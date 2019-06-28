@@ -7,7 +7,26 @@ Author: Fortinet
 * Class used to define the capabilities required from cloud platform.
 */
 
-module.exports = class CloudPlatform {
+import {Blob} from './blob';
+import * as CoreFunctions from './core-functions';
+import {VirtualMachine} from './virtual-machine';
+import {LicenseItem} from './license-item';
+import { LicenseRecord} from './license-record';
+import { HealthCheck } from './health-check-record';
+import { MasterRecord } from './master-election';
+
+export interface RequestInfo {
+    instanceId: string;
+    interval: number;
+    status: string;
+}
+
+export abstract class CloudPlatform {
+    // TODO: should remove the underscore
+    readonly _settings: {} | null;
+    private _initialized:boolean;
+    scalingGroupName: string;
+    masterScalingGroupName: string;
     constructor() {
         this._settings = null;
         this._initialized = false;
@@ -58,17 +77,13 @@ module.exports = class CloudPlatform {
      * the existing record or the same as 'new', otherwise.
      * @returns {boolean} result. true or false
      */
-    async putMasterRecord(candidateInstance, voteState, method = 'new') {
-        return await this.throwNotImplementedException();
-    }
+    abstract async putMasterRecord(candidateInstance, voteState, method): Promise<boolean>;
     /**
      * Get the master record from db.
      * Abstract class method.
      * @returns {String} Ip of the FortiGate which should be the auto-sync master
      */
-    async getMasterRecord() {
-        await this.throwNotImplementedException();
-    }
+    abstract async getMasterRecord(): Promise<MasterRecord>;
 
     /**
      * Remove the current master record from db.
@@ -140,10 +155,7 @@ module.exports = class CloudPlatform {
      * @param {Object} request the request event
      * @returns {Object} an object of required info per platform.
      */
-    extractRequestInfo(request) {
-        this.throwNotImplementedException();
-        return {};
-    }
+    abstract extractRequestInfo(request): RequestInfo;
 
     /**
      * Protect an instance from being scaled out.
@@ -170,9 +182,7 @@ module.exports = class CloudPlatform {
      * Abstract class method.
      * @param {Object} parameters parameters necessary for describing an instance.
      */
-    async describeInstance(parameters) {
-        await this.throwNotImplementedException();
-    }
+    abstract async describeInstance(parameters): Promise<VirtualMachine>;
 
     /**
      * do the instance health check.
@@ -182,9 +192,7 @@ module.exports = class CloudPlatform {
      * @returns {Object}
      *      {healthy: <bool>, heartBeatLossCount: <int>, nextHeartBeatTime: <int>}
      */
-    async getInstanceHealthCheck(instance, heartBeatInterval = null) {
-        await this.throwNotImplementedException();
-    }
+    abstract async getInstanceHealthCheck(instance, heartBeatInterval?): Promise<HealthCheck>;
 
     /**
      * update the instance health check result to DB.
@@ -297,17 +305,12 @@ module.exports = class CloudPlatform {
      * @param {Object} parameters parameter object
      * @returns {Object} the object must have the property 'content' containing the blob content
      */
-    async getBlobFromStorage(parameters) {
-        return await this.throwNotImplementedException();
-    }
+    abstract async getBlobFromStorage(parameters): Promise<Blob>;
 
-    async listBlobFromStorage(parameters) {
-        await this.throwNotImplementedException();
-    }
+    // TODO: what shuold be the correct return type here?
+    abstract async listBlobFromStorage(parameters): Promise<unknown>;
 
-    async getLicenseFileContent(fileName) {
-        return await this.throwNotImplementedException();
-    }
+    abstract async getLicenseFileContent(fileName): Promise<string>;
 
     /**
      * List license files in storage
@@ -315,9 +318,7 @@ module.exports = class CloudPlatform {
      * @returns {Map<LicenseItem>} must return a Map of LicenseItem with blobKey as key,
      * and LicenseItem as value
      */
-    async listLicenseFiles(parameters) {
-        await this.throwNotImplementedException();
-    }
+    abstract async listLicenseFiles(parameters?): Promise<Map<string, LicenseItem>>;
 
     /**
      * Update the license useage record to db
@@ -334,9 +335,7 @@ module.exports = class CloudPlatform {
      * @returns {Map<licenseRecord>} must return a Map of licenseRecord with checksum as key,
      * and LicenseItem as value
      */
-    async listLicenseUsage(parameters) {
-        await this.throwNotImplementedException();
-    }
+    abstract async listLicenseUsage(parameters?): Promise<Map<string, LicenseRecord>>;
 
     async deleteLicenseUsage(parameters) {
         await this.throwNotImplementedException();
@@ -346,9 +345,7 @@ module.exports = class CloudPlatform {
      *  @returns {Map<licenseRecord>} must return a Map of LicenseItem with blochecksumbKey as key,
      * and LicenseItem as value
      */
-    async listLicenseStock() {
-        await this.throwNotImplementedException();
-    }
+    abstract async listLicenseStock(): Promise<Map<string, LicenseRecord>>;
 
     /**
      * Find a recyclable license from those been previously used by a device but now the device
@@ -389,9 +386,7 @@ module.exports = class CloudPlatform {
      * @param {String} instanceId the instanceId of the vm if instanceId is the unique ID
      * @param {String} vmId another unique ID to identify the vm if instanceId is not the unique ID
      */
-    async getVmInfoCache(scaleSetName, instanceId, vmId = null) {
-        return await this.throwNotImplementedException() || scaleSetName && instanceId && vmId;
-    }
+    abstract async getVmInfoCache(scaleSetName: string, instanceId: string, vmId?:string): Promise<{} | null>;
 
     /**
      *
@@ -399,9 +394,7 @@ module.exports = class CloudPlatform {
      * @param {Object} info the json object of the info to cache in database
      * @param {Integer} cacheTime the maximum time in seconds to keep the cache in database
      */
-    async setVmInfoCache(scaleSetName, info, cacheTime = 3600) {
-        return await this.throwNotImplementedException() || scaleSetName && info && cacheTime;
-    }
+    abstract async setVmInfoCache(scaleSetName: string, info: {}, cacheTime?:number): Promise<void>;
 
     /**
      * Update to enable the Transit Gateway attachment propagation on a given Transit Gateway
@@ -410,9 +403,7 @@ module.exports = class CloudPlatform {
      * @param {String} routeTableId id of the transit gateway route table to update
      * @returns {Boolean} A boolean value for whether the update is success or not.
      */
-    async updateTgwRouteTablePropagation(attachmentId, routeTableId) {
-        return await this.throwNotImplementedException() || attachmentId && routeTableId;
-    }
+    abstract async updateTgwRouteTablePropagation(attachmentId:string, routeTableId:string):Promise<boolean>;
 
     /**
      * Update to enable the Transit Gateway attachment association on a given Transit Gateway
@@ -421,9 +412,7 @@ module.exports = class CloudPlatform {
      * @param {String} routeTableId id of the transit gateway route table to update
      * @returns {Boolean} A boolean value for whether the update is success or not.
      */
-    async updateTgwRouteTableAssociation(attachmentId, routeTableId) {
-        return await this.throwNotImplementedException() || attachmentId && routeTableId;
-    }
+    abstract async updateTgwRouteTableAssociation(attachmentId, routeTableId): Promise<boolean>;
 
     /**
      * return a platform-specific logger class
@@ -431,5 +420,19 @@ module.exports = class CloudPlatform {
     getPlatformLogger() {
         this.throwNotImplementedException();
     }
+
+    /**
+     * get the execution time lapse in millisecond
+     */
+    getExecutionTimeLapse():number {
+        return CoreFunctions.getTimeLapse();
+    }
+
+    /**
+     * get the execution time remaining in millisecond
+     */
+    abstract getExecutionTimeRemaining(): number;
+
+    abstract async finalizeMasterElection(): Promise<boolean>;
     /* eslint-enable no-unused-vars */
 };

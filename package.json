@@ -28,5 +28,8 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/fortinet/fortigate-autoscale"
+  },
+  "dependencies": {
+    "@types/node": "^12.0.10"
   }
 }

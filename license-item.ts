@@ -6,25 +6,18 @@ Author: Fortinet
 * A generic license item wrapper class.
 */
 
-const crypto = require('crypto');
-module.exports = class LicenseItem {
-    constructor(fileName, fileETag, content = null) {
-        this._fileName = fileName;
-        this._fileETag = fileETag;
+import * as crypto from 'crypto';
+
+export class LicenseItem {
+    private _checksum: string | null;
+    private _content: string;
+    private _algorithm: string = 'sha1';
+    constructor(readonly fileName: string, readonly fileETag:string, content?:string) {
         this._checksum = null;
-        this._algorithm = 'sha1';
-        this.content = content;
+        this._content = content;
     }
     get id() {
         return this._checksum;
-    }
-
-    get fileName() {
-        return this._fileName;
-    }
-
-    get fileETag() {
-        return this._fileETag;
     }
 
     get content() {
@@ -60,7 +53,7 @@ module.exports = class LicenseItem {
     }
 
     get blobKey() {
-        return LicenseItem.generateBlobKey(this._fileName, this._fileETag);
+        return LicenseItem.generateBlobKey(this.fileName, this.fileETag);
     }
 
     updateChecksum(algorithm, checksum) {

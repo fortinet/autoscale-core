@@ -20,27 +20,63 @@ Author: Fortinet
 * needed for the FortiGate config's callback-url parameter.
 */
 
-const path = require('path');
-const Logger = require('./logger');
-const CoreFunctions = require('./core-functions');
+import * as path from 'path';
+import * as CoreFunctions from './core-functions';
+import {VirtualMachine} from './virtual-machine';
+import {HealthCheck} from './health-check-record';
+import * as MasterElection from './master-election';
+import {CloudPlatform, RequestInfo} from './cloud-platform';
+import { LicenseItem } from './license-item';
+import { LicenseRecord } from './license-record';
+
 const
     AUTOSCALE_SECTION_EXPR =
     /(?:^|(?:\s*))config?\s*system?\s*auto-scale\s*((?:.|\s)*)\bend\b/;
 const NO_HEART_BEAT_INTERVAL_SPECIFIED = -1;
 const DEFAULT_HEART_BEAT_INTERVAL = 30;
 
-module.exports = class AutoscaleHandler {
+export enum ScalingGroupState {
+    inService = 'in-service',
+    inTransition = 'in-transition',
+    stopped = 'stopped'
+}
 
-    constructor(platform, baseConfig) {
-        this.platform = platform;
-        this._baseConfig = baseConfig;
+export enum RetrieveMasterOption {
+    masterInfo = 'masterInfo',
+    masterHealthCheck = 'masterHealthCheck',
+    masterRecord = 'masterRecord'
+}
+
+export type SubnetPair = { subnetId: string, pairId:string};
+
+export type SettingItem = {
+    settingKey: string,
+    settingValue: string | {},
+    editable: boolean,
+    jsoenEncoded: boolean,
+    description: string
+}
+
+export type ProxyResponse = string | {};
+
+export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
+    protected _selfInstance: VirtualMachine | null;
+    protected _selfHealthCheck: HealthCheck | null;
+    protected _masterHealthCheck: HealthCheck | null;
+    protected _masterRecord: MasterElection.MasterRecord | null;
+    protected _masterInfo: VirtualMachine | null;
+    protected _requestInfo: RequestInfo | null;
+    protected scalingGroupName: string;
+    protected masterScalingGroupName: string;
+    protected logger: CoreFunctions.Logger;
+    constructor(protected readonly platform: CloudPlatform, protected _baseConfig: string){
         this._selfInstance = null;
         this._selfHealthCheck = null;
         this._masterRecord = null;
         this._masterInfo = null;
-        this._requestInfo = {};
-        this.scalingGroupName = null;
-        this.masterScalingGroupName = null;
+        this._requestInfo = null;
+        this.scalingGroupName = '';
+        this.masterScalingGroupName = '';
     }
 
     static get NO_HEART_BEAT_INTERVAL_SPECIFIED() {
@@ -55,100 +91,15 @@ module.exports = class AutoscaleHandler {
      * Get the read-only settings object from the platform. To modify the settings object,
      * do it via the platform instance but not here.
      */
-    get _settings() {
-        return this.platform && this.platform._settings;
-    }
+    // TODO: improve this
+    abstract get _settings(): any;
 
     /**
-     * Set the logger to output log to platform
-     * @param {Logger} logger Logger object used to output log to platform
-     */
-    useLogger(logger) {
-        this.logger = logger || new Logger();
-    }
-
-    throwNotImplementedException() {
-        throw new Error('Not Implemented');
-    }
-
-    /* eslint-disable max-len */
-    /**
-     *
-     * @param {Platform.RequestEvent} event Event from platform.
-     * @param {Platform.RequestContext} context the runtime context of this function
-     * call from the platform
-     * @param {Platform.RequestCallback} callback the callback function the platorm
-     * uses to end a request
-     * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
-     */
-    async handle(event, context, callback) { // eslint-disable-line no-unused-vars
-        this._step = 'initializing';
-        let proxyMethod = 'method' in event && event.method ||
-            'httpMethod' in event && event.httpMethod,
-            result;
-        try {
-            const platformInitSuccess = await this.init();
-            // return 500 error if script cannot finish the initialization.
-            if (!platformInitSuccess) {
-                result = 'fatal error, cannot initialize.';
-                this.logger.error(result);
-                callback(null, this.proxyResponse(500, result));
-            } else if (event.source === 'aws.autoscaling') {
-                this._step = 'autoscaling';
-                result = await this.handleAutoScalingEvent(event);
-                callback(null, this.proxyResponse(200, result));
-            } else {
-                // authenticate the calling instance
-                this.parseRequestInfo(event);
-                if (!this._requestInfo.instanceId) {
-                    callback(null, this.proxyResponse(403, 'Instance id not provided.'));
-                    return;
-                }
-                await this.parseInstanceInfo(this._requestInfo.instanceId);
-
-                await this.checkInstanceAuthorization(this._selfInstance);
-
-                if (proxyMethod === 'GET') {
-                    this._step = 'fortigate:getConfig';
-                    result = await this.handleGetConfig();
-                    callback(null, this.proxyResponse(200, result));
-                } else if (proxyMethod === 'POST') {
-                    this._step = 'fortigate:handleSyncedCallback';
-                    // handle status messages
-                    if (this._requestInfo.status) {
-                        result = await this.handleStatusMessage(event);
-                    } else {
-                        result = await this.handleSyncedCallback();
-                    }
-                    callback(null, this.proxyResponse(200, result));
-                } else {
-                    this._step = '¯\\_(ツ)_/¯';
-
-                    this.logger.warn(`${this._step} unexpected event!`, event);
-                    // probably a test call?
-                    callback(null, this.proxyResponse(500, result));
-                }
-            }
-
-        } catch (ex) {
-            if (ex.message) {
-                ex.message = `${this._step}: ${ex.message}`;
-            }
-            try {
-                console.error('ERROR while ', this._step, proxyMethod, ex);
-            } catch (ex2) {
-                console.error('ERROR while ', this._step, proxyMethod, ex.message, ex, ex2);
-            }
-            if (proxyMethod) {
-                callback(null,
-                    this.proxyResponse(500, {
-                        message: ex.message,
-                        stack: ex.stack
-                    }));
-            } else {
-                callback(ex);
-            }
-        }
+ * Set the logger to output log to platform
+ * @param {Logger} logger Logger object used to output log to platform
+ */
+    useLogger(logger:CoreFunctions.Logger) {
+        this.logger = logger || new CoreFunctions.DefaultLogger(console);
     }
 
     async init() {
@@ -184,7 +135,90 @@ module.exports = class AutoscaleHandler {
         return success;
     }
 
-    async getConfigSet(configName) {
+    /* eslint-disable max-len */
+    /**
+     *
+     * @param {Platform.RequestEvent} event Event from platform.
+     * @param {Platform.RequestContext} context the runtime context of this function
+     * call from the platform
+     * @param {Platform.RequestCallback} callback the callback function the platorm
+     * uses to end a request
+     * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
+     */
+    // TODO: improve the handle and formal parameters
+    async handle(event: any, context: any, callback: any) { // eslint-disable-line no-unused-vars
+        let step:string = 'initializing';
+        let proxyMethod = 'method' in event && event.method ||
+            'httpMethod' in event && event.httpMethod,
+            result;
+        try {
+            const platformInitSuccess = await this.init();
+            // return 500 error if script cannot finish the initialization.
+            if (!platformInitSuccess) {
+                result = 'fatal error, cannot initialize.';
+                this.logger.error(result);
+                callback(null, this.proxyResponse(500, result));
+            } else if (event.source === 'autoscaling') {
+                step = 'autoscaling';
+                result = await this.handleAutoScalingEvent(event);
+                callback(null, this.proxyResponse(200, result));
+            } else {
+                // authenticate the calling instance
+                this.parseRequestInfo(event);
+                if (!this._requestInfo.instanceId) {
+                    callback(null, this.proxyResponse(403, 'Instance id not provided.'));
+                    return;
+                }
+                await this.parseInstanceInfo(this._requestInfo.instanceId);
+
+                await this.checkInstanceAuthorization(this._selfInstance);
+
+                if (proxyMethod === 'GET') {
+                    step = 'fortigate:getConfig';
+                    result = await this.handleGetConfig();
+                    callback(null, this.proxyResponse(200, result));
+                } else if (proxyMethod === 'POST') {
+                    step = 'fortigate:handleSyncedCallback';
+                    // handle status messages
+                    if (this._requestInfo.status) {
+                        result = await this.handleStatusMessage(event);
+                    } else {
+                        result = await this.handleSyncedCallback();
+                    }
+                    callback(null, this.proxyResponse(200, result));
+                } else {
+                    step = '¯\\_(ツ)_/¯';
+
+                    this.logger.warn(`${step} unexpected event!`, event);
+                    // probably a test call?
+                    callback(null, this.proxyResponse(500, result));
+                }
+            }
+
+        } catch (ex) {
+            if (ex.message) {
+                ex.message = `${step}: ${ex.message}`;
+            }
+            try {
+                console.error('ERROR while ', step, proxyMethod, ex);
+            } catch (ex2) {
+                console.error('ERROR while ', step, proxyMethod, ex.message, ex, ex2);
+            }
+            if (proxyMethod) {
+                callback(null,
+                    this.proxyResponse(500, {
+                        message: ex.message,
+                        stack: ex.stack
+                    }));
+            } else {
+                callback(ex);
+            }
+        }
+    }
+
+    abstract proxyResponse(statusCode:number, res: {}, logOptions?:{}):void;
+
+    async getConfigSet(configName: string): Promise<string> {
         try {
             let keyPrefix = this._settings['asset-storage-key-prefix'] ?
                 path.join(this._settings['asset-storage-key-prefix'], 'configset') : 'configset';
@@ -198,7 +232,7 @@ module.exports = class AutoscaleHandler {
             if (blob.content && typeof blob.content === 'string' &&
                 blob.content.indexOf('\r') >= 0) {
                 // eslint-disable-next-line no-control-regex
-                return blob.content.replace(new RegExp('\r', 'g', ''));
+                return blob.content.replace(new RegExp('\r', 'g'), '');
             } else {
                 return blob.content;
             }
@@ -208,12 +242,7 @@ module.exports = class AutoscaleHandler {
         }
     }
 
-    async getConfig(ip) {
-        await this.throwNotImplementedException();
-        return ip;
-    }
-
-    async getBaseConfig() {
+    async getBaseConfig():Promise<string> {
         let baseConfig = await this.getConfigSet('baseconfig');
         let psksecret = this._settings['fortigate-psk-secret'],
             fazConfig = '',
@@ -274,11 +303,11 @@ module.exports = class AutoscaleHandler {
         return baseConfig;
     }
 
-    parseRequestInfo(event) {
+    parseRequestInfo(event:{}):void {
         this._requestInfo = this.platform.extractRequestInfo(event);
     }
 
-    async parseInstanceInfo(instanceId) {
+    async parseInstanceInfo(instanceId:string):Promise<void> {
         // look for this vm in both byol and payg vmss
         // look from byol first
         this._selfInstance = this._selfInstance || await this.platform.describeInstance({
@@ -310,7 +339,7 @@ module.exports = class AutoscaleHandler {
         }
     }
 
-    async checkInstanceAuthorization(instance) {
+    async checkInstanceAuthorization(instance:VirtualMachine):Promise<boolean> {
         // TODO: can we generalize this method to core?
         if (!instance ||
                 instance.virtualNetworkId !== this._settings['fortigate-autoscale-vpc-id']) {
@@ -321,7 +350,7 @@ module.exports = class AutoscaleHandler {
         return await Promise.resolve(true);
     }
 
-    async handleGetLicense(event, context, callback) {
+    async handleGetLicense(event:any, context:any, callback:any) {
         let result;
         this.logger.info('calling handleGetLicense');
         try {
@@ -355,7 +384,7 @@ module.exports = class AutoscaleHandler {
             stockRecords = await this.updateLicenseStockRecord(licenseFiles, stockRecords);
 
             // start to pick a valid license here.
-            let availStockItem, availStockRecord;
+            let availStockItem:LicenseItem, availStockRecord:LicenseRecord;
 
             let itemKey, itemValue;
 
@@ -433,7 +462,7 @@ module.exports = class AutoscaleHandler {
                 return availStockItem;
             };
 
-            let validator = stockItem => {
+            let validator = (stockItem: LicenseItem) => {
                 return !!stockItem;
             };
 
@@ -459,18 +488,20 @@ module.exports = class AutoscaleHandler {
      * the first callback will be considered as an indication for instance "up-and-running"
      * @param {*} event event from the handling call. structure varies per platform.
      */
-    async handleSyncedCallback() {
+    async handleSyncedCallback():Promise<{} | string> {
         const
             instanceId = this._requestInfo.instanceId,
             interval = this._requestInfo.interval;
 
-        let parameters = {},
-            masterIp,
+        let masterIp,
             isMaster = false,
             lifecycleShouldAbandon = false;
 
-        parameters.instanceId = instanceId;
-        parameters.scalingGroupName = this.scalingGroupName;
+        let parameters = {
+            instanceId: instanceId,
+            scalingGroupName: this.scalingGroupName
+        };
+
         // get selfinstance
         this._selfInstance = this._selfInstance || await this.platform.describeInstance(parameters);
 
@@ -505,7 +536,7 @@ module.exports = class AutoscaleHandler {
             // 2. if there isn't a running election, then runs an election and complete it
             let promiseEmitter = this.checkMasterElection.bind(this),
                 // validator set a condition to determine if the fgt needs to keep waiting or not.
-                validator = masterInfo => {
+                validator = (masterInfo:VirtualMachine) => {
                     // if i am the new master, don't wait, continue to finalize the election.
                     // should return yes to end the waiting.
                     if (masterInfo &&
@@ -513,7 +544,8 @@ module.exports = class AutoscaleHandler {
                         this._selfInstance.primaryPrivateIpAddress) {
                         isMaster = true;
                         return true;
-                    } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
+                    } else if (this._masterRecord &&
+                        this._masterRecord.voteState === MasterElection.VoteState.pending) {
                         // if no wait for master election, I could become a headless instance
                         // may allow any non master instance to come up without master.
                         // They will receive the new master ip on one of their following
@@ -527,7 +559,8 @@ module.exports = class AutoscaleHandler {
                             this._masterRecord = null; // clear the master record cache
                             return false;
                         }
-                    } else if (this._masterRecord && this._masterRecord.voteState === 'done') {
+                    } else if (this._masterRecord &&
+                        this._masterRecord.voteState === MasterElection.VoteState.done) {
                         // if i am not the new master, and the master election is final, then no
                         // need to wait.
                         // should return true to end the waiting.
@@ -552,8 +585,8 @@ module.exports = class AutoscaleHandler {
                 // counter to set a time based condition to end this waiting. If script execution
                 // time is close to its timeout (6 seconds - abount 1 inteval + 1 second), ends the
                 // waiting to allow for the rest of logic to run
-                counter = currentCount => { // eslint-disable-line no-unused-vars
-                    if (Date.now() < process.env.SCRIPT_EXECUTION_EXPIRE_TIME - 6000) {
+                counter = (currentCount:number) => { // eslint-disable-line no-unused-vars
+                    if (Date.now() < this.platform.getExecutionTimeRemaining() - 6000) {
                         return false;
                     }
                     this.logger.warn('script execution is about to expire');
@@ -586,8 +619,8 @@ module.exports = class AutoscaleHandler {
                 }
                 await this.removeInstance(this._selfInstance);
                 throw new Error('Failed to determine the master instance within ' +
-                    `${process.env.SCRIPT_EXECUTION_EXPIRE_TIME} seconds. This instance is unable` +
-                    ' to bootstrap. Please report this to administrators.');
+                    `${this.platform.getExecutionTimeRemaining() / 1000} seconds. `+
+                    'This instance is unable to bootstrap. Please report this to administrators.');
             }
         }
 
@@ -602,7 +635,8 @@ module.exports = class AutoscaleHandler {
         // finalize the master election.
         if (this._masterInfo && this._selfInstance.instanceId === this._masterInfo.instanceId &&
             this.scalingGroupName === this.masterScalingGroupName &&
-            this._masterRecord && this._masterRecord.voteState === 'pending') {
+            this._masterRecord &&
+                this._masterRecord.voteState === MasterElection.VoteState.pending) {
             isMaster = true;
             if (!this._selfHealthCheck || this._selfHealthCheck && this._selfHealthCheck.healthy) {
                 // if election couldn't be finalized, remove the current election so someone else
@@ -628,7 +662,8 @@ module.exports = class AutoscaleHandler {
 
             masterIp = this._masterInfo ? this._masterInfo.primaryPrivateIpAddress : null;
             // if slave finds master is pending, don't update master ip to the health check record
-            if (!isMaster && this._masterRecord && this._masterRecord.voteState === 'pending' &&
+            if (!isMaster && this._masterRecord &&
+                this._masterRecord.voteState === MasterElection.VoteState.pending &&
             this._settings['master-election-no-wait'] === 'true') {
                 masterIp = null;
             }
@@ -703,7 +738,7 @@ module.exports = class AutoscaleHandler {
      * @param {Object} event the incoming request event
      * @returns {Object} return messages
      */
-    handleStatusMessage(event) {
+    handleStatusMessage(event:{}) {
         this.logger.info('calling handleStatusMessage.');
         // do not process status messages till further requriements (Mar 27, 2019)
         this.logger.info(JSON.stringify(event));
@@ -728,11 +763,10 @@ module.exports = class AutoscaleHandler {
      * The leaf property of a nested object must be a primitive.
      * @returns {String} a pasred config string
      */
-    async parseConfigSet(configSet, dataSources) { // eslint-disable-line no-unused-vars
-        return await configSet;
-    }
+    abstract async parseConfigSet(configSet:string, dataSources:{}):Promise<string>;
 
-    async getMasterConfig(parameters) {
+    // TODO: refactor the way to use of parameters here
+    async getMasterConfig(parameters:any):Promise<string> {
         // no dollar sign in place holders
         let config = '';
         this._baseConfig = await this.getBaseConfig();
@@ -749,7 +783,8 @@ module.exports = class AutoscaleHandler {
         return config;
     }
 
-    async getSlaveConfig(parameters) {
+    // TODO: refactor the way to use of parameters here
+    async getSlaveConfig(parameters:any): Promise<string> {
         this._baseConfig = await this.getBaseConfig();
         const
             autoScaleSectionMatch = AUTOSCALE_SECTION_EXPR.exec(this._baseConfig),
@@ -794,7 +829,7 @@ module.exports = class AutoscaleHandler {
             .replace(new RegExp('{CALLBACK_URL}', 'gm'), parameters.callbackUrl);
     }
 
-    async checkMasterElection() {
+    async checkMasterElection():Promise<VirtualMachine | null> {
         this.logger.info('calling checkMasterElection');
         let needElection = false,
             purgeMaster = false,
@@ -807,7 +842,7 @@ module.exports = class AutoscaleHandler {
         // is there a master election done?
         // check the master record and its voteState
         // if there's a complete election, get master health check
-        if (this._masterRecord && this._masterRecord.voteState === 'done') {
+        if (this._masterRecord && this._masterRecord.voteState === MasterElection.VoteState.done) {
             // if master is unhealthy, we need a new election
             if (!this._masterHealthCheck ||
                 !this._masterHealthCheck.healthy || !this._masterHealthCheck.inSync) {
@@ -815,7 +850,8 @@ module.exports = class AutoscaleHandler {
             } else {
                 purgeMaster = needElection = false;
             }
-        } else if (this._masterRecord && this._masterRecord.voteState === 'pending') {
+        } else if (this._masterRecord &&
+            this._masterRecord.voteState === MasterElection.VoteState.pending) {
             // if there's a pending master election, and if this election is incomplete by
             // the end-time, purge this election and starta new master election. otherwise, wait
             // until it's finished
@@ -862,7 +898,7 @@ module.exports = class AutoscaleHandler {
     /**
      * get the elected master instance info from the platform
      */
-    async getMasterInfo() {
+    async getMasterInfo():Promise<VirtualMachine> {
         this.logger.info('calling getMasterInfo');
         let instanceId;
         try {
@@ -881,7 +917,7 @@ module.exports = class AutoscaleHandler {
      * @param {Object} candidateInstance instance of the FortiGate which wants to become the master
      * @param {Object} purgeMasterRecord master record of the old master, if it's dead.
      */
-    async putMasterElectionVote(candidateInstance, purgeMasterRecord = null) {
+    async putMasterElectionVote(candidateInstance:VirtualMachine, purgeMasterRecord?:boolean): Promise<boolean> {
         try {
             this.logger.log('masterElectionVote, purge master?', JSON.stringify(purgeMasterRecord));
             if (purgeMasterRecord) {
@@ -911,44 +947,19 @@ module.exports = class AutoscaleHandler {
         return !!await this.platform.getMasterRecord();
     }
 
-    async completeMasterElection(ip) {
-        await this.throwNotImplementedException();
-        return ip;
-    }
+    abstract async getFazIp(): Promise<string>;
 
-    async completeMasterInstance(instanceId) {
-        await this.throwNotImplementedException();
-        return instanceId;
-    }
+    // TODO: refactor the event type here
+    abstract async handleNicAttachment(event:any): Promise<void>;
 
-    responseToHeartBeat(masterIp) {
-        let response = {};
-        if (masterIp) {
-            response['master-ip'] = masterIp;
-        }
-        return JSON.stringify(response);
-    }
-
-    async getFazIp() {
-        await this.throwNotImplementedException();
-        return null;
-    }
-
-    async handleNicAttachment(event) {
-        await this.throwNotImplementedException();
-        return null || event;
-    }
-
-    async handleNicDetachment(event) {
-        await this.throwNotImplementedException();
-        return null || event;
-    }
+    // TODO: refactor the event type here
+    abstract async handleNicDetachment(event:any): Promise<void>;
 
     async loadSubnetPairs() {
         return await this.platform.getSettingItem('subnets-pairs');
     }
 
-    async saveSubnetPairs(subnetPairs) {
+    async saveSubnetPairs(subnetPairs: SubnetPair[]) {
         return await this.platform.setSettingItem('subnets-pairs', subnetPairs, null, true, false);
     }
 
@@ -967,7 +978,7 @@ module.exports = class AutoscaleHandler {
     }
 
     async loadSettings() {
-        if (!(this._settings && Object.keys(this._settings) > 0)) {
+        if (!(this._settings && Object.keys(this._settings).length > 0)) {
             await this.platform.getSettingItems();// initialize the platform settings
         }
         return this._settings;
@@ -978,10 +989,14 @@ module.exports = class AutoscaleHandler {
      * responsible for it.
      * @param {Object} settings settings to save
      */
-    async saveSettings(settings) {
+    // TODO: use Map type for the settings parameter.
+    async saveSettings(settings:{}) {
         let tasks = [], errorTasks = [];
         for (let [key, value] of Object.entries(settings)) {
-            let keyName = null, description = null, jsonEncoded = false, editable = false;
+            let keyName:string | null = null,
+                description: string | null = null,
+                jsonEncoded: boolean = false,
+                editable: boolean = false;
             switch (key.toLowerCase()) {
                 case 'servicetype':
                     // ignore service type
@@ -1280,19 +1295,16 @@ module.exports = class AutoscaleHandler {
         return errorTasks.length === 0;
     }
 
-    async updateCapacity(desiredCapacity, minSize, maxSize) {
-        await this.throwNotImplementedException();
-        return null || desiredCapacity && minSize && maxSize;
-    }
+    // TODO: restrict the parameter type to number only
+    abstract async updateCapacity(desiredCapacity: string | number,
+        minSize: string | number, maxSize: string | number): Promise<void>;
 
-    async checkAutoScalingGroupState() {
-        await this.throwNotImplementedException();
-    }
+    abstract async checkAutoScalingGroupState(): Promise<void>;
 
     async resetMasterElection() {
         this.logger.info('calling resetMasterElection');
         try {
-            this.setScalingGroup(this._settings['master-scaling-group-name']);
+            this.setScalingGroup(this._settings['master-scaling-group-name'], null);
             await this.platform.removeMasterRecord();
             this.logger.info('called resetMasterElection. done.');
             return true;
@@ -1302,39 +1314,52 @@ module.exports = class AutoscaleHandler {
         }
     }
 
-    async addInstanceToMonitor(instance, heartBeatInterval, masterIp = 'null') {
-        return await this.throwNotImplementedException() ||
-            instance && heartBeatInterval && masterIp;
-    }
+    // TODO: restrict the heartBeatInterval to type: number only
+    abstract async addInstanceToMonitor(instance:VirtualMachine,
+        heartBeatInterval: string | number, masterIp?:string): Promise<void>;
 
-    async removeInstanceFromMonitor(instanceId) {
+    async removeInstanceFromMonitor(instanceId:string) {
         this.logger.info('calling removeInstanceFromMonitor');
         return await this.platform.deleteInstanceHealthCheck(instanceId);
     }
 
-    async retrieveMaster(filters = null, reload = false) {
+    /**
+     *
+     * @param filters accepted filter key: masterInfo, masterHealthCheck, or masterRecord
+     * @param reload
+     */
+    async retrieveMaster(filters: Map<RetrieveMasterOption, boolean> | null = null, reload = false):
+        Promise<{
+            masterInfo: VirtualMachine | null,
+            masterHealthCheck: HealthCheck | null,
+            masterRecord: MasterElection.MasterRecord | null
+        }>
+    {
         if (reload) {
             this._masterInfo = null;
             this._masterHealthCheck = null;
             this._masterRecord = null;
         }
-        if (!this._masterInfo && (!filters || filters && filters.masterInfo)) {
-            this._masterInfo = await this.getMasterInfo();
+        if (filters === null || filters.get(RetrieveMasterOption.masterInfo) ||
+            filters.get(RetrieveMasterOption.masterHealthCheck)) {
+            // if reload not needed, return the current object or retrive it.
+            this._masterInfo = !reload && this._masterInfo || await this.getMasterInfo();
         }
-        if (!this._masterHealthCheck && (!filters || filters && filters.masterHealthCheck)) {
-            if (!this._masterInfo) {
-                this._masterInfo = await this.getMasterInfo();
-            }
-            if (this._masterInfo) {
-                // TODO: master health check should not depend on the current hb
-                this._masterHealthCheck = await this.platform.getInstanceHealthCheck({
+
+        if (filters === null || filters.get(RetrieveMasterOption.masterHealthCheck)) {
+            // if reload not needed, return the current object or retrive it.
+            this._masterHealthCheck = !reload && this._masterHealthCheck ||
+                await this.platform.getInstanceHealthCheck({
                     instanceId: this._masterInfo.instanceId
                 });
-            }
         }
-        if (!this._masterRecord && (!filters || filters && filters.masterRecord)) {
-            this._masterRecord = await this.platform.getMasterRecord();
+
+        if (filters === null || filters.get(RetrieveMasterOption.masterRecord)) {
+            // if reload not needed, return the current object or retrive it.
+            this._masterRecord = !reload && this._masterRecord ||
+                await this.platform.getMasterRecord();
         }
+
         return {
             masterInfo: this._masterInfo,
             masterHealthCheck: this._masterHealthCheck,
@@ -1366,15 +1391,12 @@ module.exports = class AutoscaleHandler {
         }
     }
 
-    async deregisterMasterInstance(instance) {
-        return await this.throwNotImplementedException() || instance;
-    }
+    // TODO: this function is unused.
+    abstract async deregisterMasterInstance(instance:VirtualMachine): Promise<void>;
 
-    async removeInstance(instance) {
-        return await this.throwNotImplementedException() || instance;
-    }
+    abstract async removeInstance(instance:VirtualMachine): Promise<void>;
 
-    setScalingGroup(master, self) {
+    setScalingGroup(master:string | null, self:string | null) {
         if (master) {
             this.masterScalingGroupName = master;
             this.platform.setMasterScalingGroup(master);
@@ -1389,18 +1411,20 @@ module.exports = class AutoscaleHandler {
      * Check and update the route to the NAT gateway instance (which is one healthy ForitGate
      * from the scaling groups)
      */
-    async updateNatGatewayRoute() {
-        return await this.throwNotImplementedException();
-    }
+    abstract async updateNatGatewayRoute(): Promise<void>;
 
     /**
      *
-     * @param {Map<String, LicenseItem>} licenseFiles a map of LicenseItem based on
+     * @param licenseFiles a map of LicenseItem based on
      * the license files in the blob storage. Each map key is the 'blobKey' of the LicenseItem.
      * @param {Map<String, LicenseRecord>} existingRecords a map of LicenseRecord based on
      * the existing license record in the db. Each map key is the 'checksum' of the LicenseItem.
      */
-    async updateLicenseStockRecord(licenseFiles, existingRecords) {
+
+     // TODO: there are new changes in the feature/hybrid_licensing_support branch after merged.
+     // remember to merge those changes here.
+    async updateLicenseStockRecord(licenseFiles: Map<string, LicenseItem>,
+        existingRecords: Map<string, LicenseRecord>): Promise<Map<string, LicenseRecord>> {
         if (licenseFiles instanceof Map && existingRecords instanceof Map) {
             let untrackedFiles = new Map(licenseFiles.entries()); // copy the map
             let recordsToDelete = new Map();
@@ -1504,10 +1528,22 @@ module.exports = class AutoscaleHandler {
                 return (untrackedFiles.size > 0 || recordsToDelete.size > 0) &&
                     this.platform.listLicenseStock() || existingRecords;
             } catch (error) {
+                // NOTE: throw the error out here? or catch it? then what should return when error?
                 this.logger.error(error);
+                throw error;
             }
         } else {
             return existingRecords;
         }
     }
+
+    // TODO: this should be called in the lamba function implementation
+    abstract async handleAutoScalingEvent(event: any): Promise<ProxyResponse>;
+
+    abstract async handleGetConfig():Promise<ProxyResponse>;
+
+    abstract async completeGetConfigLifecycleAction(instanceId: string, success: boolean): Promise<void>;
+
+    abstract async findRecyclableLicense(stockRecords: Map<string, LicenseRecord>,
+        usageRecords: Map<string, LicenseRecord>, limit?:number): Promise<LicenseRecord[]>;
 };

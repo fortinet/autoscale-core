@@ -4,30 +4,45 @@
 Author: Fortinet
 */
 /* eslint-disable no-unused-vars */
+export interface LogLevels {
+    log: boolean;
+    info: boolean;
+    warn: boolean;
+    error: boolean;
+    debug: boolean;
+};
+
+export interface LogQueueItem {
+    // TODO: level should be an enum instead.
+    level: keyof LogLevels;
+    timestamp: Date;
+    arguments: any[];
+}
 /**
  * A unified logger class to handle logging across different platforms.
  */
-module.exports = class Logger {
-    constructor(loggerObject) {
-        this.logger = loggerObject;
-        this._outputQueue = false;
-        this._flushing = false;
-        this._timeZoneOffset = 0;
-        this._queue = [];
-        this._logCount = 0;
-        this._infoCount = 0;
-        this._debugCount = 0;
-        this._warnCount = 0;
-        this._errorCount = 0;
-    }
+export abstract class Logger {
+
+    private _timeZoneOffset = 0;
+    protected _logCount = 0;
+    protected _infoCount = 0;
+    protected _debugCount = 0;
+    protected _warnCount = 0;
+    protected _errorCount = 0;
+    protected _outputQueue = false;
+    protected _queue: LogQueueItem[] = [];
+    protected _flushing: boolean = false;
+    level: LogLevels | null = null;
+
+    constructor(public logger: Console) { }
 
     /**
      * control logging output or queue level.
      * @param {Object} levelObject {log: true | false, info: true | false, warn: true | false,
      *  error: true | false}
      */
-    setLoggingLevel(levelObject) {
-        this.level = levelObject;
+    setLoggingLevel(level: LogLevels) {
+        this.level = level;
     }
 
     /**
@@ -42,8 +57,11 @@ module.exports = class Logger {
         return this._outputQueue;
     }
 
-    set timeZoneOffset(offset) {
-        this._timeZoneOffset = isNaN(offset) ? 0 : parseInt(offset);
+    set timeZoneOffset(offset: number | string) {
+        if (typeof offset === 'string') {
+            offset = Number(offset);
+        }
+        this._timeZoneOffset = isNaN(offset) ? 0 : offset;
     }
 
     get timeZoneOffset() {
@@ -70,12 +88,11 @@ module.exports = class Logger {
         return this._errorCount;
     }
 
-    enQueue(level, args) {
-        let item = {
-            level: level,
-            timestamp: Date.now() + (new Date()).getTimezoneOffset() * 60000, // GMT time in ms
-            arguments: []};
-        item.arguments = Array.prototype.slice.call(args).map(arg => {
+    enQueue(level: keyof LogLevels, args: any[]) {
+        let d = new Date();
+        d.setUTCHours(d.getTimezoneOffset() / 60 + this._timeZoneOffset);
+        let item = { level: level, timestamp: d, arguments: <any[]>[] };
+        item.arguments = Array.from(args).map(arg => {
             return arg && arg.toString ? arg.toString() : arg;
         });
         this._queue.push(item);
@@ -84,46 +101,33 @@ module.exports = class Logger {
 
     /**
      * output or queue information to a regular logging stream.
-     * @returns {Logger} return logger instance for chaining
+     * @returns logger instance for chaining
      */
-    log() {
-        return this;
-    }
+    abstract log(...args: any[]): this
     /**
      * output or queue information to the debug logging stream.
-     * @returns {Logger} return logger instance for chaining
+     * @returns logger instance for chaining
      */
-    debug() {
-        return this;
-    }
+    abstract debug(...args: any[]): this
     /**
      * output or queue information to the info logging stream.
-     * @returns {Logger} return logger instance for chaining
+     * @returns logger instance for chaining
      */
-    info() {
-        return this;
-    }
+    abstract info(...args: any[]): this
     /**
      * output or queue information to the warning logging stream.
-     * @returns {Logger} return logger instance for chaining
+     * @returns logger instance for chaining
      */
-    warn() {
-        return this;
-    }
+    abstract warn(...args: any[]): this
     /**
      * output or queue information to the error logging stream.
-     * @returns {Logger} return logger instance for chaining
+     * @returns logger instance for chaining
      */
-    error() {
-        return this;
-    }
+    abstract error(...args: any[]): this
 
     /**
      * flush all queued logs to the output
-     * @param {String} level flush all queued logs with this level
-     * @returns {Logger} return logger instance for chaining
+     * @param level flush all queued logs with this level
      */
-    flush(level = 'log') {
-        return this;
-    }
+    abstract flush(level: keyof LogLevels): string;
 };

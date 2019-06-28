@@ -5,33 +5,16 @@ Author: Fortinet
 *
 * A license record class.
 */
-module.exports = class LicenseRecord {
-    constructor(checksum, algorithm, fileName, blobKey,
-            instanceId = null, scalingGroupName = null, assignedTime = null) {
-        this._checksum = checksum;
-        this._algorithm = algorithm;
-        this._fileName = fileName;
-        this._blobKey = blobKey;
+export class LicenseRecord {
+    private _instanceId: string;
+    private _scalingGroupName: string;
+    private _assignedTime: number;
+    constructor(readonly checksum: string, readonly algorithm: string, readonly fileName: string, readonly blobKey:string,
+            instanceId?:string, scalingGroupName?:string, assignedTime?:number) {
         this.updateUsage(instanceId, scalingGroupName, assignedTime);
     }
     get id() {
-        return this._checksum;
-    }
-
-    get checksum() {
-        return this._checksum;
-    }
-
-    get algorithm() {
-        return this._algorithm;
-    }
-
-    get fileName() {
-        return this._fileName;
-    }
-
-    get blobKey() {
-        return this._blobKey;
+        return this.checksum;
     }
 
     get instanceId() {
@@ -65,7 +48,8 @@ module.exports = class LicenseRecord {
         this.assignedTime = instanceId && (assignTime || Date.now());
     }
 
-    static fromDb(data) {
+    // TODO: need to improve
+    static fromDb(data:any) {
         if (data && data.checksum && data.algorithm && data.fileName && data.blobKey) {
             return new LicenseRecord(data.checksum, data.algorithm,
                 data.fileName, data.blobKey,

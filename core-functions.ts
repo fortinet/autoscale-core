@@ -20,100 +20,112 @@ Author: Fortinet
 * needed for the FortiGate config's callback-url parameter.
 */
 
-const uuidv5 = require('uuid/v5');
-const Logger = require('./logger');
-const crypto = require('crypto');
-const uuidGenerator = inStr => uuidv5(inStr, uuidv5.URL);
-const toGmtTime = function(time) {
+import uuidv5 from 'uuid/v5';
+import { Logger, LogLevels, LogQueueItem } from './logger';
+export { Logger, LogLevels, LogQueueItem };
+
+const scriptStartTime: number = Date.now();
+
+export function uuidGenerator(inStr: string):string {
+    return uuidv5(inStr, uuidv5.URL);
+}
+
+export function toGmtTime(time:Date | number | string):Date | null {
     let timeObject;
     if (time instanceof Date) {
         timeObject = time;
-    } else {
-        timeObject = new Date(isNaN(time) ? time : parseInt(time));
+    }
+    else if (typeof time === 'number'){
+        timeObject = new Date(Math.floor(time));
+    }
+    else {
+        timeObject = new Date(parseInt(time));
     }
     if (timeObject.getTime()) {
         return new Date(timeObject.getTime() + timeObject.getTimezoneOffset() * 60000);
     } else {
-        return null;
+        return null; // unable to be converted to Date
     }
-};
-class DefaultLogger extends Logger {
-    constructor(loggerObject) {
+}
+
+export class DefaultLogger extends Logger {
+    constructor(loggerObject: Console) {
         super(loggerObject);
     }
-    log() {
-        this._logCount ++;
+    log(...args: any[]) {
+        this._logCount++;
         if (!(this.level && this.level.log === false)) {
             if (this._outputQueue && !this._flushing) {
-                this.enQueue('log', arguments);
+                this.enQueue('log', args);
             } else {
-                this.logger.log.apply(null, arguments);
+                this.logger.log(...args);
             }
         }
         return this;
     }
-    debug() {
-        this._debugCount ++;
+    debug(...args: any[]) {
+        this._debugCount++;
         if (!(this.level && this.level.debug === false)) {
             if (this._outputQueue && !this._flushing) {
-                this.enQueue('debug', arguments);
+                this.enQueue('debug', args);
             } else {
-                this.logger.debug.apply(null, arguments);
+                this.logger.debug(...args);
             }
         }
         return this;
     }
-    info() {
-        this._infoCount ++;
+    info(...args: any[]) {
+        this._infoCount++;
         if (!(this.level && this.level.info === false)) {
             if (this._outputQueue && !this._flushing) {
-                this.enQueue('info', arguments);
+                this.enQueue('info', args);
             } else {
-                this.logger.info.apply(null, arguments);
+                this.logger.info(...args);
             }
         }
         return this;
     }
-    warn() {
-        this._warnCount ++;
+    warn(...args: any[]) {
+        this._warnCount++;
         if (!(this.level && this.level.warn === false)) {
             if (this._outputQueue && !this._flushing) {
-                this.enQueue('warn', arguments);
+                this.enQueue('warn', args);
             } else {
-                this.logger.warn.apply(null, arguments);
+                this.logger.warn(...args);
             }
         }
         return this;
     }
-    error() {
-        this._errorCount ++;
+    error(...args: any[]) {
+        this._errorCount++;
         if (!(this.level && this.level.error === false)) {
             if (this._outputQueue && !this._flushing) {
-                this.enQueue('error', arguments);
+                this.enQueue('error', args);
             } else {
-                this.logger.error.apply(null, arguments);
+                this.logger.error(...args);
             }
         }
         return this;
     }
-    flush(level = 'log') {
+    flush(level: keyof LogLevels = 'log') {
         if (!this._outputQueue) {
             return '';
         }
         let outputContent = '';
         if (this._queue.length > 0) {
             outputContent += `Queued Logs: [log: ${this._logCount}, info: ${this._infoCount}, ` +
-            `debug: ${this._debugCount}, warn: ${this._warnCount}, error: ${this._errorCount}]\n`;
+                `debug: ${this._debugCount}, warn: ${this._warnCount}, error: ${this._errorCount}]\n`;
         }
         while (this._queue.length > 0) {
-            let item = this._queue.shift();
-            outputContent += `[${item.level}][_t:${item.timestamp}]\n[_c]`;
+            // this would complain that item may be null, but the while loop won't proceed if the queue is empty so we ca
+            // just assert that it's not.
+            let item = <LogQueueItem>this._queue.shift();
+            outputContent += `[${item.level}][${item.timestamp.toString()}][/${item.level}]\n`;
             if (item.arguments.length > 0) {
                 item.arguments.forEach(arg => {
                     outputContent += `${arg}\n`;
                 });
             }
-            outputContent += `[/_c][/${item.level}]`;
 
         }
         this._flushing = true;
@@ -142,9 +154,12 @@ class DefaultLogger extends Logger {
     }
 }
 
-const logger = new DefaultLogger(console);
-const moduleId = uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
-const sleep = ms => {
+const logger: DefaultLogger = new DefaultLogger(console);
+const moduleId:string = uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
+
+export function moduleRuntimeId():string {return moduleId;};
+
+export function sleep(ms: number) {
     return new Promise(resolve => {
         logger.warn(`sleep for ${ms} ms`);
         setTimeout(resolve, ms);
@@ -157,13 +172,13 @@ const sleep = ms => {
  * This function will return a Promise resolved with the last result of promiseEmitter.
  * It will also end immediately if any error occurs during, and return a Promise rejected with the
  * error object.
- * @param {Function} promiseEmitter Function(result):Promise, A function returns a promise with a
+ * @param promiseEmitter Function(result):Promise, A function returns a promise with a
  * result of actions which you wish to wait for.
- * @param {Function} validator Function(result):boolean, a result-based condition function that
+ * @param validator A predicate that
  * takes the result of the promiseEmitter, decides whether it should end the waiting or not based on
  *  the result. The validator function should return true to end the waiting, or false to continue.
- * @param {Number} interval a period of time in milliseconds between each wait. Default is 5000.
- * @param {Function | Number} counter Function(currentCount:number):boolean | Number, an additonal
+ * @param interval a period of time in milliseconds between each wait. Default is 5000.
+ * @param counter An additonal
  * time-based condition that could end the waiting. This parameter accepts either a counter
  * function or the number of attempts where each attempt does one set of the following actions:
  * 1. awaits the return of one promise from the promiseEmitter;
@@ -172,11 +187,17 @@ const sleep = ms => {
  * and should return true to end the waiting or false to continue. If giving a number, waiting
  * will end at the given number of attempts. Default is 12.
  */
-const waitFor = async (promiseEmitter, validator, interval = 5000, counter = null) => {
-    let currentCount = 0, result, maxCount;
-    if (typeof counter !== 'function') {
-        maxCount = !counter || isNaN(counter) ? 12 : counter;
-        counter = count => {
+export async function waitFor<T>(
+    promiseEmitter: () => Promise<T>, validator: (value: T) => boolean, interval = 5000,
+    retryOrTries: ((current: number) => boolean) | number | null = null) {
+    let shouldRetry: (c: number) => boolean = typeof retryOrTries === 'function' ? retryOrTries : (c: number) => false;
+    const
+        DEFAULT_TRIES = 12,
+        tries = typeof retryOrTries === 'number' ? retryOrTries : DEFAULT_TRIES;
+    let currentCount = 0, result, maxCount = DEFAULT_TRIES;
+    if (tries !== undefined) {
+        maxCount = tries;
+        shouldRetry = count => {
             if (count >= maxCount) {
                 throw new Error(`failed to wait for a result within ${maxCount} attempts.`);
             }
@@ -185,10 +206,10 @@ const waitFor = async (promiseEmitter, validator, interval = 5000, counter = nul
     }
     try {
         result = await promiseEmitter();
-        while (!(await validator(result) || await counter(currentCount))) {
+        while (!(await validator(result) || await shouldRetry(currentCount))) {
             await sleep(interval);
             result = await promiseEmitter();
-            currentCount ++;
+            currentCount++;
         }
     } catch (error) {
         let message = '';
@@ -203,31 +224,22 @@ const waitFor = async (promiseEmitter, validator, interval = 5000, counter = nul
     return Promise.resolve(result);
 };
 
-/**
- * calculate a string checksum
- * @param {String} str a string to calculate the checksum
- * @param {String} algorithm an algorithm to calculate the checksum
- * @returns {String} checksum
- */
-function calStringChecksum(str, algorithm = 'sha1') {
-    return crypto.createHash(algorithm).update(str, 'utf8').digest('hex');
-}
-
-function configSetResourceFinder(resObject, nodePath) {
-    nodePath = nodePath.match(/^{(.+)}$/i);
-    if (!resObject || !nodePath) {
+export function configSetResourceFinder(resObject: {}, nodePath: string): {} | string | null {
+    if (Object.entries(resObject).length === 0 || !nodePath) {
         return '';
     }
-    let nodes = nodePath[1].split('.');
-    let ref = resObject;
+    let nodePathMatcher: RegExpMatchArray = nodePath.match(/^{(.+)}$/i);
+    let nodes:string[] = nodePathMatcher[1].split('.');
+    let ref:{} | string | null = resObject;
 
-    nodes.find(nodeName => {
+    // TODO: what is the correct type for ref and the function return?
+    // TODO: how to convert this properly with Array.find()
+    nodes.forEach(nodeName => {
         let matches = nodeName.match(/^([A-Za-z_@-]+)#([0-9])+$/i);
         if (matches && Array.isArray(ref[matches[1]]) && ref[matches[1]].length > matches[2]) {
             ref = ref[matches[1]][matches[2]];
         } else if (!ref[nodeName]) {
             ref = null;
-            return false;
         } else {
             ref = Array.isArray(ref[nodeName]) && ref[nodeName].length > 0 ?
                 ref[nodeName][0] : ref[nodeName];
@@ -236,12 +248,9 @@ function configSetResourceFinder(resObject, nodePath) {
     return ref;
 }
 
-
-exports.DefaultLogger = DefaultLogger;
-exports.moduleRuntimeId = () => moduleId;
-exports.uuidGenerator = uuidGenerator;
-exports.sleep = sleep;
-exports.waitFor = waitFor;
-exports.calStringChecksum = calStringChecksum;
-exports.configSetResourceFinder = configSetResourceFinder;
-exports.toGmtTime = toGmtTime;
+/**
+ * get the time lapse (in millisecond) in the current program runtime.
+ */
+export function getTimeLapse(): number {
+    return Date.now() - scriptStartTime;
+}
