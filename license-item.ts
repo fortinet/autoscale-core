@@ -8,6 +8,10 @@ Author: Fortinet
 
 import * as crypto from 'crypto';
 
+export enum LicenseChecksumAlgorithm {
+    sha1 = 'sha1'
+}
+
 export class LicenseItem {
     private _checksum: string | null;
     private _content: string;
@@ -56,7 +60,7 @@ export class LicenseItem {
         return LicenseItem.generateBlobKey(this.fileName, this.fileETag);
     }
 
-    updateChecksum(algorithm, checksum) {
+    updateChecksum(algorithm:LicenseChecksumAlgorithm, checksum:string) {
         this._algorithm = algorithm;
         this._checksum = checksum;
     }
@@ -67,7 +71,7 @@ export class LicenseItem {
      * @param {String} eTag etag of file
      * @returns {String} blobKey
      */
-    static generateBlobKey(name, eTag) {
+    static generateBlobKey(name:string, eTag:string) {
         return crypto.createHash('sha1').update(`${name}-${eTag}`, 'utf8').digest('hex');
     }
 };

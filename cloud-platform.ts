@@ -9,11 +9,14 @@ Author: Fortinet
 
 import {Blob} from './blob';
 import * as CoreFunctions from './core-functions';
-import {VirtualMachine} from './virtual-machine';
+import {VirtualMachine, NetworkInterface} from './virtual-machine';
+import {LifecycleItem} from './lifecycle-item'
 import {LicenseItem} from './license-item';
 import { LicenseRecord} from './license-record';
 import { HealthCheck } from './health-check-record';
-import { MasterRecord } from './master-election';
+import * as MasterElection from './master-election';
+import { SettingItem } from './setting-item';
+import { Logger } from './logger';
 
 export interface RequestInfo {
     instanceId: string;
@@ -21,18 +24,57 @@ export interface RequestInfo {
     status: string;
 }
 
-export abstract class CloudPlatform {
+export type PlatformDataProcessor<T> = () => T;
+
+export type AsyncPlatformDataProcessor<T> = () => Promise<T>;
+
+export type InstanceDescriptor = {
+    instanceId:string,
+    scalingGroupName?:string
+};
+
+export enum NicAttachmentState {
+    attached = 'attached',
+    pending_attach = 'pending_attach',
+    detached = 'detached',
+    pending_detach = 'pending_detach'
+}
+
+export interface NicAttachmentRecord{
+
+}
+
+// NOTE: keep this commented lines until refactoring is done.
+// export interface SettingItem {
+//     settingKey: string,
+//     settingValue: string | {},
+//     editable: boolean,
+//     jsonEncoded: boolean,
+//     description: string
+// }
+
+export type SettingItems = { [k: string]: SettingItem;};
+
+export interface BlobStorageItemDescriptor {
+    storageName: string,
+    keyPrefix: string,
+    fileName?: string
+}
+
+/**
+* Class used to define the capabilities required from cloud platform.
+* P_NI: parameter to deal with a single NetworkInterface
+* P_NIQ: parameter to query NetworkInterface
+ */
+export abstract class CloudPlatform<P_NI, P_NIQ> {
     // TODO: should remove the underscore
-    readonly _settings: {} | null;
+    readonly _settings: SettingItems | null;
     private _initialized:boolean;
     scalingGroupName: string;
     masterScalingGroupName: string;
     constructor() {
         this._settings = null;
         this._initialized = false;
-    }
-    throwNotImplementedException() {
-        throw new Error('Not Implemented');
     }
 
     /**
@@ -46,234 +88,165 @@ export abstract class CloudPlatform {
      * Initialize (and wait for) any required resources such as database tables etc.
      * Abstract class method.
      */
-    async init() {
-        await this.throwNotImplementedException();
-    }
+    abstract async init():Promise<boolean>;
 
-    setMasterScalingGroup(scalingGroupName) {
+    setMasterScalingGroup(scalingGroupName:string) {
         this.masterScalingGroupName = scalingGroupName;
     }
 
-    setScalingGroup(scalingGroupName) {
+    setScalingGroup(scalingGroupName:string) {
         this.scalingGroupName = scalingGroupName;
     }
 
     /**
-     * Submit an election vote for this ip address to become the master.
+     * Submit an election vote for this instance to become the master.
      * Abstract class method.
-     * @param {String} ip Ip of the FortiGate which wants to become the master
-     * @param {String} purgeMasterIp Ip of the dead master we should purge before voting
+     * @param candidateInstance the master candidate instance
+     * @param purgeMasterRecord purge the current master or not
      */
-    async putMasterElectionVote(ip, purgeMasterIp) {
-        await this.throwNotImplementedException();
-    }
+    abstract async putMasterElectionVote(candidateInstance: VirtualMachine, purgeMasterRecord?: boolean): Promise<boolean>;
 
     /**
      * Submit an master record for election with a vote state.
      * Abstract class method.
-     * @param {String} candidateInstance the master candidate instance
-     * @param {String} voteState vote state of 'pending' or 'done'
-     * @param {String} method 'new' for inserting when no record exists, 'replace' for replacing
+     * @param candidateInstance the master candidate instance
+     * @param voteState vote state of 'pending' or 'done'
+     * @param method 'new' for inserting when no record exists, 'replace' for replacing
      * the existing record or the same as 'new', otherwise.
-     * @returns {boolean} result. true or false
      */
-    abstract async putMasterRecord(candidateInstance, voteState, method): Promise<boolean>;
+    abstract async putMasterRecord(candidateInstance: VirtualMachine,
+        voteState: MasterElection.VoteState, method: MasterElection.VoteMethod): Promise<boolean>;
     /**
      * Get the master record from db.
      * Abstract class method.
-     * @returns {String} Ip of the FortiGate which should be the auto-sync master
      */
-    abstract async getMasterRecord(): Promise<MasterRecord>;
+    abstract async getMasterRecord(): Promise<MasterElection.MasterRecord>;
 
     /**
      * Remove the current master record from db.
      * Abstract class method.
      */
-    async removeMasterRecord() {
-        await this.throwNotImplementedException();
-    }
+    abstract async removeMasterRecord():Promise<void>;
     /**
      * Get all existing lifecyle actions for a FortiGate instance from the database.
      * Abstract class method.
-     * @param {String} instanceId Instance ID of a FortiGate.
-     * @returns {LifecycleItem} Item used by the platform to complete a lifecycleAction.
+     * @param instanceId Instance ID of a FortiGate.
      */
-    async getLifecycleItems(instanceId) {
-        await this.throwNotImplementedException();
-    }
+    abstract async getLifecycleItems(instanceId: string): Promise<LifecycleItem[]>;
     /**
      * Update one life cycle action item hooked with an instance.
      * Abstract class method.
-     * @param {LifecycleItem} item Item used by the platform to complete
+     * @param item Item used by the platform to complete
      *  a lifecycleAction.
      */
-    async updateLifecycleItem(item) {
-        await this.throwNotImplementedException();
-    }
+    // TODO: what should be return?
+    abstract async updateLifecycleItem(item: LifecycleItem):Promise<unknown>;
     /**
      * remove one life cycle action item hooked with an instance.
      * Abstract class method.
      * @param {LifecycleItem} item Item used by the platform to complete
      *  a lifecycleAction.
      */
-    async removeLifecycleItem(item) {
-        await this.throwNotImplementedException();
-    }
+    abstract async removeLifecycleItem(item:LifecycleItem):Promise<void>;
     /**
      * Clean up database the current LifeCycleItem entries (or any expired entries).
      * Abstract class method.
-     * @param {LifecycleItem} [items] an array of LifeCycleItem to remove from database.
+     * @param items an array of LifeCycleItem to remove from database.
      * When provided, only the list of items will be cleaned up, otherwise scan for expired
      *  items to purge.
      */
-    async cleanUpDbLifeCycleActions(items = []) {
-        await this.throwNotImplementedException();
-    }
+    abstract async cleanUpDbLifeCycleActions(items: LifecycleItem[] | null):
+        Promise<LifecycleItem[] | boolean>;
     /**
      * Get the url for the callback-url portion of the config.
-     * @param {Object} fromContext a context object to get the url, if needed.
+     * @param processor a data processor function that returns the url string
      */
-    async getCallbackEndpointUrl(fromContext = null) { // eslint-disable-line no-unused-vars
-        if (this._settings['autoscale-handler-url']) {
-            return await Promise.resolve(this._settings['autoscale-handler-url']);
-        } else {
-            throw new Error('Autoscale callback URL setting: autoscale-handler-url, not found.');
-        }
-    }
+    abstract async getCallbackEndpointUrl(processor: PlatformDataProcessor<string>): Promise<string>;
 
-    /**
-     * Lookup the instanceid using an ip address.
-     * Abstract class method.
-     * @param {String} ip Local ip address of an instance.
-     */
-    async findInstanceIdByIp(ip) {
-        await this.throwNotImplementedException();
-    }
 
     /**
      * Extract useful info from request event.
      * @param {Object} request the request event
      * @returns {Object} an object of required info per platform.
      */
-    abstract extractRequestInfo(request): RequestInfo;
-
-    /**
-     * Protect an instance from being scaled out.
-     * Abstract class method.
-     * @param {LifecycleItem} item Item that was used by the platform to complete a
-     *  lifecycle action
-     * @param {boolean} [protect=true] Whether to add or remove or protection the instance.
-     */
-    async protectInstanceFromScaleIn(item, protect = true) {
-        await this.throwNotImplementedException();
-    }
-
-    /**
-     * List all instances with given parameters.
-     * Abstract class method.
-     * @param {Object} parameters parameters necessary for listing all instances.
-     */
-    async listAllInstances(parameters) {
-        await this.throwNotImplementedException();
-    }
+    // TODO: refactor this function
+    abstract extractRequestInfo(request:any): RequestInfo;
 
     /**
      * Describe an instance and retrieve its information, with given parameters.
      * Abstract class method.
-     * @param {Object} parameters parameters necessary for describing an instance.
+     * @param Descriptor a Descriptor for describing an instance.
      */
-    abstract async describeInstance(parameters): Promise<VirtualMachine>;
+    abstract async describeInstance(Descriptor: InstanceDescriptor): Promise<VirtualMachine>;
 
     /**
      * do the instance health check.
      * Abstract class method.
-     * @param {Object} instance the platform-specific instance object
-     * @param {Number} heartBeatInterval the expected interval (second) between heartbeats
-     * @returns {Object}
-     *      {healthy: <bool>, heartBeatLossCount: <int>, nextHeartBeatTime: <int>}
+     * @param instance the instance
+     * @param heartBeatInterval the expected interval (second) between heartbeats
      */
-    abstract async getInstanceHealthCheck(instance, heartBeatInterval?): Promise<HealthCheck>;
+    abstract async getInstanceHealthCheck(instance:VirtualMachine, heartBeatInterval?:number): Promise<HealthCheck>;
+    /**
+     * do the instance health check.
+     * Abstract class method.
+     * @param Descriptor the instance Descriptor
+     * @param heartBeatInterval the expected interval (second) between heartbeats
+     */
+    abstract async getInstanceHealthCheck(Descriptor:InstanceDescriptor, heartBeatInterval?:number): Promise<HealthCheck>;
 
     /**
      * update the instance health check result to DB.
      * Abstract class method.
-     * @param {Object} healthCheckObject update based on the healthCheckObject got by return from
+     * @param healthCheckObject update based on the healthCheckObject got by return from
      * getInstanceHealthCheck
-     * @param {Number} heartBeatInterval the expected interval (second) between heartbeats
-     * @param {String} masterIp the current master ip in autoscaling group
-     * @param {Number} checkPointTime the check point time of when the health check is performed.
-     * @param {bool} forceOutOfSync whether force to update this record as 'out-of-sync'
+     * @param heartBeatInterval the expected interval (second) between heartbeats
+     * @param masterIp the current master ip in autoscaling group
+     * @param checkPointTime the check point time of when the health check is performed.
+     * @param forceOutOfSync whether force to update this record as 'out-of-sync'
      * @returns {bool} resul: true or false
      */
-    async updateInstanceHealthCheck(healthCheckObject, heartBeatInterval, masterIp, checkPointTime,
-        forceOutOfSync = false) {
-        await this.throwNotImplementedException();
-    }
+    abstract async updateInstanceHealthCheck(healthCheck: HealthCheck, heartBeatInterval:number,
+        masterIp:string, checkPointTime: number,forceOutOfSync?:boolean): Promise<boolean>;
 
     /**
      * delete the instance health check monitoring record from DB.
      * Abstract class method.
-     * @param {Object} instanceId the instanceId of instance
-     * @returns {bool} resul: true or false
+     * @param instanceId the instanceId of instance
      */
-    async deleteInstanceHealthCheck(instanceId) {
-        await this.throwNotImplementedException();
-    }
+    abstract async deleteInstanceHealthCheck(instanceId:string):Promise<boolean>;
 
     /**
      * Delete one or more instances from the auto scaling group.
      * Abstract class method.
      * @param {Object} parameters parameters necessary for instance deletion.
      */
-    async deleteInstances(parameters) {
-        await this.throwNotImplementedException();
-    }
+    abstract async deleteInstances(Descriptor:InstanceDescriptor[]): Promise<boolean>;
 
-    async createNetworkInterface(parameters) {
-        await this.throwNotImplementedException();
-    }
+    abstract async createNetworkInterface(parameters: P_NI): Promise<NetworkInterface>;
 
-    async deleteNetworkInterface(parameters) {
-        await this.throwNotImplementedException();
-    }
+    abstract async deleteNetworkInterface(parameters: P_NI): Promise<boolean>;
 
-    async describeNetworkInterface(parameters) {
-        await this.throwNotImplementedException();
-    }
+    abstract async describeNetworkInterface(parameters: P_NI): Promise<NetworkInterface>;
 
-    async listNetworkInterfaces(parameters) {
-        await this.throwNotImplementedException();
-    }
+    abstract async listNetworkInterfaces(parameters: P_NIQ):Promise<NetworkInterface[]>;
 
-    async attachNetworkInterface(instance, nic) {
-        await this.throwNotImplementedException();
-    }
+    abstract async attachNetworkInterface(instance:VirtualMachine, nic:NetworkInterface): Promise<string | boolean>;
 
-    async detachNetworkInterface(instance, nic) {
-        await this.throwNotImplementedException();
-    }
+    abstract async detachNetworkInterface(instance: VirtualMachine, nic: NetworkInterface):Promise<boolean>;
 
-    async listNicAttachmentRecord() {
-        await this.throwNotImplementedException();
-    }
+    abstract async listNicAttachmentRecord(): Promise<NicAttachmentRecord[]>;
 
-    async getNicAttachmentRecord(instanceId) {
-        await this.throwNotImplementedException();
-    }
+    abstract async getNicAttachmentRecord(instanceId:string):Promise<NicAttachmentRecord>;
 
-    async updateNicAttachmentRecord(instanceId, nicId, state, conditionState = null) {
-        await this.throwNotImplementedException();
-    }
+    abstract async updateNicAttachmentRecord(instanceId:string, nicId:string, state:NicAttachmentState, conditionState?:NicAttachmentState): Promise<boolean>;
 
-    async deleteNicAttachmentRecord(instanceId, conditionState = null) {
-        await this.throwNotImplementedException();
-    }
+    abstract async deleteNicAttachmentRecord(instanceId:string, conditionState?:NicAttachmentState): Promise<boolean>;
 
-    async getSettingItem(key, valueOnly = true) {
+    async getSettingItem(key: string, valueOnly?:boolean): Promise<string | {}> {
         // check _setting first
         if (this._settings && this._settings.hasOwnProperty(key)) {
             // if get full item object
-            if (!valueOnly && this._settings[key] && this._settings[key].settingKey) {
+            if (!valueOnly && typeof this._settings[key] === 'object' && this._settings[key].settingKey) {
                 return this._settings[key];
             }
             // if not get full item object
@@ -282,7 +255,7 @@ export abstract class CloudPlatform {
                 return this._settings[key].settingKey || this._settings[key];
             }
         }
-        await this.getSettingItems(key, valueOnly);
+        await this.getSettingItems([key], valueOnly);
         return this._settings[key];
     }
 
@@ -292,25 +265,21 @@ export abstract class CloudPlatform {
      * @param {Boolean} valueOnly return setting value only or full detail
      * @returns {Object} Json object
      */
-    async getSettingItems(keyFilter = null, valueOnly = true) {
-        await this.throwNotImplementedException();
-    }
+    abstract async getSettingItems(keyFilter?: string[], valueOnly?: boolean): Promise<SettingItems>;
 
-    async setSettingItem(key, value, description = null, jsonEncoded = false, editable = false) {
-        await this.throwNotImplementedException();
-    }
+    abstract async setSettingItem(key: string, value: string | {}, description?:string, jsonEncoded?:boolean, editable?:boolean): Promise<boolean>;
 
     /**
      * get the blob from storage
      * @param {Object} parameters parameter object
      * @returns {Object} the object must have the property 'content' containing the blob content
      */
-    abstract async getBlobFromStorage(parameters): Promise<Blob>;
+    abstract async getBlobFromStorage(parameters: BlobStorageItemDescriptor): Promise<Blob>;
 
     // TODO: what shuold be the correct return type here?
-    abstract async listBlobFromStorage(parameters): Promise<unknown>;
+    abstract async listBlobFromStorage(parameters: BlobStorageItemDescriptor): Promise<Blob[]>;
 
-    abstract async getLicenseFileContent(fileName): Promise<string>;
+    abstract async getLicenseFileContent(fileName:string): Promise<string>;
 
     /**
      * List license files in storage
@@ -318,28 +287,15 @@ export abstract class CloudPlatform {
      * @returns {Map<LicenseItem>} must return a Map of LicenseItem with blobKey as key,
      * and LicenseItem as value
      */
-    abstract async listLicenseFiles(parameters?): Promise<Map<string, LicenseItem>>;
+    abstract async listLicenseFiles(parameters?:BlobStorageItemDescriptor): Promise<Map<string, LicenseItem>>;
 
-    /**
-     * Update the license useage record to db
-     * @param {LicenseRecord} licenseRecord the license record to update
-     * @param {Boolean} replace use replace or update method
-     * @return {Boolan} return the update result
-     */
-    async updateLicenseUsage(licenseRecord, replace = false) {
-        await this.throwNotImplementedException();
-    }
+    abstract async updateLicenseUsage(licenseRecord:LicenseRecord, replace?:boolean): Promise<boolean>;
     /**
      * List license usage records
-     * @param {Object} parameters parameter require to list and filter license usage records
      * @returns {Map<licenseRecord>} must return a Map of licenseRecord with checksum as key,
      * and LicenseItem as value
      */
-    abstract async listLicenseUsage(parameters?): Promise<Map<string, LicenseRecord>>;
-
-    async deleteLicenseUsage(parameters) {
-        await this.throwNotImplementedException();
-    }
+    abstract async listLicenseUsage(): Promise<Map<string, LicenseRecord>>;
 
     /**
      *  @returns {Map<licenseRecord>} must return a Map of LicenseItem with blochecksumbKey as key,
@@ -356,29 +312,22 @@ export abstract class CloudPlatform {
      * @returns {Array<licenseRecord>} must return an Array of licenseRecord with checksum as key,
      * and LicenseItem as value
      */
-    async findRecyclableLicense(stockRecords, usageRecords, limit = -1) {
-        await this.throwNotImplementedException();
-    }
+    abstract async findRecyclableLicense(stockRecords: Map<string, LicenseRecord>, usageRecords: Map<string, LicenseRecord>, limit?: number): Promise<LicenseRecord[]>;
 
     /**
      * Update the given license item to db
      * @param {LicenseItem} licenseItem the license item to update
      * @param {Boolean} replace update method: replace existing or not. Default true
      */
-    async updateLicenseStock(licenseItem, replace = true) {
-        await this.throwNotImplementedException();
-    }
+    abstract async updateLicenseStock(licenseItem: LicenseItem, replace?:boolean): Promise<boolean>;
+
     /**
      * Delete the given license item from db
      * @param {LicenseItem} licenseItem the license item to update
      */
-    async deleteLicenseStock(licenseItem) {
-        await this.throwNotImplementedException();
-    }
+    abstract async deleteLicenseStock(licenseItem: LicenseItem):Promise<boolean>;
 
-    async terminateInstanceInAutoScalingGroup(instance) {
-        await this.throwNotImplementedException();
-    }
+    abstract async terminateInstanceInAutoScalingGroup(instance:VirtualMachine): Promise<boolean>;
 
     /**
      * Retrieve the cached vm info from database
@@ -412,14 +361,12 @@ export abstract class CloudPlatform {
      * @param {String} routeTableId id of the transit gateway route table to update
      * @returns {Boolean} A boolean value for whether the update is success or not.
      */
-    abstract async updateTgwRouteTableAssociation(attachmentId, routeTableId): Promise<boolean>;
+    abstract async updateTgwRouteTableAssociation(attachmentId:string, routeTableId: string): Promise<boolean>;
 
     /**
      * return a platform-specific logger class
      */
-    getPlatformLogger() {
-        this.throwNotImplementedException();
-    }
+    abstract getPlatformLogger(): Logger;
 
     /**
      * get the execution time lapse in millisecond

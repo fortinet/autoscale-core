@@ -25,7 +25,7 @@ import * as CoreFunctions from './core-functions';
 import {VirtualMachine} from './virtual-machine';
 import {HealthCheck} from './health-check-record';
 import * as MasterElection from './master-election';
-import {CloudPlatform, RequestInfo} from './cloud-platform';
+import { CloudPlatform, RequestInfo, InstanceDescriptor, SettingItems, BlobStorageItemDescriptor} from './cloud-platform';
 import { LicenseItem } from './license-item';
 import { LicenseRecord } from './license-record';
 
@@ -47,19 +47,16 @@ export enum RetrieveMasterOption {
     masterRecord = 'masterRecord'
 }
 
-export type SubnetPair = { subnetId: string, pairId:string};
-
-export type SettingItem = {
-    settingKey: string,
-    settingValue: string | {},
-    editable: boolean,
-    jsoenEncoded: boolean,
-    description: string
-}
+export interface SubnetPair {
+    subnetId: string,
+    pairId:string
+};
 
 export type ProxyResponse = string | {};
 
-export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
+export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM,
+    P_NI, P_NIQ,
+    P extends CloudPlatform<P_NI, P_NIQ>> {
     protected _selfInstance: VirtualMachine | null;
     protected _selfHealthCheck: HealthCheck | null;
     protected _masterHealthCheck: HealthCheck | null;
@@ -69,7 +66,7 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
     protected scalingGroupName: string;
     protected masterScalingGroupName: string;
     protected logger: CoreFunctions.Logger;
-    constructor(protected readonly platform: CloudPlatform, protected _baseConfig: string){
+    constructor(protected readonly platform: P, protected _baseConfig: string){
         this._selfInstance = null;
         this._selfHealthCheck = null;
         this._masterRecord = null;
@@ -92,12 +89,14 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
      * do it via the platform instance but not here.
      */
     // TODO: improve this
-    abstract get _settings(): any;
+    get _settings(): SettingItems {
+        return this.platform._settings;
+    }
 
     /**
- * Set the logger to output log to platform
- * @param {Logger} logger Logger object used to output log to platform
- */
+    * Set the logger to output log to platform
+    * @param {Logger} logger Logger object used to output log to platform
+    */
     useLogger(logger:CoreFunctions.Logger) {
         this.logger = logger || new CoreFunctions.DefaultLogger(console);
     }
@@ -121,7 +120,7 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
         this.logger.info('checking deployment setting items');
         await this.loadSettings();
         if (!this._settings || this._settings &&
-            this._settings['deployment-settings-saved'] !== 'true') {
+            !this._settings['deployment-settings-saved']) {
             // in the init function of each platform autoscale-handler, this error must be caught
             // and provide addtional handling code to save the settings
             throw new Error('Deployment settings not saved.');
@@ -129,8 +128,13 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
 
         // set scaling group names for master and self
         this.setScalingGroup(
-            this._settings['master-scaling-group-name'],
-            this._settings['master-scaling-group-name']
+            // TODO:
+            //the data structure here for this._settings is not good.Needs to improve it
+            //Because it can hold a value of string or json object type,
+            //However, this will fail if the property is undefined/null.
+            // .toString() actually stringifies the object type value. any better way?
+            this._settings['master-scaling-group-name'].toString(),
+            this._settings['master-scaling-group-name'].toString()
         );
         return success;
     }
@@ -146,8 +150,10 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
      * @see https://docs.aws.amazon.com/apigateway/latest/developerguide/set-up-lambda-proxy-integrations.html#api-gateway-simple-proxy-for-lambda-input-format
      */
     // TODO: improve the handle and formal parameters
+    // NOTE:
+    // see detailed code review comments on: 75699/1/core/autoscale-handler.ts#149
     async handle(event: any, context: any, callback: any) { // eslint-disable-line no-unused-vars
-        let step:string = 'initializing';
+        let step = 'initializing';
         let proxyMethod = 'method' in event && event.method ||
             'httpMethod' in event && event.httpMethod,
             result;
@@ -221,9 +227,9 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
     async getConfigSet(configName: string): Promise<string> {
         try {
             let keyPrefix = this._settings['asset-storage-key-prefix'] ?
-                path.join(this._settings['asset-storage-key-prefix'], 'configset') : 'configset';
-            const parameters = {
-                storageName: this._settings['asset-storage-name'],
+                path.join(this._settings['asset-storage-key-prefix'].toString(), 'configset') : 'configset';
+            const parameters: BlobStorageItemDescriptor = {
+                storageName: this._settings['asset-storage-name'].toString(),
                 keyPrefix: keyPrefix,
                 fileName: configName
             };
@@ -244,16 +250,16 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
 
     async getBaseConfig():Promise<string> {
         let baseConfig = await this.getConfigSet('baseconfig');
-        let psksecret = this._settings['fortigate-psk-secret'],
+        let psksecret = this._settings['fortigate-psk-secret'].toString(),
             fazConfig = '',
             fazIp;
         if (baseConfig) {
             // check if other config set are required
-            let requiredConfigSet = this._settings['required-configset'] || [];
+            let requiredConfigSet:string = this._settings['required-configset'].toString() || '';
             let configContent = '';
             // check if second nic is enabled, config for the second nic must be prepended to
             // base config
-            if (this._settings['enable-second-nic'] === 'true') {
+            if (this._settings['enable-second-nic'].toString() === 'true') {
                 baseConfig = await this.getConfigSet('port2config') + baseConfig;
             }
             for (let configset of requiredConfigSet.split(',')) {
@@ -287,47 +293,61 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
 
             baseConfig = baseConfig
                 .replace(new RegExp('{SYNC_INTERFACE}', 'gm'),
-                    this._settings['fortigate-sync-interface'] || 'port1')
+                    this._settings['fortigate-sync-interface'] &&
+                    this._settings['fortigate-sync-interface'].toString() || 'port1')
                 .replace(new RegExp('{EXTERNAL_INTERFACE}', 'gm'), 'port1')
                 .replace(new RegExp('{INTERNAL_INTERFACE}', 'gm'), 'port2')
                 .replace(new RegExp('{PSK_SECRET}', 'gm'), psksecret)
                 .replace(new RegExp('{TRAFFIC_PORT}', 'gm'),
-                    this._settings['fortigate-traffic-port'] || 443)
+                    this._settings['fortigate-traffic-port'] &&
+                    this._settings['fortigate-traffic-port'].toString() || '443')
                 .replace(new RegExp('{ADMIN_PORT}', 'gm'),
-                    this._settings['fortigate-admin-port'] || 8443)
+                    this._settings['fortigate-admin-port'] &&
+                    this._settings['fortigate-admin-port'].toString() || '8443')
                 .replace(new RegExp('{HEART_BEAT_INTERVAL}', 'gm'),
-                    this._settings['heartbeat-interval'] || 30)
+                    this._settings['heartbeat-interval'] &&
+                    this._settings['heartbeat-interval'].toString() || '30')
                 .replace(new RegExp('{INTERNAL_ELB_DNS}', 'gm'),
-                    this._settings['fortigate-protected-internal-elb-dns'] || '');
+                    this._settings['fortigate-protected-internal-elb-dns'] &&
+                    this._settings['fortigate-protected-internal-elb-dns'].toString() || '');
         }
         return baseConfig;
     }
 
-    parseRequestInfo(event:{}):void {
+    parseRequestInfo(event:{}) {
         this._requestInfo = this.platform.extractRequestInfo(event);
     }
 
     async parseInstanceInfo(instanceId:string):Promise<void> {
         // look for this vm in both byol and payg vmss
         // look from byol first
-        this._selfInstance = this._selfInstance || await this.platform.describeInstance({
-            instanceId: instanceId,
-            scalingGroupName: this._settings['byol-scaling-group-name']
-        });
+        this._selfInstance = this._selfInstance || await this.platform.describeInstance(
+            <InstanceDescriptor>{
+                instanceId: instanceId,
+                scalingGroupName: this._settings['byol-scaling-group-name'] &&
+                    this._settings['byol-scaling-group-name'].toString()
+            });
         if (this._selfInstance) {
             this.setScalingGroup(
-                this._settings['master-scaling-group-name'],
-                this._settings['byol-scaling-group-name']
+                this._settings['master-scaling-group-name'] &&
+                this._settings['master-scaling-group-name'].toString(),
+                this._settings['byol-scaling-group-name'] &&
+                this._settings['byol-scaling-group-name'].toString()
             );
         } else { // not found in byol vmss, look from payg
-            this._selfInstance = await this.platform.describeInstance({
-                instanceId: instanceId,
-                scalingGroupName: this._settings['payg-scaling-group-name']
-            });
+            this._selfInstance = await this.platform.describeInstance(
+                <InstanceDescriptor>{
+                    instanceId: instanceId,
+                    scalingGroupName: this._settings['payg-scaling-group-name'] &&
+                        this._settings['payg-scaling-group-name'].toString()
+                });
+
             if (this._selfInstance) {
                 this.setScalingGroup(
-                    this._settings['master-scaling-group-name'],
-                this._settings['payg-scaling-group-name']
+                    this._settings['master-scaling-group-name'] &&
+                    this._settings['master-scaling-group-name'].toString(),
+                this._settings['payg-scaling-group-name'] &&
+                this._settings['payg-scaling-group-name'].toString()
                 );
             }
         }
@@ -342,7 +362,7 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
     async checkInstanceAuthorization(instance:VirtualMachine):Promise<boolean> {
         // TODO: can we generalize this method to core?
         if (!instance ||
-                instance.virtualNetworkId !== this._settings['fortigate-autoscale-vpc-id']) {
+                instance.virtualNetworkId !== this._settings['fortigate-autoscale-vpc-id'].toString()) {
             // not trusted
             return await Promise.reject('Unauthorized calling instance (' +
                 `instanceId: ${instance && instance.instanceId || null}). Instance not found in VPC.`);
@@ -497,18 +517,18 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
             isMaster = false,
             lifecycleShouldAbandon = false;
 
-        let parameters = {
-            instanceId: instanceId,
-            scalingGroupName: this.scalingGroupName
-        };
-
         // get selfinstance
-        this._selfInstance = this._selfInstance || await this.platform.describeInstance(parameters);
+        this._selfInstance = this._selfInstance || await this.platform.describeInstance(
+            <InstanceDescriptor>{
+                instanceId: instanceId,
+                scalingGroupName: this.scalingGroupName
+            });
 
         // handle hb monitor
         // get self health check
         this._selfHealthCheck = this._selfHealthCheck ||
-            await this.platform.getInstanceHealthCheck({
+            await this.platform.getInstanceHealthCheck(
+                <InstanceDescriptor>{
                 instanceId: this._selfInstance.instanceId
             }, interval);
         // if self is already out-of-sync, skip the monitoring logics
@@ -550,7 +570,7 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
                         // may allow any non master instance to come up without master.
                         // They will receive the new master ip on one of their following
                         // heartbeat sync callback
-                        if (this._settings['master-election-no-wait'] === 'true') {
+                        if (this._settings['master-election-no-wait'].toString() === 'true') {
                             return true;
                         } else {
                         // if i am not the new master, and the new master hasn't come up to
@@ -627,7 +647,8 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
         // check if myself is under health check monitoring
         // (master instance itself may have got its healthcheck result in some code blocks above)
         this._selfHealthCheck = this._selfHealthCheck ||
-            await this.platform.getInstanceHealthCheck({
+            await this.platform.getInstanceHealthCheck(
+                <InstanceDescriptor>{
                 instanceId: this._selfInstance.instanceId
             }, interval);
 
@@ -664,12 +685,12 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
             // if slave finds master is pending, don't update master ip to the health check record
             if (!isMaster && this._masterRecord &&
                 this._masterRecord.voteState === MasterElection.VoteState.pending &&
-            this._settings['master-election-no-wait'] === 'true') {
+            this._settings['master-election-no-wait'].toString() === 'true') {
                 masterIp = null;
             }
             await this.addInstanceToMonitor(this._selfInstance, interval, masterIp);
             let logMessagMasterIp = !masterIp &&
-                this._settings['master-election-no-wait'] === 'true' ? ' without master ip)' :
+                this._settings['master-election-no-wait'].toString() === 'true' ? ' without master ip)' :
                 ` master-ip: ${masterIp})`;
             this.logger.info(`instance (id:${this._selfInstance.instanceId}, ` +
                     `${logMessagMasterIp} is added to monitor at timestamp: ${Date.now()}.`);
@@ -907,9 +928,10 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
         } catch (ex) {
             this.logger.error(ex);
         }
-        return this._masterRecord && await this.platform.describeInstance({
-            instanceId: instanceId
-        });
+        return this._masterRecord && await this.platform.describeInstance(
+            <InstanceDescriptor>{
+                instanceId: instanceId
+            });
     }
 
     /**
@@ -930,7 +952,8 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
             } else {
                 this.logger.log('no master purge');
             }
-            return await this.platform.putMasterRecord(candidateInstance, 'pending', 'new');
+            return await this.platform.putMasterRecord(candidateInstance,
+                MasterElection.VoteState.pending, MasterElection.VoteMethod.new);
         } catch (ex) {
             this.logger.warn('exception while putMasterElectionVote',
                 JSON.stringify(candidateInstance), JSON.stringify(purgeMasterRecord), ex.stack);
@@ -1304,7 +1327,8 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
     async resetMasterElection() {
         this.logger.info('calling resetMasterElection');
         try {
-            this.setScalingGroup(this._settings['master-scaling-group-name'], null);
+            this.setScalingGroup(this._settings['master-scaling-group-name'] &&
+                this._settings['master-scaling-group-name'].toString(), null);
             await this.platform.removeMasterRecord();
             this.logger.info('called resetMasterElection. done.');
             return true;
@@ -1349,7 +1373,8 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
         if (filters === null || filters.get(RetrieveMasterOption.masterHealthCheck)) {
             // if reload not needed, return the current object or retrive it.
             this._masterHealthCheck = !reload && this._masterHealthCheck ||
-                await this.platform.getInstanceHealthCheck({
+                await this.platform.getInstanceHealthCheck(
+                    <InstanceDescriptor>{
                     instanceId: this._masterInfo.instanceId
                 });
         }
@@ -1371,7 +1396,7 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
         // TODO: double check that the work flow of terminating the master instance here
         // is appropriate
         try {
-            let asyncTasks = [];
+            let asyncTasks: Promise<any>[] = [];
             await this.retrieveMaster();
             // if has master health check record, make it out-of-sync
             if (this._masterInfo && this._masterHealthCheck) {
@@ -1443,7 +1468,7 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
                 }
                 let platform = this.platform, logger = this.logger;
                 // fetch the content for each untrack license file
-                let updateTasks = [], updateTasksResult = [], doneTaskCount = 0;
+                let updateTasks: Promise<any>[] = [], updateTasksResult: LicenseItem[], doneTaskCount = 0;
 
                 if (recordsToDelete.size > 0) {
                     recordsToDelete.forEach(licenseRecord => {
@@ -1453,15 +1478,20 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
                                     'from stock.');
                                 return true;
                             })
-                            .catch(error => {
+                            .catch((error:any) => {
                                 logger.error('cannot remove license file ' +
                                     `(${licenseRecord.fileName}) from stock. ` +
                                     `error: ${JSON.stringify(error)}`);
                                 return false;
                             }));
                     });
-                    updateTasksResult = await Promise.all(updateTasks);
-                    doneTaskCount = updateTasksResult.filter(result => { return result }).length;
+
+                    await Promise.all(updateTasks).then(doneTasks=>{
+                        doneTaskCount = 0;
+                        doneTasks.forEach(done => doneTaskCount = done && doneTaskCount + 1);
+                        return doneTaskCount;
+                    });
+
                     if (doneTaskCount > 0) {
                         logger.info(`${doneTaskCount} files removed from stock.`);
                     }
@@ -1482,11 +1512,13 @@ export abstract class AutoscaleHandler<T_PARAM, T_PLATFORM> {
                                     return null;
                                 }));
                         } else {
-                            updateTasks.push(licenseItem);
+                            updateTasks.push(Promise.resolve(licenseItem));
                         }
                     });
 
-                    updateTasksResult = await Promise.all(updateTasks);
+                    updateTasksResult = await Promise.all(updateTasks).then((result: LicenseItem[])=>{
+                        return result;
+                    });
                     untrackedFiles = new Map(updateTasksResult.filter(licenseItem => {
                         return !!licenseItem;
                     }).map((licenseItem => {

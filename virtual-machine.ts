@@ -7,7 +7,12 @@ Author: Fortinet
 * AWS - EC2 instance
 * Azure - Virtial Machine
 */
-export abstract class NetworkInterface {
+
+// TODO:
+// This is designed as a cross-platform generic type.
+// Will fill its properties but need to gather more information about network interface
+// in different platforms first in order to find the most common properties. maybe just id?
+export interface NetworkInterface {
 
 }
 

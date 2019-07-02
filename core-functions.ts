@@ -26,19 +26,17 @@ export { Logger, LogLevels, LogQueueItem };
 
 const scriptStartTime: number = Date.now();
 
-export function uuidGenerator(inStr: string):string {
+export function uuidGenerator(inStr: string) {
     return uuidv5(inStr, uuidv5.URL);
 }
 
-export function toGmtTime(time:Date | number | string):Date | null {
+export function toGmtTime(time: Date | number | string): Date | null {
     let timeObject;
     if (time instanceof Date) {
         timeObject = time;
-    }
-    else if (typeof time === 'number'){
+    } else if (typeof time === 'number') {
         timeObject = new Date(Math.floor(time));
-    }
-    else {
+    } else {
         timeObject = new Date(parseInt(time));
     }
     if (timeObject.getTime()) {
@@ -154,10 +152,10 @@ export class DefaultLogger extends Logger {
     }
 }
 
-const logger: DefaultLogger = new DefaultLogger(console);
-const moduleId:string = uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
+const logger = new DefaultLogger(console);
+const moduleId: string = uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
 
-export function moduleRuntimeId():string {return moduleId;};
+export function moduleRuntimeId(): string { return moduleId; };
 
 export function sleep(ms: number) {
     return new Promise(resolve => {
@@ -229,20 +227,25 @@ export function configSetResourceFinder(resObject: {}, nodePath: string): {} | s
         return '';
     }
     let nodePathMatcher: RegExpMatchArray = nodePath.match(/^{(.+)}$/i);
-    let nodes:string[] = nodePathMatcher[1].split('.');
-    let ref:{} | string | null = resObject;
+    let nodes: string[] = nodePathMatcher[1].split('.');
+    let ref: { [k: string]: string | any[]; } = resObject;
 
     // TODO: what is the correct type for ref and the function return?
     // TODO: how to convert this properly with Array.find()
     nodes.forEach(nodeName => {
         let matches = nodeName.match(/^([A-Za-z_@-]+)#([0-9])+$/i);
-        if (matches && Array.isArray(ref[matches[1]]) && ref[matches[1]].length > matches[2]) {
-            ref = ref[matches[1]][matches[2]];
-        } else if (!ref[nodeName]) {
-            ref = null;
-        } else {
-            ref = Array.isArray(ref[nodeName]) && ref[nodeName].length > 0 ?
-                ref[nodeName][0] : ref[nodeName];
+        if (matches && matches.length > 0) {
+            const refName: string = matches[1];
+            const refIndex: number = matches[2] && parseInt(matches[2]) || 0;
+            if (Array.isArray(ref[refName]) && ref[refName].length > refIndex) {
+                ref = ref[refName][refIndex];
+            }
+            else if (!ref[nodeName]) {
+                ref = null;
+            } else {
+                ref = Array.isArray(ref[nodeName]) && ref[nodeName].length > 0 ?
+                    ref[nodeName][0] : ref[nodeName];
+            }
         }
     });
     return ref;
