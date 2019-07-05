@@ -7,16 +7,16 @@ Author: Fortinet
 * Class used to define the capabilities required from cloud platform.
 */
 
-import {Blob} from './blob';
+import { Blob } from './blob';
 import * as CoreFunctions from './core-functions';
-import {VirtualMachine, NetworkInterface} from './virtual-machine';
-import {LifecycleItem} from './lifecycle-item'
-import {LicenseItem} from './license-item';
-import { LicenseRecord} from './license-record';
 import { HealthCheck } from './health-check-record';
+import { LicenseItem } from './license-item';
+import { LicenseRecord } from './license-record';
+import { LifecycleItem } from './lifecycle-item';
+import { Logger } from './logger';
 import * as MasterElection from './master-election';
 import { SettingItem } from './setting-item';
-import { Logger } from './logger';
+import { NetworkInterface, VirtualMachine } from './virtual-machine';
 
 export interface RequestInfo {
     instanceId: string;
