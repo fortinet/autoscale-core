@@ -1,11 +1,46 @@
-'use strict';
+
 
 /*
 FortiGate Autoscale AWS DynamoDB table definitions (1.0.0)
 Author: Fortinet
 */
-exports = module.exports;
-const DB = {
+
+export enum Tables {
+    FORTIGATEAUTOSCALE = 'FORTIGATEAUTOSCALE',
+    FORTIGATEMASTERELECTION = 'FORTIGATEMASTERELECTION',
+    SETTINGS = 'SETTINGS',
+    VMINFOCACHE = 'VMINFOCACHE',
+    LIFECYCLEITEM = 'LIFECYCLEITEM',
+    NICATTACHMENT = 'NICATTACHMENT',
+    FORTIANALYZER = 'FORTIANALYZER',
+    LICENSESTOCK = 'LICENSESTOCK',
+    LICENSEUSAGE = 'LICENSEUSAGE',
+    CUSTOMLOG = 'CUSTOMLOG',
+    VPNATTACHMENT = 'VPNATTACHMENT',
+}
+
+export interface DbDef {
+    [key: string]: TableDef;
+}
+
+export interface AttributeDef {
+    AttributeName: string;
+    AttributeType?: string;
+    KeyType?: string;
+}
+
+export interface TableDef {
+    TableName: string;
+    AttributeDefinitions: AttributeDef[];
+    KeySchema: AttributeDef[];
+    ProvisionedThroughput?: {
+        ReadCapacityUnits: number;
+        WriteCapacityUnits: number;
+    };
+    AdditionalAttributeDefinitions?: AttributeDef[];
+}
+
+const DB: DbDef = {
     LIFECYCLEITEM: {
         AttributeDefinitions: [
             {
@@ -346,7 +381,8 @@ const DB = {
             {
                 AttributeName: 'id',
                 AttributeType: 'S'
-            },{
+            },
+            {
                 AttributeName: 'timestamp',
                 AttributeType: 'N'
             }
@@ -355,7 +391,8 @@ const DB = {
             {
                 AttributeName: 'id',
                 KeyType: 'HASH'
-            },{
+            },
+            {
                 AttributeName: 'timestamp',
                 KeyType: 'RANGE'
             }
@@ -407,57 +444,26 @@ const DB = {
             }
         ]
     }
-
 };
 
-exports.getTables = (custom_id, unique_id, excludedKeys = null) => {
-    let tables = {},
-        prefix = () => { return custom_id ? `${custom_id}-` : '' },
-        suffix = () => { return unique_id ? `-${unique_id}` : '' };
-    Object.keys(DB).forEach(itemName => {
-        if (!excludedKeys || Array.isArray(excludedKeys) && !excludedKeys.includes(itemName)) {
-            let table = {};
-            table.AttributeDefinitions = DB[itemName].AttributeDefinitions;
-            table.KeySchema = DB[itemName].KeySchema;
-            table.ProvisionedThroughput = DB[itemName].ProvisionedThroughput;
-            table.TableName = prefix() + DB[itemName].TableName + suffix();
-            table.AdditionalAttributeDefinitions = DB[itemName].AdditionalAttributeDefinitions;
-            tables[itemName] = table;
+export function getTables(
+    namePrefix?: string,
+    nameSuffix?: string,
+    excludedKeys: string[] = null
+) {
+    let tables: DbDef = {},
+        prefix = () => {
+            return namePrefix ? `${namePrefix}-` : '';
+        },
+        suffix = () => {
+            return nameSuffix ? `-${nameSuffix}` : '';
+        };
+
+    Object.entries(DB).forEach(([tableKey, tableDef]) => {
+        if (!(excludedKeys && excludedKeys.includes(tableKey))) {
+            tableDef.TableName = prefix() + tableDef.TableName + suffix();
+            tables[tableKey] = tableDef;
         }
     });
     return tables;
-};
-
-exports.getTableSchema = (tables, tableName) => {
-    if (!tables || !tables.hasOwnProperty(tableName)) {
-        return null;
-    }
-    let schema = {};
-    schema.AttributeDefinitions = tables[tableName].AttributeDefinitions;
-    schema.KeySchema = tables[tableName].KeySchema;
-    schema.TableName = tables[tableName].TableName;
-    schema.ProvisionedThroughput = tables[tableName].ProvisionedThroughput;
-    return schema;
-};
-
-exports.getKeys = (excludedNames = null) => {
-    let keys = [];
-    for (let [key, table] of Object.entries(DB)) {
-        if (!excludedNames ||
-                Array.isArray(excludedNames) && !excludedNames.includes(table.TableName)) {
-            keys.push(key);
-        }
-    }
-    return keys;
-};
-
-exports.getNames = (excludedKeys = null) => {
-    let names = [];
-    for (let [key, table] of Object.entries(DB)) {
-        if (!excludedKeys ||
-            Array.isArray(excludedKeys) && !excludedKeys.includes(key)) {
-            names.push(table.TableName);
-        }
-    }
-    return names;
-};
+}
