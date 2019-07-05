@@ -1,6 +1,14 @@
 'use strict';
 
-export class SettingItem {
+export interface SettingItemInterface {
+    settingKey: string,
+    settingValue: string | {},
+    editable: boolean,
+    jsonEncoded: boolean,
+    description: string,
+}
+
+export class SettingItem implements SettingItemInterface {
     constructor(
         public settingKey: string,
         public settingValue: string | {},

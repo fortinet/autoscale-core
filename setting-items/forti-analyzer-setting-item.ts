@@ -4,12 +4,16 @@
 A DynamoDB structure for Setting item: FortiAnalyzer.
 Author: Fortinet
 */
+import {SettingItem, SettingItemInterface} from '../setting-item';
 
-module.exports = class FortiAnalyzerSettingItem {
-    constructor(instanceId, ip, vip) {
-        this.instanceId = instanceId;
-        this.ip = ip;
-        this.vip = vip;
+export class FortiAnalyzerSettingItem extends SettingItem {
+    constructor(public readonly instanceId: string, public readonly ip: string, public readonly vip:string) {
+        //TODO: key and descriptions are to be determined
+        super(`${FortiAnalyzerSettingItem.SETTING_KEY}-${instanceId}`, JSON.stringify({
+            instanceId: instanceId,
+            ip: ip,
+            vip: vip
+        }), false, true, '');
     }
 
     static get SETTING_KEY() {
@@ -33,16 +37,16 @@ module.exports = class FortiAnalyzerSettingItem {
 
     /**
      * Resucitate from a stored DB entry
-     * @param {Object} entry Entry from DB
-     * @returns {LifecycleItem} A new setting item.
+     * @param entry Entry from DB
+     * @returns {FortiAnalyzerSettingItem} A new faz setting item.
      */
-    static fromDb(entry) {
-        let value;
-        if (!(entry.settingKey && entry.settingKey === FortiAnalyzerSettingItem.SETTING_KEY)) {
+    static fromDb(entry: SettingItemInterface) {
+        let value:{[key:string]:string};
+        if (!(entry.settingKey || entry.settingKey.indexOf(FortiAnalyzerSettingItem.SETTING_KEY) >= 0)) {
             throw new Error('Invalid entry setting key.');
         }
         try {
-            value = JSON.parse(entry.settingValue);
+            value = entry.jsonEncoded && JSON.parse(entry.settingValue as string) || entry.settingValue;
         } catch (error) {
             throw new Error(`Invalid setting value: ${entry.settingValue}`);
         }
