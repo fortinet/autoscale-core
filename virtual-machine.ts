@@ -1,5 +1,3 @@
-'use strict';
-
 /*
 Author: Fortinet
 *
@@ -12,18 +10,38 @@ Author: Fortinet
 // This is designed as a cross-platform generic type.
 // Will fill its properties but need to gather more information about network interface
 // in different platforms first in order to find the most common properties. maybe just id?
-export interface NetworkInterface {
 
+export interface NetworkInterfaceLike {
+    networkInterfaceId: string;
+    subnetId: string;
 }
 
-export abstract class VirtualMachine {
+export interface VirtualMachineLike {
+    instanceId: string;
+    scalingGroupName?: string;
+    sourceVmData?: {};
+    primaryPrivateIpAddress: string;
+    primaryPublicIpAddress: string;
+    virtualNetworkId: string;
+    subnetId: string;
+    securityGroups?: string[];
+    networkInterfaces?: object[];
+}
+
+export abstract class VirtualMachine<SourceType, NetworkInterfaceType extends NetworkInterfaceLike>
+    implements VirtualMachineLike {
     private _instanceId: string;
     protected _securityGroups: string[];
-    protected _networkInterfaces: Array<NetworkInterface>;
-    private _sourceVmData: {};
-    constructor(instanceId: string, readonly scalingGroupName: string, readonly sourcePlatform: string, vmData: {}) {
+    protected _networkInterfaces: Array<NetworkInterfaceType>;
+    private _sourceData: SourceType;
+    constructor(
+        instanceId: string,
+        public scalingGroupName: string | null,
+        readonly sourcePlatform: string,
+        vmData: SourceType
+    ) {
         this._instanceId = instanceId;
-        this._sourceVmData = vmData; // the original vm data retrieved from the platform
+        this._sourceData = vmData; // the original vm data retrieved from the platform
         this._securityGroups = [];
         this._networkInterfaces = [];
     }
@@ -32,8 +50,8 @@ export abstract class VirtualMachine {
         return this._instanceId;
     }
 
-    get sourceVmData(): {} {
-        return this._sourceVmData;
+    get sourceData(): SourceType {
+        return this._sourceData;
     }
 
     abstract get primaryPrivateIpAddress(): string;
@@ -48,7 +66,7 @@ export abstract class VirtualMachine {
         return this._securityGroups;
     }
 
-    get networkInterfaces(): Array<NetworkInterface> {
+    get networkInterfaces(): NetworkInterfaceType[] {
         return this._networkInterfaces;
     }
 

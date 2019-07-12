@@ -4,17 +4,21 @@
 Author: Fortinet
 */
 
-const CoreFunctions = require('./core-functions');
-exports.LifecycleItem = require('./lifecycle-item');
-exports.LicenseItem = require('./license-item');
-exports.LicenseRecord = require('./license-record');
-exports.CloudPlatform = require('./cloud-platform');
-exports.AutoscaleHandler = require('./autoscale-handler');
-exports.dbDefinitions = require('./db-definitions');
-const {VirtualMachine, NetworkInterface} = require('./virtual-machine');
-exports.VirtualMachine = VirtualMachine;
-exports.NetworkInterface = NetworkInterface;
-exports.settingItems = require('./setting-items');
-exports.DefaultLogger = CoreFunctions.DefaultLogger;
-exports.moduleRuntimeId = () => CoreFunctions.moduleId;
-exports.Functions = CoreFunctions;
+import * as dbDefinitions from './db-definitions';
+import * as SettingItems from './setting-items';
+import * as Functions from './core-functions';
+
+// TODO: how to re export the moduleRuntimeId, DefaultLogger from core-functions ?
+export { Functions, dbDefinitions, SettingItems };
+
+export * from './virtual-machine';
+export * from './virtual-network';
+export * from './cloud-platform';
+export * from './autoscale-handler';
+export * from './logger';
+export * from './lifecycle-item';
+export * from './license-item';
+export * from './license-record';
+export * from './setting-items/setting-item';
+export * from './master-election';
+export * from './blob';

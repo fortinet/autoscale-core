@@ -1,11 +1,11 @@
-'use strict';
+
 
 export interface SettingItemInterface {
-    settingKey: string,
-    settingValue: string | {},
-    editable: boolean,
-    jsonEncoded: boolean,
-    description: string,
+    settingKey: string;
+    settingValue: string | {};
+    editable: boolean;
+    jsonEncoded: boolean;
+    description: string;
 }
 
 export class SettingItem implements SettingItemInterface {
@@ -14,16 +14,13 @@ export class SettingItem implements SettingItemInterface {
         public settingValue: string | {},
         public editable: boolean,
         public jsonEncoded: boolean,
-        public description: string,
-        ){
+        public description: string
+    ) {}
 
-    }
-
-    toString():string {
-        if (this.jsonEncoded && typeof this.settingValue === 'object'){
+    toString(): string {
+        if (this.jsonEncoded && typeof this.settingValue === 'object') {
             return JSON.stringify(this.settingValue as object);
-        }
-        else {
+        } else {
             return this.settingValue as string;
         }
     }

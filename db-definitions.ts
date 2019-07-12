@@ -1,10 +1,3 @@
-
-
-/*
-FortiGate Autoscale AWS DynamoDB table definitions (1.0.0)
-Author: Fortinet
-*/
-
 export enum Tables {
     FORTIGATEAUTOSCALE = 'FORTIGATEAUTOSCALE',
     FORTIGATEMASTERELECTION = 'FORTIGATEMASTERELECTION',
