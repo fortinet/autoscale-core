@@ -1,40 +1,39 @@
-'use strict';
+'use strict'
 
 /*
 Author: Fortinet
 */
 /* eslint-disable no-unused-vars */
 export interface LogLevels {
-    log: boolean;
-    info: boolean;
-    warn: boolean;
-    error: boolean;
-    debug: boolean;
-};
+    log: boolean
+    info: boolean
+    warn: boolean
+    error: boolean
+    debug: boolean
+}
 
 export interface LogQueueItem {
     // TODO: level should be an enum instead.
-    level: keyof LogLevels;
-    timestamp: Date;
-    arguments: any[];
+    level: keyof LogLevels
+    timestamp: Date
+    arguments: any[]
 }
 /**
  * A unified logger class to handle logging across different platforms.
  */
 export abstract class Logger {
+    private _timeZoneOffset = 0
+    protected _logCount = 0
+    protected _infoCount = 0
+    protected _debugCount = 0
+    protected _warnCount = 0
+    protected _errorCount = 0
+    protected _outputQueue = false
+    protected _queue: LogQueueItem[] = []
+    protected _flushing: boolean = false
+    level: LogLevels | null = null
 
-    private _timeZoneOffset = 0;
-    protected _logCount = 0;
-    protected _infoCount = 0;
-    protected _debugCount = 0;
-    protected _warnCount = 0;
-    protected _errorCount = 0;
-    protected _outputQueue = false;
-    protected _queue: LogQueueItem[] = [];
-    protected _flushing: boolean = false;
-    level: LogLevels | null = null;
-
-    constructor(public logger: Console) { }
+    constructor(public logger: Console) {}
 
     /**
      * control logging output or queue level.
@@ -42,7 +41,7 @@ export abstract class Logger {
      *  error: true | false}
      */
     setLoggingLevel(level: LogLevels) {
-        this.level = level;
+        this.level = level
     }
 
     /**
@@ -50,53 +49,53 @@ export abstract class Logger {
      * @param {Boolean} enable enable this logging feature or not
      */
     set outputQueue(enable) {
-        this._outputQueue = enable;
+        this._outputQueue = enable
     }
 
     get outputQueue() {
-        return this._outputQueue;
+        return this._outputQueue
     }
 
     set timeZoneOffset(offset: number | string) {
         if (typeof offset === 'string') {
-            offset = Number(offset);
+            offset = Number(offset)
         }
-        this._timeZoneOffset = isNaN(offset) ? 0 : offset;
+        this._timeZoneOffset = isNaN(offset) ? 0 : offset
     }
 
     get timeZoneOffset() {
-        return this._timeZoneOffset;
+        return this._timeZoneOffset
     }
 
     get logCount() {
-        return this._logCount;
+        return this._logCount
     }
 
     get infoCount() {
-        return this._infoCount;
+        return this._infoCount
     }
 
     get debugCount() {
-        return this._debugCount;
+        return this._debugCount
     }
 
     get warnCount() {
-        return this._warnCount;
+        return this._warnCount
     }
 
     get errorCount() {
-        return this._errorCount;
+        return this._errorCount
     }
 
     enQueue(level: keyof LogLevels, args: any[]) {
-        let d = new Date();
-        d.setUTCHours(d.getTimezoneOffset() / 60 + this._timeZoneOffset);
-        let item = { level: level, timestamp: d, arguments: <any[]>[] };
+        let d = new Date()
+        d.setUTCHours(d.getTimezoneOffset() / 60 + this._timeZoneOffset)
+        let item = { level: level, timestamp: d, arguments: <any[]>[] }
         item.arguments = Array.from(args).map(arg => {
-            return arg && arg.toString ? arg.toString() : arg;
-        });
-        this._queue.push(item);
-        return this;
+            return arg && arg.toString ? arg.toString() : arg
+        })
+        this._queue.push(item)
+        return this
     }
 
     /**
@@ -129,5 +128,5 @@ export abstract class Logger {
      * flush all queued logs to the output
      * @param level flush all queued logs with this level
      */
-    abstract flush(level: keyof LogLevels): string;
-};
+    abstract flush(level: keyof LogLevels): string
+}

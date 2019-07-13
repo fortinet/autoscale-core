@@ -1,4 +1,4 @@
-'use strict';
+'use strict'
 
 /*
 Author: Fortinet
@@ -12,16 +12,16 @@ export enum LifecycleAction {
     ACTION_NAME_TERMINATING_INSTANCE = 'terminating',
     ACTION_NAME_GET_CONFIG = 'getconfig',
     ACTION_NAME_ATTACH_NIC2 = 'attachnic2',
-    UNKNOWN_ACTION = 'unknown'
-};
+    UNKNOWN_ACTION = 'unknown',
+}
 
 export interface LifecycleItemInterface {
-    readonly instanceId: string;
-    readonly detail: {};
-    actionName: LifecycleAction;
-    done: boolean;
-    readonly timestamp?: Date;
-};
+    readonly instanceId: string
+    readonly detail: {}
+    actionName: LifecycleAction
+    done: boolean
+    readonly timestamp?: Date
+}
 
 export class LifecycleItem implements LifecycleItemInterface {
     /**
@@ -32,10 +32,13 @@ export class LifecycleItem implements LifecycleItemInterface {
      * @param done whether this lifecyclehook action is done or not
      * @param timestamp Optional timestamp for this record.
      */
-    constructor(readonly instanceId: string, readonly detail: {},
+    constructor(
+        readonly instanceId: string,
+        readonly detail: {},
         public actionName: LifecycleAction = LifecycleAction.UNKNOWN_ACTION,
-        public done: boolean = false, public readonly timestamp?: Date) {
-    }
+        public done: boolean = false,
+        public readonly timestamp?: Date
+    ) {}
 
     /**
      * @returns {LifecycleItemInterface} object {FortigateInstance, Timestamp, Detail}
@@ -47,9 +50,8 @@ export class LifecycleItem implements LifecycleItemInterface {
             actionName: this.actionName,
             timestamp: this.timestamp,
             detail: this.detail,
-            done: this.done
-        };
-
+            done: this.done,
+        }
     }
 
     /**
@@ -58,12 +60,19 @@ export class LifecycleItem implements LifecycleItemInterface {
      * @returns A new lifecycle item.
      */
     static fromDb(entry: LifecycleItemInterface) {
-        const date = entry.timestamp && new Date(entry.timestamp) || null;
+        const date = (entry.timestamp && new Date(entry.timestamp)) || null
         if (date && !date.getTime()) {
-            throw new Error(`Cannot convert timestamp to type Date ` +
-                `from entry.timestamp: ${entry.timestamp}`);
+            throw new Error(
+                `Cannot convert timestamp to type Date ` +
+                    `from entry.timestamp: ${entry.timestamp}`
+            )
         }
-        return new LifecycleItem(entry.instanceId, entry.detail, entry.actionName,
-            entry.done, entry.timestamp);
+        return new LifecycleItem(
+            entry.instanceId,
+            entry.detail,
+            entry.actionName,
+            entry.done,
+            entry.timestamp
+        )
     }
-};
+}

@@ -31,5 +31,6 @@
   },
   "dependencies": {
     "@types/node": "^12.0.10"
-  }
+  },
+  "prettier": {}
 }

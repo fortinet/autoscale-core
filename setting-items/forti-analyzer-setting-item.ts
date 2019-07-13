@@ -1,10 +1,10 @@
-'use strict';
+'use strict'
 
 /*
 A DynamoDB structure for Setting item: FortiAnalyzer.
 Author: Fortinet
 */
-import { SettingItem } from './setting-item';
+import { SettingItem } from './setting-item'
 
 export class FortiAnalyzerSettingItem extends SettingItem {
     constructor(
@@ -23,11 +23,11 @@ export class FortiAnalyzerSettingItem extends SettingItem {
             false,
             true,
             ''
-        );
+        )
     }
 
     static get SETTING_KEY() {
-        return 'fortianalyzer';
+        return 'fortianalyzer'
     }
 
     /**
@@ -42,7 +42,7 @@ export class FortiAnalyzerSettingItem extends SettingItem {
                 ip: this.ip,
                 vip: this.vip,
             }),
-        };
+        }
     }
 
     /**
@@ -52,25 +52,25 @@ export class FortiAnalyzerSettingItem extends SettingItem {
      */
     //TODO: use SettingItemInterface instead of any for entry type
     static fromDb(entry: any) {
-        let value: { [key: string]: string };
+        let value: { [key: string]: string }
         if (
             !(
                 entry.settingKey ||
                 entry.settingKey.indexOf(FortiAnalyzerSettingItem.SETTING_KEY) >= 0
             )
         ) {
-            throw new Error('Invalid entry setting key.');
+            throw new Error('Invalid entry setting key.')
         }
         try {
             value =
                 (entry.jsonEncoded && JSON.parse(entry.settingValue as string)) ||
-                entry.settingValue;
+                entry.settingValue
         } catch (error) {
-            throw new Error(`Invalid setting value: ${entry.settingValue}`);
+            throw new Error(`Invalid setting value: ${entry.settingValue}`)
         }
         if (!value.instanceId) {
-            throw new Error('No instanceId found on setting value.');
+            throw new Error('No instanceId found on setting value.')
         }
-        return new FortiAnalyzerSettingItem(value.instanceId, value.ip, value.vip);
+        return new FortiAnalyzerSettingItem(value.instanceId, value.ip, value.vip)
     }
 }

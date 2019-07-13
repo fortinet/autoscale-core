@@ -1,5 +1,5 @@
-'use strict';
+'use strict'
 
 export class Blob {
-    content: string;
+    content: string
 }
