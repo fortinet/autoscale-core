@@ -33,6 +33,7 @@ export interface TableDef {
     AdditionalAttributeDefinitions?: AttributeDef[]
 }
 
+//TODO: make the schema more generic
 const DB: DbDef = {
     LIFECYCLEITEM: {
         AttributeDefinitions: [

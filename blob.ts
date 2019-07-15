@@ -1,5 +1,3 @@
-'use strict'
-
-export class Blob {
+export interface Blob {
     content: string
 }

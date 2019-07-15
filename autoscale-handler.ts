@@ -28,10 +28,10 @@ import {
     RequestInfo,
     InstanceDescriptor,
     SettingItems,
-    BlobStorageItemDescriptor,
     SubnetPair,
     RuntimeAgent,
     ErrorDataPair,
+    BlobStorageItemDescriptor,
 } from './cloud-platform'
 import { LicenseItem } from './license-item'
 import { LicenseRecord } from './license-record'
@@ -252,6 +252,7 @@ export abstract class AutoscaleHandler<
                 ? path.join(this._settings['asset-storage-key-prefix'].toString(), 'configset')
                 : 'configset'
             const parameters: BlobStorageItemDescriptor = {
+                kind: 'BlobStorageItemDescriptor',
                 storageName: this._settings['asset-storage-name'].toString(),
                 keyPrefix: keyPrefix,
                 fileName: configName,
@@ -408,6 +409,8 @@ export abstract class AutoscaleHandler<
         }
     }
 
+    // TODO: Is this specific to a certain platform? If you are concerned about the calling
+    // instance, why not lock down the function via a security group ? Why do this part in the code?
     async checkInstanceAuthorization(instance: VM): Promise<boolean> {
         // TODO: can we generalize this method to core?
         if (
@@ -520,9 +523,16 @@ export abstract class AutoscaleHandler<
                 // this will also update the checksum and algorithm which will be saved in the
                 // usage record too.
                 if (!availStockItem.content) {
-                    availStockItem.content = await this.platform.getLicenseFileContent(
-                        availStockItem.fileName
-                    )
+                    availStockItem.content = await this.platform.getLicenseFileContent(<
+                        BlobStorageItemDescriptor
+                    >{
+                        storageName: this._settings['asset-storage-name'].toString(),
+                        keyPrefix: path.join(
+                            this._settings['asset-storage-key-prefix'].toString(),
+                            this._settings['fortigate-license-storage-key-prefix'].toString()
+                        ),
+                        fileName: availStockItem.fileName,
+                    })
                 }
 
                 // license file found
@@ -1161,6 +1171,8 @@ export abstract class AutoscaleHandler<
         return await this.platform.setSettingItem('subnets-pairs', subnetPairs, null, true, false)
     }
 
+    //TODO: I believe this was aws specific. If so could we add a comment and in the future
+    // think about just moving it to the AWS code?
     async loadAutoScalingSettings() {
         let [desiredCapacity, minSize, maxSize, groupSetting] = await Promise.all([
             this.platform.getSettingItem('scaling-group-desired-capacity'),
@@ -1718,7 +1730,18 @@ export abstract class AutoscaleHandler<
                         if (!licenseItem.content) {
                             updateTasks.push(
                                 platform
-                                    .getLicenseFileContent(licenseItem.fileName)
+                                    .getLicenseFileContent(<BlobStorageItemDescriptor>{
+                                        storageName: this._settings[
+                                            'asset-storage-name'
+                                        ].toString(),
+                                        keyPrefix: path.join(
+                                            this._settings['asset-storage-key-prefix'].toString(),
+                                            this._settings[
+                                                'fortigate-license-storage-key-prefix'
+                                            ].toString()
+                                        ),
+                                        fileName: licenseItem.fileName,
+                                    })
                                     .then(content => {
                                         licenseItem.content = content
                                         return licenseItem

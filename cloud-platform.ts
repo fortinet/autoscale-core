@@ -13,6 +13,7 @@ import { HealthCheck } from './health-check-record'
 import { LicenseItem } from './license-item'
 import { LicenseRecord } from './license-record'
 import { LifecycleItem } from './lifecycle-item'
+import { NicAttachmentRecord, NicAttachmentState } from './nic-attachment'
 import { Logger } from './logger'
 import * as MasterElection from './master-election'
 import { SettingItem } from './setting-items/setting-item'
@@ -26,18 +27,33 @@ export interface RequestInfo {
     status: string
 }
 
+/**
+ * A function template that takes one certain input type and returns one certain output type.
+ */
 export type DataProcessor<InputType, OutputType> = (data: InputType) => OutputType
 
+/**
+ * An asynchronous function template that takes one certain input type and returns
+ * one certain output type.
+ */
 export type AsyncDataProcessor<InputType, OutputType> = (data: InputType) => Promise<OutputType>
 
+/**
+ * A paired two subnets for a cetain purpose. For example, Traffic going into the subnet with
+ * subnetId will be routed to the subnet with pairId
+ */
 export interface SubnetPair {
     subnetId: string
     pairId: string
 }
 
-//This kind of value must have a unique id but the id property name may vary.
+/**
+ * This kind of value must have a unique id but the id property name may vary.
+ */
 export interface ResourceLike {
-    idPropertyName: string // define the key property of this resource
+    // define the key property of this resource. When the id property needs to be referenced,
+    // program can retrieve it by this property.
+    idPropertyName: string
 }
 
 /**
@@ -46,15 +62,20 @@ export interface ResourceLike {
  */
 export type Descriptor = InstanceDescriptor | NetworkInterfaceDescriptor
 
+/**
+ * A error-data pair structure. It is designed to use with the Node.js error-first callback style
+ * functions.
+ */
 export interface ErrorDataPair {
     error: any
     data: any
 }
 
 /**
- * Runtime Agent is an object that holds the information of the platform request, context,
- * callback etc. This agent acts as an agent to interact with the platform runtime.
- * It has one abstract function processResponse to handle how data is passking back to a
+ * Runtime Agent is an agent-object class that holds the information of the platform request,
+ * context, callback etc. This agent interacts with the platform runtime.
+ * It's able to be easily passed from one handler to another within the same runtime.
+ * It has one abstract function processResponse to handle how data is passing back to a
  * platform.
  */
 export abstract class RuntimeAgent<HttpRequest, RuntimeContext> {
@@ -68,14 +89,17 @@ export abstract class RuntimeAgent<HttpRequest, RuntimeContext> {
 }
 
 /**
- * This interface defines the base of interfaces that they have a kind property
- * to distinguish themselves by their kind.
+ * This interface defines the base of interfaces that they have a 'kind' property
+ * to distinguish themselves by their kind while being grouped.
  * Usually, it's helpful when it comes to the Discriminated Unions pattern.
  */
 export interface Akind {
     kind: string
 }
 
+/**
+ * It's a typical key-value pair with 'key' and 'value' properties.
+ */
 export interface KeyValuePair<VALUE_TYPE> extends Akind {
     kind: 'KeyValuePair'
     key: string
@@ -89,25 +113,38 @@ export interface KeyValuePair<VALUE_TYPE> extends Akind {
  * for the property 'kind', see the taggged union types
  * @see: https://github.com/Microsoft/TypeScript/wiki/What's-new-in-TypeScript#tagged-union-types
  */
-export interface FilterLikeResourceQuery<KeyValueLike> extends Akind {
+export interface FilterLikeResourceQuery<KeyValueLike> {
     filter?: KeyValueLike[]
     excluded?: KeyValueLike[]
     included?: KeyValueLike[]
 }
 
 /**
- * Carry neccesarry information about how to describe a virtual machine instance in a platform
+ * Carry neccesarry information about how to describe a virtual machine instance in a platform.
  */
 export interface InstanceDescriptor extends Akind, ResourceLike {
+    // Akind definition
     kind: 'InstanceDescriptor'
+    // ResourceLike definition
     idPropertyName: 'instanceId'
+    // instance id of a cloud-computing device that has an OS, network interface, ip, etc.
+    // e.g.: AWS EC2 Instance
     instanceId: string
+    // scaling group name (or id) when it comes to auto scaling.
+    // such device may be placed in an scaling group. Some other device may not need to set this.
     scalingGroupName?: string
+    // refers to its primary private ip address
     privateIp?: string
+    // refers to its primary public ip address if it has one
     publicIp?: string
+    // defines that any other proerty should have a string key and any value type
     [key: string]: any
 }
 
+/**
+ * It is a virtual network descriptor. virtual network refers to: VPC (AWS), VirtualNetwork (Azure)
+ * etc.
+ */
 export interface VirtualNetworkDescriptor extends Akind, ResourceLike {
     kind: 'VirtualNetworkDescriptor'
     idPropertyName: 'virtualNetworkId'
@@ -120,19 +157,13 @@ export interface VirtualNetworkDescriptor extends Akind, ResourceLike {
  * in a platform.
  */
 export interface NetworkInterfaceDescriptor extends Akind, ResourceLike {
+    kind: 'NetworkInterfaceDescriptor'
+    idPropertyName: 'networkInterfaceId'
     networkInterfaceId: string
     subnetId?: string
 }
 
-export enum NicAttachmentState {
-    attached = 'attached',
-    pending_attach = 'pending_attach',
-    detached = 'detached',
-    pending_detach = 'pending_detach',
-}
-
-export interface NicAttachmentRecord {}
-
+// TODO:
 // NOTE: keep this commented lines until refactoring is done.
 // export interface SettingItem {
 //     settingKey: string,
@@ -144,24 +175,46 @@ export interface NicAttachmentRecord {}
 
 export type SettingItems = { [k: string]: SettingItem }
 
+/**
+ * BlobStorageItemDescriptor holds only information necessary to describe a blob in a storage
+ * in a platform.
+ * It includes the blob location and file name
+ */
 export interface BlobStorageItemDescriptor {
+    kind: 'BlobStorageItemDescriptor'
     storageName: string
     keyPrefix: string
     fileName?: string
 }
 
-export interface HttpRequestLike {
-    headers: {
-        [key: string]: string
-    }
-    body: {
-        [key: string]: string
-    }
-    httpMethod?: HttpMethodType
-    method?: HttpMethodType
+/**
+ * BlobStorageItemDescriptor holds only information necessary to describe a blob in a storage
+ * in a platform.
+ * It includes the blob location and 3 optional file name filters: filter, included, excluded.
+ */
+export interface BlobStorageItemQuery extends FilterLikeResourceQuery<string> {
+    storageName: string
+    keyPrefix: string
 }
 
-export type HttpMethodType = 'POST' | 'GET' | 'PUT' | 'DELETE' | 'HEAD' | 'OPTIONS' | string
+/**
+ * Defines the Http request-object-like structure
+ */
+export interface HttpRequestLike {
+    headers: JSON
+    body: JSON
+}
+
+export interface HttpRequest extends HttpRequestLike {
+    // note that different platform may provide the http method property in different names
+    // here the httpMethod should return the method per platform
+    httpMethod(): HttpMethodType
+}
+
+/**
+ * Http methods are defined as all capticalized letters.
+ */
+export type HttpMethodType = 'POST' | 'GET' | 'PUT' | 'DELETE' | 'HEAD' | 'OPTIONS'
 
 /**
  * Class used to define the capabilities required from cloud platform.
@@ -197,12 +250,13 @@ export abstract class CloudPlatform<
     abstract get logger(): Logger
 
     /**
+     * initialization flag. probably check it to avoid multiple init calls in a workflow?
      * @returns {Boolean} whether the CloudPlatform is initialzied or not
      */
     get initialized() {
         return this._initialized
     }
-    /* eslint-disable no-unused-vars */
+
     /**
      * Initialize (and wait for) any required resources such as database tables etc.
      * Abstract class method.
@@ -329,32 +383,63 @@ export abstract class CloudPlatform<
      */
     abstract async deleteInstances(parameters: InstanceDescriptor[]): Promise<boolean>
 
+    /**
+     * Create a network interface in the platform
+     * @param parameters
+     */
     abstract async createNetworkInterface(
         parameters: NetworkInterfaceDescriptor
     ): Promise<NetworkInterfaceLike | boolean>
 
+    /**
+     * Delete a network interface in the platform
+     * @param parameters
+     */
     abstract async deleteNetworkInterface(parameters: NetworkInterfaceDescriptor): Promise<boolean>
 
+    /**
+     * query a network interface in the platform
+     * @param parameters
+     */
     abstract async describeNetworkInterface(
         parameters: NetworkInterfaceDescriptor
     ): Promise<NetworkInterfaceLike> | null
 
+    /**
+     * query a or multiple network interfaces in a platform
+     * @param parameters
+     * @param statusToInclude a list of platform-specific status strings
+     */
     abstract async listNetworkInterfaces(
         parameters: FilterLikeResourceQuery<KeyValueLike>,
         statusToInclude?: string[]
     ): Promise<NetworkInterfaceLike[]>
 
+    /**
+     * Attach one network interface to a virtual machine.
+     * @param instance
+     * @param nic
+     * @return it's recommended to return the index of the nic in the vm
+     */
     abstract async attachNetworkInterface(
         instance: VM,
         nic: NetworkInterfaceLike
     ): Promise<string | boolean>
 
+    /**
+     * Detach one network interface to a virtual machine.
+     * @param instance
+     * @param nic
+     */
     abstract async detachNetworkInterface(instance: VM, nic: NetworkInterfaceLike): Promise<boolean>
 
-    abstract async listNicAttachmentRecord(): Promise<NicAttachmentRecord[]>
-
-    abstract async getNicAttachmentRecord(instanceId: string): Promise<NicAttachmentRecord>
-
+    /**
+     * Insert / update the network interface record managed by the Autoscale project
+     * @param instanceId
+     * @param nicId
+     * @param state
+     * @param conditionState
+     */
     abstract async updateNicAttachmentRecord(
         instanceId: string,
         nicId: string,
@@ -362,18 +447,43 @@ export abstract class CloudPlatform<
         conditionState?: NicAttachmentState
     ): Promise<boolean>
 
+    /**
+     * List all network interface records managed by the Autoscale project
+     */
+    abstract async listNicAttachmentRecord(): Promise<NicAttachmentRecord[]>
+
+    /**
+     * query the network interface record attached to the given instance. currently can only
+     * be able to manage one additional nic per vm via the Autoscale project
+     * @param instanceId
+     */
+    abstract async getNicAttachmentRecord(instanceId: string): Promise<NicAttachmentRecord>
+
+    /**
+     * delete the Autoscale managed network interface record attached to the given instance.
+     * currently can only be able to manage one additional nic per vm via the Autoscale project.
+     * @param instanceId
+     * @param conditionState
+     */
     abstract async deleteNicAttachmentRecord(
         instanceId: string,
         conditionState?: NicAttachmentState
     ): Promise<boolean>
 
+    /**
+     * get one saved setting of the current Autoscale deployment from DB
+     * @param key setting key
+     * @param valueOnly whether retrieve the stringified value of the raw value
+     */
+    // TODO: need to refactor
     async getSettingItem(key: string, valueOnly?: boolean): Promise<string | {}> {
         // check _setting first
         if (this._settings && this._settings.hasOwnProperty(key)) {
             // if get full item object
             if (
                 !valueOnly &&
-                typeof this._settings[key] === 'object' &&
+                typeof this._settings[key] === 'object' && // TODO: need to refactor the way
+                // of type checking
                 this._settings[key].settingKey
             ) {
                 return this._settings[key]
@@ -396,9 +506,19 @@ export abstract class CloudPlatform<
      */
     abstract async getSettingItems(keyFilter?: string[], valueOnly?: boolean): Promise<SettingItems>
 
+    /**
+     * save one setting of the current Autoscale deployment to DB
+     * @param key setting key
+     * @param value raw value of he setting in string or object form
+     * @param description escription for this setting. recommend to prvoide this even
+        // though it is optional.
+     * @param jsonEncoded whether the raw value of this item is JSON.stringif()-ed or not.
+     * @param editable indicator whether this setting allow for modification
+        or not after the Autoscale is deployed.
+     */
     abstract async setSettingItem(
         key: string,
-        value: string | {},
+        value: string | {}, //TODO: could it be a JSON form?
         description?: string,
         jsonEncoded?: boolean,
         editable?: boolean
@@ -406,15 +526,22 @@ export abstract class CloudPlatform<
 
     /**
      * get the blob from storage
-     * @param {Object} parameters parameter object
+     * @param {Object} parameters parameter descriptor for this blob
      * @returns {Object} the object must have the property 'content' containing the blob content
      */
     abstract async getBlobFromStorage(parameters: BlobStorageItemDescriptor): Promise<Blob>
 
-    // TODO: what shuold be the correct return type here?
-    abstract async listBlobFromStorage(parameters: BlobStorageItemDescriptor): Promise<Blob[]>
+    /**
+     * query blob items in the storage
+     * @param parameters a filter-like resource query
+     */
+    abstract async listBlobFromStorage(parameters: BlobStorageItemQuery): Promise<Blob[]>
 
-    abstract async getLicenseFileContent(fileName: string): Promise<string>
+    /**
+     * retrieve the blob content in string format
+     * @param descriptor
+     */
+    abstract async getLicenseFileContent(descriptor: BlobStorageItemQuery): Promise<string>
 
     /**
      * List license files in storage
@@ -426,18 +553,24 @@ export abstract class CloudPlatform<
         parameters?: BlobStorageItemDescriptor
     ): Promise<Map<string, LicenseItem>>
 
+    /**
+     * Update a license record to the DB
+     * @param licenseRecord
+     * @param replace replace existing one or put new one
+     */
     abstract async updateLicenseUsage(
         licenseRecord: LicenseRecord,
         replace?: boolean
     ): Promise<boolean>
     /**
-     * List license usage records
+     * List license usage records including records for used licenses and only
      * @returns {Map<licenseRecord>} must return a Map of licenseRecord with checksum as key,
      * and LicenseItem as value
      */
     abstract async listLicenseUsage(): Promise<Map<string, LicenseRecord>>
 
     /**
+     * List license usage records including records for non-used and used licenses
      *  @returns {Map<licenseRecord>} must return a Map of LicenseItem with blochecksumbKey as key,
      * and LicenseItem as value
      */
@@ -456,10 +589,14 @@ export abstract class CloudPlatform<
      */
     abstract async deleteLicenseStock(licenseItem: LicenseItem): Promise<boolean>
 
+    /**
+     * issue a virtual machine termination request to the auto scaling group in a platform
+     * @param instance
+     */
     abstract async terminateInstanceInAutoScalingGroup(instance: VM): Promise<boolean>
 
     /**
-     * Retrieve the cached vm info from database
+     * Retrieve the cached vm info from DB
      * @param {String} scaleSetName scaling group name the vm belongs to
      * @param {String} instanceId the instanceId of the vm if instanceId is the unique ID
      * @param {String} vmId another unique ID to identify the vm if instanceId is not the unique ID
@@ -471,42 +608,48 @@ export abstract class CloudPlatform<
     ): Promise<{} | null>
 
     /**
-     *
+     * save the vm info object to the DB.
+     * Caching it to avoid frequent api call to a platform that has a limit per period (e.g.: Azure)
      * @param {String} scaleSetName scaling group name the vm belongs to
      * @param {Object} info the json object of the info to cache in database
      * @param {Integer} cacheTime the maximum time in seconds to keep the cache in database
      */
     abstract async setVmInfoCache(scaleSetName: string, info: {}, cacheTime?: number): Promise<void>
     /**
-     * get the execution time lapse in millisecond
+     * get the execution time lapse in millisecond.
+     * Intend to be the time lapse since the very beginning the serverless function is called
      */
     getExecutionTimeLapse(): number {
         return CoreFunctions.getTimeLapse()
     }
 
     /**
-     * get the execution time remaining in millisecond
+     * get the execution time remaining in millisecond. Some platforms such as AWS provide a
+     * way to calculate the remaining time to serverless function timeout.
      */
     abstract getExecutionTimeRemaining(): number
 
+    /**
+     * To finalize a master role in the master-slave HA context.
+     * The master is firstly elected as a pending master. The pending master needs to proactively
+     * contact the Autoscale to confirm its availability, functionality as the master role.
+     * If election timeout, this pending master will be purged and a new pending master will be
+     * elected.
+     */
     abstract async finalizeMasterElection(): Promise<boolean>
 
-    /* eslint-disable max-len */
     /**
-     * Get information about a Virtual Network (terminology varies in different platform) by the given parameters.
+     * Get information about a Virtual Network (terminology varies in different platform) by
+     * the given parameters. For example: VPC in AWS.
      * @param parameters parameters
      */
-    /* eslint-enable max-len */
     abstract async describeVirtualNetwork(
         parameters: VirtualNetworkDescriptor
     ): Promise<VirtualNetworkLike>
 
-    /* eslint-disable max-len */
     /**
-     * Get information about a VPC by the given parameters.
+     * Get information about the subnets in a given virtual network.
      * @param parameters parameters
      */
-    /* eslint-enable max-len */
     abstract async listSubnets(parameters: VirtualNetworkDescriptor): Promise<SubnetLike[]>
-    /* eslint-enable no-unused-vars */
 }
