@@ -189,7 +189,7 @@ export async function waitFor<T>(
     validator: (value: T) => boolean,
     interval = 5000,
     retryOrTries: ((current: number) => boolean) | number | null = null
-) {
+): Promise<T> {
     let shouldRetry: (c: number) => boolean =
         typeof retryOrTries === 'function' ? retryOrTries : (c: number) => false
     const DEFAULT_TRIES = 12,

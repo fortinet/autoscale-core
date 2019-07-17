@@ -7,6 +7,7 @@ export enum HealthCheckSyncState {
 
 export interface HealthCheck {
     instanceId: string
+    ip: string
     inSync: boolean
     healthy: boolean
     masterIp: string

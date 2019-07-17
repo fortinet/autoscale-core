@@ -21,10 +21,24 @@ import { VirtualNetworkLike, SubnetLike } from './virtual-network'
 import { NetworkInterfaceLike, VirtualMachine } from './virtual-machine'
 import { URL } from 'url'
 
+export type ValidHeartbeatInterval = number | 'not-set';
+
 export interface RequestInfo {
     instanceId: string
-    interval: number
-    status: string
+    interval: ValidHeartbeatInterval
+    status: string | null
+}
+
+export interface AutoscaleRequestLike {
+    //exists in header in GET configuration call
+    'Fos-instance-id'?: string,
+    //exists in body in heartbeat sync POST call
+    instance?: string,
+    //exists in body in heartbeat sync POST call
+    interval?: string,
+    // only exists in status message
+    success?: string,
+    [key: string]: any
 }
 
 /**
@@ -122,6 +136,7 @@ export interface FilterLikeResourceQuery<KeyValueLike> {
 /**
  * Carry neccesarry information about how to describe a virtual machine instance in a platform.
  */
+//TODO: need to rename it to VirtualMachineDescriptor
 export interface InstanceDescriptor extends Akind, ResourceLike {
     // Akind definition
     kind: 'InstanceDescriptor'
@@ -201,7 +216,7 @@ export interface BlobStorageItemQuery extends FilterLikeResourceQuery<string> {
  * Defines the Http request-object-like structure
  */
 export interface HttpRequestLike {
-    headers: JSON
+    headers: JSONL
     body: JSON
 }
 
@@ -219,6 +234,22 @@ export type HttpMethodType = 'POST' | 'GET' | 'PUT' | 'DELETE' | 'HEAD' | 'OPTIO
 /**
  * Class used to define the capabilities required from cloud platform.
  * P_NIQ: parameter to query NetworkInterface
+ */
+/**
+ * Class used to define the capabilities required from cloud platform.
+ *
+ * Note: Each abstract function interacting with the platform api should catch potential errors
+ * thrown from the platform api, output the error message with the Runtim Agent logger. Whether
+ * to throw it to upper level of the calling stack or not depends on how this abstract function
+ * is required for implementation.
+ *
+ * @argument HttpRequest: generic type parameter used by RA
+ * @argument RuntimeContext: generic type parameter used by RA
+ * @argument RuntimeContext: generic type parameter used by RA
+ * @argument KeyValueLike: a KeyValueLike parameter kind generic type
+ * @argument VmSourceType: generic type parameter used by VM
+ * @argument VM: a concrete VirtualMachine kind parameter for a specific platform
+ * @argument RA: a concrete RuntimeAgent kind parameter for a specific platform
  */
 export abstract class CloudPlatform<
     HttpRequest,
@@ -346,9 +377,9 @@ export abstract class CloudPlatform<
      * @param heartBeatInterval the expected interval (second) between heartbeats
      */
     abstract async getInstanceHealthCheck(
-        Descriptor: InstanceDescriptor,
-        heartBeatInterval?: number
-    ): Promise<HealthCheck>
+        descriptor: InstanceDescriptor,
+        heartBeatInterval?: ValidHeartbeatInterval
+    ): Promise<HealthCheck | null>
 
     /**
      * update the instance health check result to DB.
