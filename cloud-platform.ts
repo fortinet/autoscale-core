@@ -21,7 +21,9 @@ import { VirtualNetworkLike, SubnetLike } from './virtual-network'
 import { NetworkInterfaceLike, VirtualMachine } from './virtual-machine'
 import { URL } from 'url'
 
-export type ValidHeartbeatInterval = number | 'not-set';
+export const USE_EXISTING: unique symbol = Symbol('Use existing value from the data store');
+
+export type ValidHeartbeatInterval = number | typeof USE_EXISTING;
 
 export interface RequestInfo {
     instanceId: string
