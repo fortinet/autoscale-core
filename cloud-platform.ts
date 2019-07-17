@@ -112,7 +112,6 @@ export abstract class RuntimeAgent<HttpRequest, RuntimeContext> {
  * It's a typical key-value pair with 'key' and 'value' properties.
  */
 export interface KeyValuePair<VALUE_TYPE> {
-    kind: 'KeyValuePair'
     key: string
     value: VALUE_TYPE
 }
@@ -196,7 +195,6 @@ export type SettingItems = { [k: string]: SettingItem }
  * It includes the blob location and file name
  */
 export interface BlobStorageItemDescriptor {
-    kind: 'BlobStorageItemDescriptor'
     storageName: string
     keyPrefix: string
     fileName?: string

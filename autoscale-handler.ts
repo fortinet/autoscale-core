@@ -258,7 +258,6 @@ export abstract class AutoscaleHandler<
                 ? path.join(this._settings['asset-storage-key-prefix'].toString(), 'configset')
                 : 'configset'
             const parameters: BlobStorageItemDescriptor = {
-                kind: 'BlobStorageItemDescriptor',
                 storageName: this._settings['asset-storage-name'].toString(),
                 keyPrefix: keyPrefix,
                 fileName: configName,
