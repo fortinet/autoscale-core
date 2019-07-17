@@ -1,4 +1,4 @@
-export interface SettingItemInterface {
+export interface SettingItemLike {
     settingKey: string
     settingValue: string | {}
     editable: boolean
@@ -6,7 +6,7 @@ export interface SettingItemInterface {
     description: string
 }
 
-export class SettingItem implements SettingItemInterface {
+export class SettingItem implements SettingItemLike {
     constructor(
         public settingKey: string,
         public settingValue: string | {},

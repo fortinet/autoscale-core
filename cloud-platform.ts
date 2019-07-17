@@ -188,6 +188,7 @@ export interface NetworkInterfaceDescriptor extends Akind, ResourceLike {
 //     description: string
 // }
 
+
 export type SettingItems = { [k: string]: SettingItem }
 
 /**
@@ -216,8 +217,8 @@ export interface BlobStorageItemQuery extends FilterLikeResourceQuery<string> {
  * Defines the Http request-object-like structure
  */
 export interface HttpRequestLike {
-    headers: JSONL
-    body: JSON
+    headers: {}
+    body: {}
 }
 
 export interface HttpRequest extends HttpRequestLike {
@@ -394,7 +395,7 @@ export abstract class CloudPlatform<
      */
     abstract async updateInstanceHealthCheck(
         healthCheck: HealthCheck,
-        heartBeatInterval: number,
+        heartBeatInterval: ValidHeartbeatInterval,
         masterIp: string,
         checkPointTime: number,
         forceOutOfSync?: boolean

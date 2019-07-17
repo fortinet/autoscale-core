@@ -50,7 +50,7 @@ export class FortiAnalyzerSettingItem extends SettingItem {
      * @param entry Entry from DB
      * @returns {FortiAnalyzerSettingItem} A new faz setting item.
      */
-    //TODO: use SettingItemInterface instead of any for entry type
+    //TODO: use SettingItemLike instead of any for entry type
     static fromDb(entry: any) {
         let value: { [key: string]: string }
         if (
