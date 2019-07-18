@@ -5,10 +5,20 @@ Author: Fortinet
 *
 * A license record class.
 */
-export class LicenseRecord {
+
+export interface LicenseRecordLike {
+    checksum: string,
+    algorithm: string,
+    fileName: string,
+    blobKey: string,
+    instanceId?: string,
+    scalingGroupName?: string,
+    assignedTime?: number
+}
+export class LicenseRecord implements LicenseRecordLike {
     private _instanceId: string
     private _scalingGroupName: string
-    private _assignedTime: number
+    private _assignedTime: Date
     constructor(
         readonly checksum: string,
         readonly algorithm: string,
@@ -32,14 +42,14 @@ export class LicenseRecord {
         return this._scalingGroupName
     }
 
-    get assignedTime() {
-        return this._assignedTime
+    get assignedTime(): number {
+        return this._assignedTime && this._assignedTime.getTime() || 0;
     }
 
-    set assignedTime(time) {
+    set assignedTime(time:number) {
         let date = time && new Date(time)
         if (date && !isNaN(date.getTime())) {
-            this._assignedTime = date.getTime()
+            this._assignedTime = date
         } else {
             this._assignedTime = null
         }
@@ -54,27 +64,16 @@ export class LicenseRecord {
         this._scalingGroupName = (instanceId && scalingGroupName) || null
         this.assignedTime = instanceId && ((assignTime && assignTime.getTime()) || Date.now())
     }
+}
 
-    // TODO: need to improve
-    static fromDb(data: any) {
-        if (data && data.checksum && data.algorithm && data.fileName && data.blobKey) {
-            let date = new Date(data.assignTime)
-            if (!date.getTime()) {
-                throw new Error(
-                    `Cannot convert assign time to type Date ` + `from value: ${data.assignTime}`
-                )
-            }
-            return new LicenseRecord(
-                data.checksum,
-                data.algorithm,
-                data.fileName,
-                data.blobKey,
-                data.instanceId,
-                data.scalingGroupName,
-                date
-            )
-        } else {
-            return null
-        }
-    }
+export function LicenseRecordConvertor(datasource: LicenseRecordLike): LicenseRecord {
+    return new LicenseRecord(
+        datasource.checksum,
+        datasource.algorithm,
+        datasource.fileName,
+        datasource.blobKey,
+        datasource.instanceId,
+        datasource.scalingGroupName,
+        new Date(datasource.assignedTime)
+    );
 }

@@ -32,6 +32,7 @@ import {
     RuntimeAgent,
     ErrorDataPair,
     BlobStorageItemDescriptor,
+    ValidHeartbeatInterval,
 } from './cloud-platform'
 import { LicenseItem } from './license-item'
 import { LicenseRecord } from './license-record'
@@ -79,7 +80,7 @@ export abstract class AutoscaleHandler<
     protected _baseConfig: string
     protected scalingGroupName: string
     protected logger: Logger
-    constructor(protected readonly platform: CP) {
+    constructor(readonly platform: CP) {
         this._selfInstance = null
         this._selfHealthCheck = null
         this._masterRecord = null
@@ -89,10 +90,12 @@ export abstract class AutoscaleHandler<
         this._baseConfig = ''
     }
 
+    // TODO: do we still need this?
     static get NO_HEART_BEAT_INTERVAL_SPECIFIED() {
         return NO_HEART_BEAT_INTERVAL_SPECIFIED
     }
 
+    // TODO: do we still need this?
     static get DEFAULT_HEART_BEAT_INTERVAL() {
         return DEFAULT_HEART_BEAT_INTERVAL
     }
@@ -1555,7 +1558,7 @@ export abstract class AutoscaleHandler<
     // TODO: restrict the heartBeatInterval to type: number only
     abstract async addInstanceToMonitor(
         instance: VM,
-        heartBeatInterval: string | number,
+        heartBeatInterval: ValidHeartbeatInterval,
         masterIp?: string
     ): Promise<void>
 

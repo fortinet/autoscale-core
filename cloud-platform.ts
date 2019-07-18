@@ -105,18 +105,9 @@ export abstract class RuntimeAgent<HttpRequest, RuntimeContext> {
 }
 
 /**
- * This interface defines the base of interfaces that they have a 'kind' property
- * to distinguish themselves by their kind while being grouped.
- * Usually, it's helpful when it comes to the Discriminated Unions pattern.
- */
-export interface Akind {
-    kind: string
-}
-
-/**
  * It's a typical key-value pair with 'key' and 'value' properties.
  */
-export interface KeyValuePair<VALUE_TYPE> extends Akind {
+export interface KeyValuePair<VALUE_TYPE> {
     kind: 'KeyValuePair'
     key: string
     value: VALUE_TYPE
@@ -139,9 +130,7 @@ export interface FilterLikeResourceQuery<KeyValueLike> {
  * Carry neccesarry information about how to describe a virtual machine instance in a platform.
  */
 //TODO: need to rename it to VirtualMachineDescriptor
-export interface InstanceDescriptor extends Akind, ResourceLike {
-    // Akind definition
-    kind: 'InstanceDescriptor'
+export interface InstanceDescriptor extends ResourceLike {
     // ResourceLike definition
     idPropertyName: 'instanceId'
     // instance id of a cloud-computing device that has an OS, network interface, ip, etc.
@@ -162,8 +151,7 @@ export interface InstanceDescriptor extends Akind, ResourceLike {
  * It is a virtual network descriptor. virtual network refers to: VPC (AWS), VirtualNetwork (Azure)
  * etc.
  */
-export interface VirtualNetworkDescriptor extends Akind, ResourceLike {
-    kind: 'VirtualNetworkDescriptor'
+export interface VirtualNetworkDescriptor extends ResourceLike {
     idPropertyName: 'virtualNetworkId'
     virtualNetworkId: string
     subnetId?: string[]
@@ -173,8 +161,7 @@ export interface VirtualNetworkDescriptor extends Akind, ResourceLike {
  * NetworkInterfaceDescriptor holds only information necessary to describe a network interface
  * in a platform.
  */
-export interface NetworkInterfaceDescriptor extends Akind, ResourceLike {
-    kind: 'NetworkInterfaceDescriptor'
+export interface NetworkInterfaceDescriptor extends ResourceLike {
     idPropertyName: 'networkInterfaceId'
     networkInterfaceId: string
     subnetId?: string
@@ -560,10 +547,10 @@ export abstract class CloudPlatform<
 
     /**
      * get the blob from storage
-     * @param {Object} parameters parameter descriptor for this blob
-     * @returns {Object} the object must have the property 'content' containing the blob content
+     * @param descriptor descriptor for this blob
+     * @returns the object must have the property 'content' containing the blob content
      */
-    abstract async getBlobFromStorage(parameters: BlobStorageItemDescriptor): Promise<Blob>
+    abstract async getBlobFromStorage(descriptor: BlobStorageItemDescriptor): Promise<Blob>
 
     /**
      * query blob items in the storage
@@ -575,7 +562,7 @@ export abstract class CloudPlatform<
      * retrieve the blob content in string format
      * @param descriptor
      */
-    abstract async getLicenseFileContent(descriptor: BlobStorageItemQuery): Promise<string>
+    abstract async getLicenseFileContent(descriptor: BlobStorageItemDescriptor): Promise<string>
 
     /**
      * List license files in storage
