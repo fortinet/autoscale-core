@@ -30,7 +30,7 @@ import {
     SettingItems,
     SubnetPair,
     RuntimeAgent,
-    ErrorDataPair,
+    ErrorDataPairLike,
     BlobStorageItemDescriptor,
     ValidHeartbeatInterval,
 } from './cloud-platform'
@@ -69,7 +69,10 @@ export abstract class AutoscaleHandler<
     VmSourceType,
     VM extends VirtualMachine<VmSourceType, NetworkInterfaceLike>,
     RA extends RuntimeAgent<HttpRequest, RuntimeContext>,
-    CP extends CloudPlatform<HttpRequest, RuntimeContext, KeyValueLike, VmSourceType, VM, RA>
+    CP extends CloudPlatform<
+        HttpRequest, RuntimeContext,
+        KeyValueLike, VmSourceType, VM, RA
+    >
 > {
     protected _selfInstance: VM | null
     protected _selfHealthCheck: HealthCheck | null
@@ -246,8 +249,8 @@ export abstract class AutoscaleHandler<
         }
     }
 
-    // TODO: this function need to be replace. will use the runtimeAgent & ErrorDataPair instead
-    abstract proxyResponse(statusCode: number, res: {}, logOptions?: {}): void
+    // TODO: this function need to be replace. will use the runtimeAgent & ErrorDataPairLike instead
+    abstract proxyResponse(statusCode: number, res: {}, logOptions?: {}): any
 
     async getConfigSet(configName: string): Promise<string> {
         try {
@@ -1839,10 +1842,10 @@ export abstract class AutoscaleHandler<
     }
 
     // TODO: this should be called in the lamba function implementation
-    abstract async handleAutoScalingEvent(event?: unknown): Promise<ErrorDataPair>
+    abstract async handleAutoScalingEvent(event?: unknown): Promise<ErrorDataPairLike>
 
     // TODO: this should be called in the lamba function implementation
-    abstract async handleGetConfig(event?: unknown): Promise<ErrorDataPair>
+    abstract async handleGetConfig(event?: unknown): Promise<ErrorDataPairLike>
 
     /**
      * To handle and move on the lifecycle to its next stage

@@ -15,7 +15,7 @@ export enum LifecycleAction {
     UNKNOWN_ACTION = 'unknown',
 }
 
-export interface LifecycleItemInterface {
+export interface LifecycleItemLike {
     readonly instanceId: string
     readonly detail: {}
     actionName: LifecycleAction
@@ -23,7 +23,7 @@ export interface LifecycleItemInterface {
     readonly timestamp?: Date
 }
 
-export class LifecycleItem implements LifecycleItemInterface {
+export class LifecycleItem implements LifecycleItemLike {
     /**
      * @param instanceId Id of the FortiGate instance.
      * @param detail Opaque information used by the platform to manage this item.
@@ -44,8 +44,8 @@ export class LifecycleItem implements LifecycleItemInterface {
      * @returns {LifecycleItemInterface} object {FortigateInstance, Timestamp, Detail}
      */
 
-    toDb() {
-        return <LifecycleItemInterface>{
+    likeify() {
+        return <LifecycleItemLike>{
             instanceId: this.instanceId,
             actionName: this.actionName,
             timestamp: this.timestamp,
@@ -59,7 +59,7 @@ export class LifecycleItem implements LifecycleItemInterface {
      * @param entry Entry from DB
      * @returns A new lifecycle item.
      */
-    static fromDb(entry: LifecycleItemInterface) {
+    static fromDb(entry: LifecycleItemLike) {
         const date = (entry.timestamp && new Date(entry.timestamp)) || null
         if (date && !date.getTime()) {
             throw new Error(

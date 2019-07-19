@@ -20,6 +20,9 @@ import { SettingItem } from './setting-items/setting-item'
 import { VirtualNetworkLike, SubnetLike } from './virtual-network'
 import { NetworkInterfaceLike, VirtualMachine } from './virtual-machine'
 import { URL } from 'url'
+import * as HttpStatusCode from 'http-status-codes'
+
+export { HttpStatusCode }
 
 export const USE_EXISTING: unique symbol = Symbol('Use existing value from the data store');
 
@@ -73,18 +76,13 @@ export interface ResourceLike {
 }
 
 /**
- * Discriminated Unions for descriptor
- * @see https://www.typescriptlang.org/docs/handbook/advanced-types.html
- */
-export type Descriptor = InstanceDescriptor | NetworkInterfaceDescriptor
-
-/**
  * A error-data pair structure. It is designed to use with the Node.js error-first callback style
  * functions.
  */
-export interface ErrorDataPair {
+export interface ErrorDataPairLike {
     error: any
     data: any
+    [key:string]:any
 }
 
 /**
@@ -95,15 +93,18 @@ export interface ErrorDataPair {
  * platform.
  */
 export abstract class RuntimeAgent<HttpRequest, RuntimeContext> {
+    response: ErrorDataPairLike
     constructor(
         readonly request: HttpRequest,
         readonly context: RuntimeContext,
         readonly logger: Logger
     ) {}
 
-    abstract async processResponse(response: ErrorDataPair): Promise<any>
+    /**
+     * function to respond to a platform
+     */
+    abstract async respond(response: ErrorDataPairLike):Promise<any>;
 }
-
 /**
  * It's a typical key-value pair with 'key' and 'value' properties.
  */
@@ -234,7 +235,6 @@ export type HttpMethodType = 'POST' | 'GET' | 'PUT' | 'DELETE' | 'HEAD' | 'OPTIO
  * is required for implementation.
  *
  * @argument HttpRequest: generic type parameter used by RA
- * @argument RuntimeContext: generic type parameter used by RA
  * @argument RuntimeContext: generic type parameter used by RA
  * @argument KeyValueLike: a KeyValueLike parameter kind generic type
  * @argument VmSourceType: generic type parameter used by VM
