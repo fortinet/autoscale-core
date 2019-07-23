@@ -18,7 +18,7 @@ import { Logger } from './logger'
 import * as MasterElection from './master-election'
 import { SettingItem } from './setting-items/setting-item'
 import { VirtualNetworkLike, SubnetLike } from './virtual-network'
-import { NetworkInterfaceLike, VirtualMachine } from './virtual-machine'
+import { NetworkInterfaceLike, VirtualMachine, ScalingGroupLike } from './virtual-machine'
 import { URL } from 'url'
 import * as HttpStatusCode from 'http-status-codes'
 
@@ -94,11 +94,14 @@ export interface ErrorDataPairLike {
  */
 export abstract class RuntimeAgent<HttpRequest, RuntimeContext> {
     response: ErrorDataPairLike
+    readonly createdTime: number
     constructor(
         readonly request: HttpRequest,
         readonly context: RuntimeContext,
         readonly logger: Logger
-    ) {}
+    ) {
+        this.createdTime = Date.now();
+    }
 
     /**
      * function to respond to a platform
@@ -131,7 +134,7 @@ export interface FilterLikeResourceQuery<KeyValueLike> {
  * Carry neccesarry information about how to describe a virtual machine instance in a platform.
  */
 //TODO: need to rename it to VirtualMachineDescriptor
-export interface InstanceDescriptor extends ResourceLike {
+export interface VirtualMachineDescriptor extends ResourceLike {
     // ResourceLike definition
     idPropertyName: 'instanceId'
     // instance id of a cloud-computing device that has an OS, network interface, ip, etc.
@@ -166,6 +169,12 @@ export interface NetworkInterfaceDescriptor extends ResourceLike {
     idPropertyName: 'networkInterfaceId'
     networkInterfaceId: string
     subnetId?: string
+}
+
+export interface ScalingGroupDecriptor extends ResourceLike {
+    idPropertyName: 'scalingGroupName' | 'scalingGroupId',
+    scalingGroupName?: string,
+    scalingGroupId?: string
 }
 
 // TODO:
@@ -209,12 +218,13 @@ export interface BlobStorageItemQuery extends FilterLikeResourceQuery<string> {
 export interface HttpRequestLike {
     headers: {}
     body: {}
+    [key: string]: any
 }
 
 export interface HttpRequest extends HttpRequestLike {
     // note that different platform may provide the http method property in different names
     // here the httpMethod should return the method per platform
-    httpMethod(): HttpMethodType
+    httpMethod: HttpMethodType
 }
 
 /**
@@ -356,9 +366,9 @@ export abstract class CloudPlatform<
     /**
      * Describe an instance and retrieve its information, with given parameters.
      * Abstract class method.
-     * @param Descriptor a Descriptor for describing an instance.
+     * @param descriptor a descriptor for describing an instance.
      */
-    abstract async describeInstance(descriptor: InstanceDescriptor): Promise<VM>
+    abstract async describeInstance(descriptor: VirtualMachineDescriptor): Promise<VM>
 
     /**
      * do the instance health check.
@@ -367,7 +377,7 @@ export abstract class CloudPlatform<
      * @param heartBeatInterval the expected interval (second) between heartbeats
      */
     abstract async getInstanceHealthCheck(
-        descriptor: InstanceDescriptor,
+        descriptor: VirtualMachineDescriptor,
         heartBeatInterval?: ValidHeartbeatInterval
     ): Promise<HealthCheck | null>
 
@@ -402,7 +412,13 @@ export abstract class CloudPlatform<
      * Abstract class method.
      * @param {Object} parameters parameters necessary for instance deletion.
      */
-    abstract async deleteInstances(parameters: InstanceDescriptor[]): Promise<boolean>
+    abstract async deleteInstances(parameters: VirtualMachineDescriptor[]): Promise<boolean>
+
+    /**
+     * describe a scaling group
+     * @param decriptor a descriptor for describing a scaling group.
+     */
+    abstract async describeScalingGroup(decriptor: ScalingGroupDecriptor): Promise<ScalingGroupLike | null>
 
     /**
      * Create a network interface in the platform
@@ -478,7 +494,7 @@ export abstract class CloudPlatform<
      * be able to manage one additional nic per vm via the Autoscale project
      * @param instanceId
      */
-    abstract async getNicAttachmentRecord(instanceId: string): Promise<NicAttachmentRecord>
+    abstract async getNicAttachmentRecord(instanceId: string): Promise<NicAttachmentRecord | null>
 
     /**
      * delete the Autoscale managed network interface record attached to the given instance.

@@ -26,7 +26,7 @@ import * as MasterElection from './master-election'
 import {
     CloudPlatform,
     RequestInfo,
-    InstanceDescriptor,
+    VirtualMachineDescriptor,
     SettingItems,
     SubnetPair,
     RuntimeAgent,
@@ -373,7 +373,7 @@ export abstract class AutoscaleHandler<
         // look from byol first
         this._selfInstance =
             this._selfInstance ||
-            (await this.platform.describeInstance(<InstanceDescriptor>{
+            (await this.platform.describeInstance(<VirtualMachineDescriptor>{
                 instanceId: instanceId,
                 scalingGroupName:
                     this._settings['byol-scaling-group-name'] &&
@@ -388,7 +388,7 @@ export abstract class AutoscaleHandler<
             )
         } else {
             // not found in byol vmss, look from payg
-            this._selfInstance = await this.platform.describeInstance(<InstanceDescriptor>{
+            this._selfInstance = await this.platform.describeInstance(<VirtualMachineDescriptor>{
                 instanceId: instanceId,
                 scalingGroupName:
                     this._settings['payg-scaling-group-name'] &&
@@ -433,6 +433,7 @@ export abstract class AutoscaleHandler<
         return await Promise.resolve(true)
     }
 
+    //TODO: improve this function
     async handleGetLicense(event: any, context: any, callback: any) {
         let result
         this.logger.info('calling handleGetLicense')
@@ -601,7 +602,7 @@ export abstract class AutoscaleHandler<
         // get selfinstance
         this._selfInstance =
             this._selfInstance ||
-            (await this.platform.describeInstance(<InstanceDescriptor>{
+            (await this.platform.describeInstance(<VirtualMachineDescriptor>{
                 instanceId: instanceId,
                 scalingGroupName: this.scalingGroupName,
             }))
@@ -611,7 +612,7 @@ export abstract class AutoscaleHandler<
         this._selfHealthCheck =
             this._selfHealthCheck ||
             (await this.platform.getInstanceHealthCheck(
-                <InstanceDescriptor>{
+                <VirtualMachineDescriptor>{
                     instanceId: this._selfInstance.instanceId,
                 },
                 interval
@@ -752,7 +753,7 @@ export abstract class AutoscaleHandler<
         this._selfHealthCheck =
             this._selfHealthCheck ||
             (await this.platform.getInstanceHealthCheck(
-                <InstanceDescriptor>{
+                <VirtualMachineDescriptor>{
                     instanceId: this._selfInstance.instanceId,
                 },
                 interval
@@ -1109,7 +1110,7 @@ export abstract class AutoscaleHandler<
         }
         return (
             this._masterRecord &&
-            (await this.platform.describeInstance(<InstanceDescriptor>{
+            (await this.platform.describeInstance(<VirtualMachineDescriptor>{
                 instanceId: instanceId,
             }))
         )
@@ -1534,12 +1535,17 @@ export abstract class AutoscaleHandler<
 
     // TODO: restrict the parameter type to number only
     abstract async updateCapacity(
-        desiredCapacity: string | number,
-        minSize: string | number,
-        maxSize: string | number
-    ): Promise<void>
+        scalingGroupName: string,
+        desiredCapacity: number | null,
+        minSize: number | null,
+        maxSize: number | null
+    ): Promise<boolean>
 
-    abstract async checkAutoScalingGroupState(): Promise<void>
+    /**
+     * check state of one scaling groups
+     * @param scalingGroupName scaling group name
+     */
+    abstract async checkAutoScalingGroupState(scalingGroupName: string): Promise<ScalingGroupState|string>
 
     async resetMasterElection() {
         this.logger.info('calling resetMasterElection')
@@ -1597,11 +1603,12 @@ export abstract class AutoscaleHandler<
             this._masterInfo = (!reload && this._masterInfo) || (await this.getMasterInfo())
         }
 
-        if (filters === null || filters.get(RetrieveMasterOption.masterHealthCheck)) {
+        if (this._masterInfo &&
+            (filters === null || filters.get(RetrieveMasterOption.masterHealthCheck))) {
             // if reload not needed, return the current object or retrive it.
             this._masterHealthCheck =
                 (!reload && this._masterHealthCheck) ||
-                (await this.platform.getInstanceHealthCheck(<InstanceDescriptor>{
+                (await this.platform.getInstanceHealthCheck(<VirtualMachineDescriptor>{
                     instanceId: this._masterInfo.instanceId,
                 }))
         }
@@ -1649,7 +1656,7 @@ export abstract class AutoscaleHandler<
         }
     }
 
-    abstract async removeInstance(instance: VM): Promise<void>
+    abstract async removeInstance(instance: VM): Promise<boolean>
 
     setScalingGroup(master: string | null, self: string | null) {
         if (master) {

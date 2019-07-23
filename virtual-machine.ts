@@ -123,3 +123,25 @@ export abstract class VirtualMachine<SourceType, NetworkInterfaceType extends Ne
     //     return virtualMachine;
     // }
 }
+
+export interface ScalingGroupLike {
+    scalingGroupId: string,
+    scalingGroupName: string,
+    virtualMachineIds: string[]
+}
+
+export abstract class ScalingGroup<SourceType>
+    implements ScalingGroupLike {
+    private _sourceData: SourceType;
+    constructor(sourceData: SourceType){
+        this._sourceData = sourceData;
+    }
+
+    get sourceData(): SourceType {
+        return this._sourceData
+    }
+
+    abstract get scalingGroupId(): string;
+    abstract get scalingGroupName(): string;
+    abstract get virtualMachineIds(): string[];
+}

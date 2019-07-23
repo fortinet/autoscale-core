@@ -44,8 +44,8 @@ export function toGmtTime(time: Date | number | string): Date | null {
 }
 
 export class DefaultLogger extends Logger {
-    constructor(loggerObject: Console) {
-        super(loggerObject)
+    constructor(loggerObject: Console, depth: number = 2) {
+        super(loggerObject, depth)
     }
     log(...args: any[]) {
         this._logCount++
@@ -214,6 +214,8 @@ export async function waitFor<T>(
             currentCount++
         }
     } catch (error) {
+        //TODO: the original error trace is lost, how to keep the trace?
+        // maybe just simply reject the error?
         let message = ''
         if (error instanceof Error) {
             message = error.message

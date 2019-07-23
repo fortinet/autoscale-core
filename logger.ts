@@ -33,7 +33,9 @@ export abstract class Logger {
     protected _flushing: boolean = false
     level: LogLevels | null = null
 
-    constructor(public logger: Console) {}
+    // TODO:
+    // for log output [object object] issues, check util.inspect(result, false, null) for more info
+    constructor(public logger: Console, public depth: number = 2) {}
 
     /**
      * control logging output or queue level.

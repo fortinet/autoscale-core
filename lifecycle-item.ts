@@ -59,7 +59,7 @@ export class LifecycleItem implements LifecycleItemLike {
      * @param entry Entry from DB
      * @returns A new lifecycle item.
      */
-    static fromDb(entry: LifecycleItemLike) {
+    static parse(entry: LifecycleItemLike) {
         const date = (entry.timestamp && new Date(entry.timestamp)) || null
         if (date && !date.getTime()) {
             throw new Error(
