@@ -14,5 +14,7 @@ export interface HealthCheck {
     heartBeatLossCount: number
     heartBeatInterval: number
     nextHeartBeatTime: number
-    syncState: HealthCheckSyncState
+    syncState: HealthCheckSyncState,
+    inevitableFailToSyncTime?: number,
+    healthCheckTime?: number
 }

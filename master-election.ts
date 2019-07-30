@@ -11,6 +11,7 @@ export enum VoteMethod {
 type VoteStateType = VoteState.pending | VoteState.done
 
 export interface MasterRecordLike {
+    id?:string
     ip: string
     instanceId: string
     scalingGroupName: string

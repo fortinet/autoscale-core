@@ -19,7 +19,7 @@ Author: Fortinet
 */
 
 import uuidv5 from 'uuid/v5'
-import { Logger, LogLevels, LogQueueItem } from './logger'
+import { Logger, LogLevels, LogQueueItem, LoggerLike } from './logger'
 
 const scriptStartTime: number = Date.now()
 
@@ -43,8 +43,9 @@ export function toGmtTime(time: Date | number | string): Date | null {
     }
 }
 
+//FIXME: should move this class to Logger.ts
 export class DefaultLogger extends Logger {
-    constructor(loggerObject: Console, depth: number = 2) {
+    constructor(loggerObject: LoggerLike, depth: number = 2) {
         super(loggerObject, depth)
     }
     log(...args: any[]) {

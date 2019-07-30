@@ -19,7 +19,7 @@ export interface NetworkInterfaceLike {
 export interface VirtualMachineLike {
     instanceId: string
     scalingGroupName?: string
-    sourceVmData?: {}
+    sourceVmData?: {} //FIXME: sourceVmData -> sourceData
     primaryPrivateIpAddress: string
     primaryPublicIpAddress: string
     virtualNetworkId: string

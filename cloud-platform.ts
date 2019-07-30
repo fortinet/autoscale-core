@@ -106,7 +106,7 @@ export abstract class RuntimeAgent<HttpRequest, RuntimeContext> {
     /**
      * function to respond to a platform
      */
-    abstract async respond(response: ErrorDataPairLike):Promise<any>;
+    abstract async respond(response: ErrorDataPairLike, httpStatusCode?: number):Promise<any>;
 }
 /**
  * It's a typical key-value pair with 'key' and 'value' properties.
@@ -214,8 +214,12 @@ export interface BlobStorageItemQuery extends FilterLikeResourceQuery<string> {
  * Defines the Http request-object-like structure
  */
 export interface HttpRequestLike {
-    headers: {}
-    body: {}
+    headers: {
+        [key: string]: any
+    }
+    body?: {
+        [key: string]: any
+    }
     [key: string]: any
 }
 
@@ -291,6 +295,13 @@ export abstract class CloudPlatform<
      * Abstract class method.
      */
     abstract async init(): Promise<boolean>
+
+    /**
+     * Send response to platform.
+     * @param response
+     * @param httpStatusCode
+     */
+    abstract async respond(response: ErrorDataPairLike, httpStatusCode?: number):Promise<void>;
 
     /**
      * Submit an master record for election with a vote state.
@@ -395,33 +406,38 @@ export abstract class CloudPlatform<
         heartBeatInterval: ValidHeartbeatInterval,
         masterIp: string,
         checkPointTime: number,
-        forceOutOfSync?: boolean
+        forceOutOfSync?: boolean,
+        scalingGroupName?: string
     ): Promise<boolean>
 
     /**
      * delete the instance health check monitoring record from DB.
      * Abstract class method.
      * @param instanceId the instanceId of instance
+     * @param scalingGroupName the scaling group the isntance is located
      */
-    abstract async deleteInstanceHealthCheck(instanceId: string): Promise<boolean>
+    abstract async deleteInstanceHealthCheck(instanceId: string, scalingGroupName?:string): Promise<boolean>
 
     /**
      * Delete one or more instances from the auto scaling group.
      * Abstract class method.
      * @param {Object} parameters parameters necessary for instance deletion.
      */
+    //FIXME: parameters -> descriptors
     abstract async deleteInstances(parameters: VirtualMachineDescriptor[]): Promise<boolean>
 
     /**
      * describe a scaling group
      * @param decriptor a descriptor for describing a scaling group.
      */
+    //FIXME: decriptor -> descriptor, it's spelt wrong in multiple places
     abstract async describeScalingGroup(decriptor: ScalingGroupDecriptor): Promise<ScalingGroupLike | null>
 
     /**
      * Create a network interface in the platform
      * @param parameters
      */
+    //FIXME: parameters -> descriptor
     abstract async createNetworkInterface(
         parameters: NetworkInterfaceDescriptor
     ): Promise<NetworkInterfaceLike | boolean>
@@ -430,12 +446,14 @@ export abstract class CloudPlatform<
      * Delete a network interface in the platform
      * @param parameters
      */
+    //FIXME: parameters -> descriptor
     abstract async deleteNetworkInterface(parameters: NetworkInterfaceDescriptor): Promise<boolean>
 
     /**
      * query a network interface in the platform
      * @param parameters
      */
+    //FIXME: parameters -> descriptor
     abstract async describeNetworkInterface(
         parameters: NetworkInterfaceDescriptor
     ): Promise<NetworkInterfaceLike> | null
@@ -445,6 +463,7 @@ export abstract class CloudPlatform<
      * @param parameters
      * @param statusToInclude a list of platform-specific status strings
      */
+    //FIXME: parameters -> resourceQuery
     abstract async listNetworkInterfaces(
         parameters: FilterLikeResourceQuery<KeyValueLike>,
         statusToInclude?: string[]
@@ -570,6 +589,7 @@ export abstract class CloudPlatform<
      * query blob items in the storage
      * @param parameters a filter-like resource query
      */
+    //FIXME: parameters -> resourceQuery
     abstract async listBlobFromStorage(parameters: BlobStorageItemQuery): Promise<Blob[]>
 
     /**
@@ -584,6 +604,7 @@ export abstract class CloudPlatform<
      * @returns {Map<LicenseItem>} must return a Map of LicenseItem with blobKey as key,
      * and LicenseItem as value
      */
+    //FIXME: parameters -> descriptor
     abstract async listLicenseFiles(
         parameters?: BlobStorageItemDescriptor
     ): Promise<Map<string, LicenseItem>>
@@ -678,6 +699,7 @@ export abstract class CloudPlatform<
      * the given parameters. For example: VPC in AWS.
      * @param parameters parameters
      */
+    //FIXME: parameters -> descriptor
     abstract async describeVirtualNetwork(
         parameters: VirtualNetworkDescriptor
     ): Promise<VirtualNetworkLike>
@@ -686,5 +708,6 @@ export abstract class CloudPlatform<
      * Get information about the subnets in a given virtual network.
      * @param parameters parameters
      */
+    //FIXME: parameters -> descriptor
     abstract async listSubnets(parameters: VirtualNetworkDescriptor): Promise<SubnetLike[]>
 }

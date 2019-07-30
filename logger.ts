@@ -18,6 +18,14 @@ export interface LogQueueItem {
     timestamp: Date
     arguments: any[]
 }
+
+export interface LoggerLike {
+    log(...args:any[]): void | any,
+    info(...args: any[]): void | any,
+    warn(...args: any[]): void | any,
+    error(...args: any[]): void | any,
+    debug(...args: any[]): void | any
+}
 /**
  * A unified logger class to handle logging across different platforms.
  */
@@ -35,7 +43,7 @@ export abstract class Logger {
 
     // TODO:
     // for log output [object object] issues, check util.inspect(result, false, null) for more info
-    constructor(public logger: Console, public depth: number = 2) {}
+    constructor(public logger: LoggerLike, public depth: number = 2) {}
 
     /**
      * control logging output or queue level.
@@ -94,7 +102,7 @@ export abstract class Logger {
         d.setUTCHours(d.getTimezoneOffset() / 60 + this._timeZoneOffset)
         let item = { level: level, timestamp: d, arguments: <any[]>[] }
         item.arguments = Array.from(args).map(arg => {
-            return arg && arg.toString ? arg.toString() : arg
+            return arg && JSON.stringify(arg) || arg
         })
         this._queue.push(item)
         return this
@@ -104,31 +112,31 @@ export abstract class Logger {
      * output or queue information to a regular logging stream.
      * @returns logger instance for chaining
      */
-    abstract log(...args: any[]): this
+    abstract log(message?: any, ...optionalParams: any[]): this
     /**
      * output or queue information to the debug logging stream.
      * @returns logger instance for chaining
      */
-    abstract debug(...args: any[]): this
+    abstract debug(message?: any, ...optionalParams: any[]): this
     /**
      * output or queue information to the info logging stream.
      * @returns logger instance for chaining
      */
-    abstract info(...args: any[]): this
+    abstract info(message?: any, ...optionalParams: any[]): this
     /**
      * output or queue information to the warning logging stream.
      * @returns logger instance for chaining
      */
-    abstract warn(...args: any[]): this
+    abstract warn(message?: any, ...optionalParams: any[]): this
     /**
      * output or queue information to the error logging stream.
      * @returns logger instance for chaining
      */
-    abstract error(...args: any[]): this
+    abstract error(message?: any, ...optionalParams: any[]): this
 
     /**
      * flush all queued logs to the output
      * @param level flush all queued logs with this level
      */
-    abstract flush(level: keyof LogLevels): string
+    abstract flush(level?: keyof LogLevels): string
 }

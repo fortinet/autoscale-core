@@ -33,12 +33,14 @@ import {
     ErrorDataPairLike,
     BlobStorageItemDescriptor,
     ValidHeartbeatInterval,
+    HttpStatusCode
 } from './cloud-platform'
 import { LicenseItem } from './license-item'
 import { LicenseRecord } from './license-record'
 import { LifecycleAction } from './lifecycle-item'
 import { URL } from 'url'
 import { Logger } from './logger'
+
 
 const AUTOSCALE_SECTION_EXPR = /(?:^|(?:\s*))config?\s*system?\s*auto-scale\s*((?:.|\s)*)\bend\b/
 const NO_HEART_BEAT_INTERVAL_SPECIFIED = -1
@@ -433,8 +435,9 @@ export abstract class AutoscaleHandler<
     }
 
     //TODO: improve this function
-    async handleGetLicense(event: any, context: any, callback: any) {
-        let result
+    async handleGetLicense(runtimeAgent?: RA) {
+        let result;
+        let ra: RA = runtimeAgent || this.platform.runtimeAgent;
         this.logger.info('calling handleGetLicense')
         try {
             const platformInitSuccess = await this.init()
@@ -442,14 +445,17 @@ export abstract class AutoscaleHandler<
             if (!platformInitSuccess) {
                 result = 'fatal error, cannot initialize.'
                 this.logger.error(result)
-                callback(null, this.proxyResponse(500, result))
+                this.platform.respond(result, HttpStatusCode.INTERNAL_SERVER_ERROR);
                 return
             }
 
             // authenticate the calling instance
-            this.parseRequestInfo(event)
+            this.parseRequestInfo(ra);
             if (!this._requestInfo.instanceId) {
-                callback(null, this.proxyResponse(403, 'Instance id not provided.'))
+                this.platform.respond({
+                    error: null,
+                    data: 'Instance id not provided.'
+                }, HttpStatusCode.FORBIDDEN);
                 return
             }
             await this.parseInstanceInfo(this._requestInfo.instanceId)
@@ -579,9 +585,16 @@ export abstract class AutoscaleHandler<
                     `assigned to instance (id: ${this._selfInstance.instanceId}).`
             )
 
-            callback(null, this.proxyResponse(200, availStockItem.content, { maskResponse: true }))
+            this.platform.respond(<ErrorDataPairLike>{
+                error: null,
+                data: availStockItem.content,
+                maskResponse: true
+            }, HttpStatusCode.OK);
         } catch (ex) {
-            callback(ex, this.proxyResponse(500, 'Error in getting license. Please check logs.'))
+            this.platform.respond({
+                error: ex,
+                data: 'Error in getting license. Please check logs.'
+            }, HttpStatusCode.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -857,7 +870,9 @@ export abstract class AutoscaleHandler<
                 this._selfHealthCheck,
                 interval,
                 masterIp,
-                now
+                now,
+                false,
+                this.scalingGroupName
             )
             this.logger.info(
                 `hb record updated on (timestamp: ${now}, instance id:` +
@@ -1206,7 +1221,7 @@ export abstract class AutoscaleHandler<
      * @param {Object} settings settings to save
      */
     // TODO: use Map type for the settings parameter.
-    async saveSettings(settings: {}) {
+    async saveSettings(settings: { [key: string]: any}) {
         let tasks = [],
             errorTasks = []
         for (let [key, value] of Object.entries(settings)) {
@@ -1568,11 +1583,11 @@ export abstract class AutoscaleHandler<
         instance: VM,
         heartBeatInterval: ValidHeartbeatInterval,
         masterIp?: string
-    ): Promise<void>
+    ): Promise<boolean>
 
     async removeInstanceFromMonitor(instanceId: string) {
         this.logger.info('calling removeInstanceFromMonitor')
-        return await this.platform.deleteInstanceHealthCheck(instanceId)
+        return await this.platform.deleteInstanceHealthCheck(instanceId, this.scalingGroupName)
     }
 
     /**
@@ -1848,6 +1863,8 @@ export abstract class AutoscaleHandler<
     }
 
     // TODO: this should be called in the lamba function implementation
+    // FIXME: this function is intended for handling AWS lifecycle events. move to AWS library,
+    // not need to be abstract
     abstract async handleAutoScalingEvent(event?: unknown): Promise<ErrorDataPairLike>
 
     // TODO: this should be called in the lamba function implementation
@@ -1861,6 +1878,8 @@ export abstract class AutoscaleHandler<
      * @param action the lifecycle action
      * @param fulfilled lifecycle action is satisified as desired or not
      */
+    // FIXME: this function is intended for handling AWS lifecycle events. move to AWS library,
+    // not need to be abstract
     abstract async handleLifecycleAction(
         instanceId: string,
         action: LifecycleAction,
