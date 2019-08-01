@@ -33,7 +33,8 @@ import {
     ErrorDataPairLike,
     BlobStorageItemDescriptor,
     ValidHeartbeatInterval,
-    HttpStatusCode
+    HttpStatusCode,
+    MaskedResponse
 } from './cloud-platform'
 import { LicenseItem } from './license-item'
 import { LicenseRecord } from './license-record'
@@ -445,7 +446,10 @@ export abstract class AutoscaleHandler<
             if (!platformInitSuccess) {
                 result = 'fatal error, cannot initialize.'
                 this.logger.error(result)
-                this.platform.respond(result, HttpStatusCode.INTERNAL_SERVER_ERROR);
+                this.platform.respond(<ErrorDataPairLike>{
+                    error: new Error(result),
+                    data: null
+                }, HttpStatusCode.INTERNAL_SERVER_ERROR);
                 return
             }
 
@@ -585,13 +589,13 @@ export abstract class AutoscaleHandler<
                     `assigned to instance (id: ${this._selfInstance.instanceId}).`
             )
 
-            this.platform.respond(<ErrorDataPairLike>{
+            this.platform.respond(<MaskedResponse>{
                 error: null,
                 data: availStockItem.content,
                 maskResponse: true
             }, HttpStatusCode.OK);
         } catch (ex) {
-            this.platform.respond({
+            this.platform.respond(<ErrorDataPairLike>{
                 error: ex,
                 data: 'Error in getting license. Please check logs.'
             }, HttpStatusCode.INTERNAL_SERVER_ERROR);

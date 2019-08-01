@@ -85,6 +85,10 @@ export interface ErrorDataPairLike {
     [key:string]:any
 }
 
+export interface MaskedResponse extends ErrorDataPairLike {
+    maskResponse: boolean
+}
+
 /**
  * Runtime Agent is an agent-object class that holds the information of the platform request,
  * context, callback etc. This agent interacts with the platform runtime.
@@ -98,15 +102,11 @@ export abstract class RuntimeAgent<HttpRequest, RuntimeContext> {
     constructor(
         readonly request: HttpRequest,
         readonly context: RuntimeContext,
-        readonly logger: Logger
+        readonly logger: Logger,
+        readonly callback: (...args:any[])=>any
     ) {
         this.createdTime = Date.now();
     }
-
-    /**
-     * function to respond to a platform
-     */
-    abstract async respond(response: ErrorDataPairLike, httpStatusCode?: number):Promise<any>;
 }
 /**
  * It's a typical key-value pair with 'key' and 'value' properties.
