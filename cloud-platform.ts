@@ -96,14 +96,14 @@ export interface MaskedResponse extends ErrorDataPairLike {
  * It has one abstract function processResponse to handle how data is passing back to a
  * platform.
  */
-export abstract class RuntimeAgent<HttpRequest, RuntimeContext> {
+export abstract class RuntimeAgent<HttpRequest, RuntimeContext, PlatformLogger> {
     response: ErrorDataPairLike
     readonly createdTime: number
     constructor(
         readonly request: HttpRequest,
         readonly context: RuntimeContext,
-        readonly logger: Logger,
-        readonly callback: (...args:any[])=>any
+        readonly logger: Logger<PlatformLogger>,
+        readonly callback: PlatformCallback
     ) {
         this.createdTime = Date.now();
     }
@@ -235,6 +235,19 @@ export interface HttpRequest extends HttpRequestLike {
 export type HttpMethodType = 'POST' | 'GET' | 'PUT' | 'DELETE' | 'HEAD' | 'OPTIONS'
 
 /**
+ * Custom log request is expected with this headers
+ */
+export interface CustomLogRequestHeaders {
+    token?: string,
+    timefrom?: string,
+    timeto?: string,
+    timezoneoffset?: string,
+    [key:string]: any
+}
+
+export type PlatformCallback = (...args:any[]) => void;
+
+/**
  * Class used to define the capabilities required from cloud platform.
  * P_NIQ: parameter to query NetworkInterface
  */
@@ -256,10 +269,11 @@ export type HttpMethodType = 'POST' | 'GET' | 'PUT' | 'DELETE' | 'HEAD' | 'OPTIO
 export abstract class CloudPlatform<
     HttpRequest,
     RuntimeContext,
+    PlatformLogger,
     KeyValueLike,
     VmSourceType,
     VM extends VirtualMachine<VmSourceType, NetworkInterfaceLike>,
-    RA extends RuntimeAgent<HttpRequest, RuntimeContext>
+    RA extends RuntimeAgent<HttpRequest, RuntimeContext, PlatformLogger>
 > {
     // TODO: NOTE:ugly naming here. should remove the underscore
     // to use accessor style here, have to make it double underscore.
@@ -280,7 +294,7 @@ export abstract class CloudPlatform<
     /**
      * return the instance of the platform-specific logger class
      */
-    abstract get logger(): Logger
+    abstract get logger(): Logger<PlatformLogger>
 
     /**
      * initialization flag. probably check it to avoid multiple init calls in a workflow?

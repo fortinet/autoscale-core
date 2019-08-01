@@ -34,7 +34,8 @@ import {
     BlobStorageItemDescriptor,
     ValidHeartbeatInterval,
     HttpStatusCode,
-    MaskedResponse
+    MaskedResponse,
+    USE_EXISTING
 } from './cloud-platform'
 import { LicenseItem } from './license-item'
 import { LicenseRecord } from './license-record'
@@ -68,12 +69,13 @@ export interface ConfigSetParser {
 export abstract class AutoscaleHandler<
     HttpRequest,
     RuntimeContext,
+    PlatformLogger,
     KeyValueLike,
     VmSourceType,
     VM extends VirtualMachine<VmSourceType, NetworkInterfaceLike>,
-    RA extends RuntimeAgent<HttpRequest, RuntimeContext>,
+    RA extends RuntimeAgent<HttpRequest, RuntimeContext, PlatformLogger>,
     CP extends CloudPlatform<
-        HttpRequest, RuntimeContext,
+        HttpRequest, RuntimeContext, PlatformLogger,
         KeyValueLike, VmSourceType, VM, RA
     >
 > {
@@ -85,7 +87,7 @@ export abstract class AutoscaleHandler<
     protected _requestInfo: RequestInfo | null
     protected _baseConfig: string
     protected scalingGroupName: string
-    protected logger: Logger
+    protected logger: Logger<PlatformLogger>
     constructor(readonly platform: CP) {
         this._selfInstance = null
         this._selfHealthCheck = null
@@ -117,14 +119,6 @@ export abstract class AutoscaleHandler<
     // TODO: improve this
     get _settings(): SettingItems {
         return this.platform._settings
-    }
-
-    /**
-     * Set the logger to output log to platform
-     * @param {Logger} logger Logger object used to output log to platform
-     */
-    useLogger(logger: Logger) {
-        this.logger = logger || new CoreFunctions.DefaultLogger(console)
     }
 
     async init() {
@@ -609,7 +603,8 @@ export abstract class AutoscaleHandler<
      */
     async handleSyncedCallback(): Promise<{} | string> {
         const instanceId = this._requestInfo.instanceId,
-            interval = this._requestInfo.interval
+            interval = this._requestInfo.interval === USE_EXISTING ?
+                DEFAULT_HEART_BEAT_INTERVAL : Number(this._requestInfo.interval)
 
         let masterIp,
             isMaster = false,
@@ -808,6 +803,8 @@ export abstract class AutoscaleHandler<
         if (!this._selfHealthCheck) {
             // check if a lifecycle event waiting
             // handle the lifecycle action
+            //NOTE: for those platforms don't offer lifecycle handling, the handleLifecycleAction()
+            // could be implemented as always returning true.
             await this.handleLifecycleAction(
                 this._selfInstance.instanceId,
                 LifecycleAction.ACTION_NAME_GET_CONFIG,

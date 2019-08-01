@@ -19,7 +19,7 @@ Author: Fortinet
 */
 
 import uuidv5 from 'uuid/v5'
-import { Logger, LogLevels, LogQueueItem, LoggerLike } from './logger'
+import { Logger, LogLevels, LogQueueItem } from './logger'
 
 const scriptStartTime: number = Date.now()
 
@@ -27,25 +27,17 @@ export function uuidGenerator(inStr: string) {
     return uuidv5(inStr, uuidv5.URL)
 }
 
-export function toGmtTime(time: Date | number | string): Date | null {
-    let timeObject
-    if (time instanceof Date) {
-        timeObject = time
-    } else if (typeof time === 'number') {
-        timeObject = new Date(Math.floor(time))
-    } else {
-        timeObject = new Date(parseInt(time))
+export function toGmtTime(time: Date | number | string): Date {
+    let dateObject:Date = new Date(time);
+    if (!isNaN(dateObject.getTime())){
+        dateObject = new Date(dateObject.getTime() + dateObject.getTimezoneOffset() * 60000);
     }
-    if (timeObject.getTime()) {
-        return new Date(timeObject.getTime() + timeObject.getTimezoneOffset() * 60000)
-    } else {
-        return null // unable to be converted to Date
-    }
+    return dateObject;
 }
 
 //FIXME: should move this class to Logger.ts
-export class DefaultLogger extends Logger {
-    constructor(loggerObject: LoggerLike, depth: number = 2) {
+export class DefaultLogger extends Logger<Console> {
+    constructor(loggerObject: Console, depth: number = 2) {
         super(loggerObject, depth)
     }
     log(...args: any[]) {

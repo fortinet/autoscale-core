@@ -19,17 +19,10 @@ export interface LogQueueItem {
     arguments: any[]
 }
 
-export interface LoggerLike {
-    log(...args:any[]): void | any,
-    info(...args: any[]): void | any,
-    warn(...args: any[]): void | any,
-    error(...args: any[]): void | any,
-    debug(...args: any[]): void | any
-}
 /**
  * A unified logger class to handle logging across different platforms.
  */
-export abstract class Logger {
+export abstract class Logger<LoggerLike> {
     private _timeZoneOffset = 0
     protected _logCount = 0
     protected _infoCount = 0
@@ -43,7 +36,7 @@ export abstract class Logger {
 
     // TODO:
     // for log output [object object] issues, check util.inspect(result, false, null) for more info
-    constructor(public logger: LoggerLike, public depth: number = 2) {}
+    constructor(protected logger: LoggerLike, public depth: number = 2) {}
 
     /**
      * control logging output or queue level.
@@ -97,7 +90,7 @@ export abstract class Logger {
         return this._errorCount
     }
 
-    enQueue(level: keyof LogLevels, args: any[]) {
+    enQueue(level: keyof LogLevels, ...args:any[]) {
         let d = new Date()
         d.setUTCHours(d.getTimezoneOffset() / 60 + this._timeZoneOffset)
         let item = { level: level, timestamp: d, arguments: <any[]>[] }
