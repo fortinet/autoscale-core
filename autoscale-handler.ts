@@ -112,6 +112,10 @@ export abstract class AutoscaleHandler<
         return this.platform.masterScalingGroupName
     }
 
+    get logger(): Logger {
+        return this.platform.logger;
+    }
+
     /**
      * Get the read-only settings object from the platform. To modify the settings object,
      * do it via the platform instance but not here.

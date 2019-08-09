@@ -93,8 +93,6 @@ export interface MaskedResponse extends ErrorDataPairLike {
  * Runtime Agent is an agent-object class that holds the information of the platform request,
  * context, callback etc. This agent interacts with the platform runtime.
  * It's able to be easily passed from one handler to another within the same runtime.
- * It has one abstract function processResponse to handle how data is passing back to a
- * platform.
  */
 export abstract class RuntimeAgent<HttpRequest, RuntimeContext, PlatformLogger> {
     response: ErrorDataPairLike

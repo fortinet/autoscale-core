@@ -41,10 +41,10 @@ export class LifecycleItem implements LifecycleItemLike {
     ) {}
 
     /**
-     * @returns {LifecycleItemInterface} object {FortigateInstance, Timestamp, Detail}
+     * convert the class to a format for storing (in DB).
      */
 
-    likeify() {
+    toStore() {
         return <LifecycleItemLike>{
             instanceId: this.instanceId,
             actionName: this.actionName,

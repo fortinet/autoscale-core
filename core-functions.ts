@@ -24,7 +24,7 @@ import { Logger, LogLevels, LogQueueItem } from './logger'
 const scriptStartTime: number = Date.now()
 
 export function uuidGenerator(inStr: string) {
-    return uuidv5(inStr, uuidv5.URL)
+    return uuidv5(inStr, uuidv5.URL);
 }
 
 export function toGmtTime(time: Date | number | string): Date {
