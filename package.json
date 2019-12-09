@@ -1,35 +1,35 @@
 {
-  "name": "fortigate-autoscale-core",
-  "version": "1.0.0",
-  "description": "FortiGate Autoscale Module - Core",
+  "name": "autoscale-core",
+  "version": "3.0.0-alpha",
+  "description": "Autoscale - Core Module",
   "main": "index.js",
   "directories": {
     "test": "tests"
   },
-  "files_to_deploy": [
-    "*.js",
-    "package.json"
-  ],
   "devDependencies": {
+    "@types/mocha": "^5.2.7",
     "@types/node": "^12.0.10",
     "@types/uuid": "^3.4.5",
     "eslint": "^5.4.0",
     "eslint-plugin-mocha": "^5.2.0",
     "mocha": "^5.2.0",
     "nyc": "^14.1.1",
-    "request": "^2.87.0"
+    "request": "^2.87.0",
+    "typescript": "^3.7.3"
   },
   "scripts": {
     "pretest": "eslint --fix .",
-    "deploy": "dpl",
-    "build": "scripts/make-dist.js",
+    "copy-package-files": "cp package.json ./compiled && cp LICENSE ./compiled && cp README.md ./compiled",
+    "make-dist": "(mkdir -p ./dist && cd ./compiled && npm pack | xargs -I{} cp ./{} ../dist/)",
+    "ts-compile": "rm -rf ./compiled && node node_modules/typescript/bin/tsc",
+    "build": "npm install && npm run ts-compile && npm run copy-package-files && npm run make-dist",
     "test": "nyc mocha --recursive './test/mocha/*.js'"
   },
   "author": "fortinet",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/fortinet/fortigate-autoscale"
+    "url": "git+https://github.com/fortinet/autoscale-core"
   },
   "dependencies": {
     "http-status-codes": "^1.3.2"

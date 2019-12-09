@@ -1,0 +1,16 @@
+language: node_js
+node_js: 8.11.1
+script:
+  - npm run build
+  - git describe
+deploy:
+  provider: releases
+  api_key:
+    secure: gE+vOJxBD5kvvI6J83YQxpZj1vKU7nBdZ8tsx/zRfawaxMSFdPOrM1CLgE7XSpnB06fC6x74c2O8HU0DLVNBeIqR5DR0PVMSurK0zK7Y6zCJvXjO3Kg/fA5YZjqEd2XqmXHBj4QYhrlEkK5pVA6MNsEQilLY1eu57v+28EBkt2B/LGlWq0MI6+d8HN5fSlnCRQr/GBIJkI54C5mREgyOFTFTu5249Oh5g3ABz2Is+Ru97rEVTPQyCunnSM8JOht0tIrPn/Te5ObdRhIJG4enhVDiIu72Z+ShB73KXCc55ZxpcjmjNbgLjtAW/hYs1mMb25Qw9SdelJ37iJ51ACzVOCjLjJ3GwLGzW5hVV+CmKBwKIT2eyFprMi02JC/u1/x7jIaDTgcWW7oj1fP78D2zWxKAnw2pqc+6IlwbWzEDJli9hAVOXg/pF94x0mGuQv7/0VsE/vVDydrCkCUG26aTR8feN2ccnzLhyHEBCtBFwvbfV/uhs7StfZtpOnzPnB+6BdprnfuqIVb/Dz9HVSriPeD/u0ftKvS2dBjP56XVHlcSPbQxG78JAhpCZaSl0a/A0q5EhFCnNeo9kpJMWqUOXYFJhIk8X00yHvS0ytJIs2fMPtLw6CcBYUo2qSyUwAmIgcLVdAIrdyGksgH3EG4Swn7PsERWIptctbyO6EHuhK8=
+  file_glob: true
+  file: dist/*
+  skip_cleanup: true
+  on:
+    repo: fortinet/autoscale-core
+    tags: true
+    branch: master

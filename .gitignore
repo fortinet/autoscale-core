@@ -1,0 +1,14 @@
+# project-specific
+dist
+compiled
+
+# npm
+**/node_modules
+**/npm-debug.log
+
+# istanbul javascript test coverage
+**/.nyc_output
+
+# visual studio code
+**/.vscode
+**/*.code-workspace

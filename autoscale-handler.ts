@@ -87,7 +87,7 @@ export abstract class AutoscaleHandler<
     protected _requestInfo: RequestInfo | null
     protected _baseConfig: string
     protected scalingGroupName: string
-    protected logger: Logger<PlatformLogger>
+    // protected logger: Logger<PlatformLogger>
     constructor(readonly platform: CP) {
         this._selfInstance = null
         this._selfHealthCheck = null
@@ -112,7 +112,7 @@ export abstract class AutoscaleHandler<
         return this.platform.masterScalingGroupName
     }
 
-    get logger(): Logger {
+    get logger(): Logger<PlatformLogger> {
         return this.platform.logger;
     }
 
