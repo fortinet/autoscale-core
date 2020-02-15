@@ -18,143 +18,166 @@ Author: Fortinet
 * needed for the FortiGate config's callback-url parameter.
 */
 
-import uuidv5 from 'uuid/v5'
-import { Logger, LogLevels, LogQueueItem } from './logger'
+import uuidv5 from 'uuid/v5';
+import { Logger, LogLevels, LogQueueItem } from './logger';
 
-const scriptStartTime: number = Date.now()
+const scriptStartTime: number = Date.now();
 
 export function uuidGenerator(inStr: string) {
     return uuidv5(inStr, uuidv5.URL);
 }
 
 export function toGmtTime(time: Date | number | string): Date {
-    let dateObject:Date = new Date(time);
-    if (!isNaN(dateObject.getTime())){
+    let dateObject: Date = new Date(time);
+    if (!isNaN(dateObject.getTime())) {
         dateObject = new Date(dateObject.getTime() + dateObject.getTimezoneOffset() * 60000);
     }
     return dateObject;
 }
 
-//FIXME: should move this class to Logger.ts
+// FIXME: should move this class to Logger.ts
 export class DefaultLogger extends Logger<Console> {
-    constructor(loggerObject: Console, depth: number = 2) {
-        super(loggerObject, depth)
+    constructor(loggerObject: Console, depth = 2) {
+        super(loggerObject, depth);
     }
     log(...args: any[]) {
-        this._logCount++
+        this._logCount++;
         if (!(this.level && this.level.log === false)) {
             if (this._outputQueue && !this._flushing) {
-                this.enQueue('log', args)
+                this.enQueue('log', args);
             } else {
-                this.logger.log(...args)
+                this.logger.log(...args);
             }
         }
-        return this
+        return this;
     }
     debug(...args: any[]) {
-        this._debugCount++
+        this._debugCount++;
         if (!(this.level && this.level.debug === false)) {
             if (this._outputQueue && !this._flushing) {
-                this.enQueue('debug', args)
+                this.enQueue('debug', args);
             } else {
-                this.logger.debug(...args)
+                this.logger.debug(...args);
             }
         }
-        return this
+        return this;
     }
     info(...args: any[]) {
-        this._infoCount++
+        this._infoCount++;
         if (!(this.level && this.level.info === false)) {
             if (this._outputQueue && !this._flushing) {
-                this.enQueue('info', args)
+                this.enQueue('info', args);
             } else {
-                this.logger.info(...args)
+                this.logger.info(...args);
             }
         }
-        return this
+        return this;
     }
     warn(...args: any[]) {
-        this._warnCount++
+        this._warnCount++;
         if (!(this.level && this.level.warn === false)) {
             if (this._outputQueue && !this._flushing) {
-                this.enQueue('warn', args)
+                this.enQueue('warn', args);
             } else {
-                this.logger.warn(...args)
+                this.logger.warn(...args);
             }
         }
-        return this
+        return this;
     }
     error(...args: any[]) {
-        this._errorCount++
+        this._errorCount++;
         if (!(this.level && this.level.error === false)) {
             if (this._outputQueue && !this._flushing) {
-                this.enQueue('error', args)
+                this.enQueue('error', args);
             } else {
-                this.logger.error(...args)
+                this.logger.error(...args);
             }
         }
-        return this
+        return this;
     }
     flush(level: keyof LogLevels = 'log') {
         if (!this._outputQueue) {
-            return ''
+            return '';
         }
-        let outputContent = ''
+        let outputContent = '';
         if (this._queue.length > 0) {
             outputContent +=
                 `Queued Logs: [log: ${this._logCount}, info: ${this._infoCount}, ` +
-                `debug: ${this._debugCount}, warn: ${this._warnCount}, error: ${this._errorCount}]\n`
+                `debug: ${this._debugCount}, warn: ${this._warnCount}, error: ${this._errorCount}]\n`;
         }
         while (this._queue.length > 0) {
             // this would complain that item may be null, but the while loop won't proceed if the queue is empty so we ca
             // just assert that it's not.
-            let item = <LogQueueItem>this._queue.shift()
-            outputContent += `[${item.level}][${item.timestamp.toString()}][/${item.level}]\n`
+            const item = this._queue.shift() as LogQueueItem;
+            outputContent += `[${item.level}][${item.timestamp.toString()}][/${item.level}]\n`;
             if (item.arguments.length > 0) {
                 item.arguments.forEach(arg => {
-                    outputContent += `${arg}\n`
-                })
+                    outputContent += `${arg}\n`;
+                });
             }
         }
-        this._flushing = true
+        this._flushing = true;
         switch (level) {
             case 'log':
-                this.log(outputContent)
-                break
+                this.log(outputContent);
+                break;
             case 'debug':
-                this.debug(outputContent)
-                break
+                this.debug(outputContent);
+                break;
             case 'info':
-                this.info(outputContent)
-                break
+                this.info(outputContent);
+                break;
             case 'warn':
-                this.warn(outputContent)
-                break
+                this.warn(outputContent);
+                break;
             case 'error':
-                this.error(outputContent)
-                break
+                this.error(outputContent);
+                break;
             default:
-                this.log(outputContent)
-                break
+                this.log(outputContent);
+                break;
         }
-        this._flushing = false
-        return outputContent
+        this._flushing = false;
+        return outputContent;
     }
 }
 
-const logger = new DefaultLogger(console)
-const moduleId: string = uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`))
+const logger = new DefaultLogger(console);
+const moduleId: string = uuidGenerator(JSON.stringify(`${__filename}${Date.now()}`));
 
 export function moduleRuntimeId(): string {
-    return moduleId
+    return moduleId;
 }
 
 export function sleep(ms: number) {
     return new Promise(resolve => {
-        logger.warn(`sleep for ${ms} ms`)
-        setTimeout(resolve, ms)
-    })
+        logger.warn(`sleep for ${ms} ms`);
+        setTimeout(resolve, ms);
+    });
 }
+
+/**
+ * function type that returns a promise<T>
+ * @name PromiseEmitter
+ * @function
+ * @returns {Promise<T>}
+ */
+
+/**
+ * Validator function type that accepts a generic input and returns a boolean.
+ * @name ResultBaseValidator
+ * @function
+ * @template {T} value a generic type parameter
+ * @returns {boolean}
+ */
+
+/**
+ * Validator function that accepts a number as a try count and returns a boolean.
+ * @name TryBaseValidator
+ * @function
+ * @param {number} tries a number of tries
+ * @returns {boolean}
+ */
 
 /**
  * A wait-for function that periodically awaits an async promise, and does a custom validation on
@@ -162,13 +185,13 @@ export function sleep(ms: number) {
  * This function will return a Promise resolved with the last result of promiseEmitter.
  * It will also end immediately if any error occurs during, and return a Promise rejected with the
  * error object.
- * @param promiseEmitter Function(result):Promise, A function returns a promise with a
- * result of actions which you wish to wait for.
- * @param validator A predicate that
- * takes the result of the promiseEmitter, decides whether it should end the waiting or not based on
+ * @param {PromiseEmitter} promiseEmitter a function returns
+ * a promise with a result of actions which you wish to wait for.
+ * @param {ResultBaseValidator} validator A predicate that takes the result of the promiseEmitter,
+ *  decides whether it should end the waiting or not based on
  *  the result. The validator function should return true to end the waiting, or false to continue.
- * @param interval a period of time in milliseconds between each wait. Default is 5000.
- * @param counter An additonal
+ * @param {number} interval a period of time in milliseconds between each wait. Default is 5000.
+ * @param  {TryBaseValidator|number|null} retryOrTries An additonal
  * time-based condition that could end the waiting. This parameter accepts either a counter
  * function or the number of attempts where each attempt does one set of the following actions:
  * 1. awaits the return of one promise from the promiseEmitter;
@@ -184,80 +207,81 @@ export async function waitFor<T>(
     retryOrTries: ((current: number) => boolean) | number | null = null
 ): Promise<T> {
     let shouldRetry: (c: number) => boolean =
-        typeof retryOrTries === 'function' ? retryOrTries : (c: number) => false
+        typeof retryOrTries === 'function' ? retryOrTries : (c: number) => false;
     const DEFAULT_TRIES = 12,
-        tries = typeof retryOrTries === 'number' ? retryOrTries : DEFAULT_TRIES
+        tries = typeof retryOrTries === 'number' ? retryOrTries : DEFAULT_TRIES;
     let currentCount = 0,
         result,
-        maxCount = DEFAULT_TRIES
+        maxCount = DEFAULT_TRIES;
     if (tries !== undefined) {
-        maxCount = tries
+        maxCount = tries;
         shouldRetry = count => {
             if (count >= maxCount) {
-                throw new Error(`failed to wait for a result within ${maxCount} attempts.`)
+                throw new Error(`failed to wait for a result within ${maxCount} attempts.`);
             }
-            return false
-        }
+            return false;
+        };
     }
     try {
-        result = await promiseEmitter()
+        result = await promiseEmitter();
         while (!((await validator(result)) || (await shouldRetry(currentCount)))) {
-            await sleep(interval)
-            result = await promiseEmitter()
-            currentCount++
+            await sleep(interval);
+            result = await promiseEmitter();
+            currentCount++;
         }
     } catch (error) {
-        //TODO: the original error trace is lost, how to keep the trace?
+        // TODO: the original error trace is lost, how to keep the trace?
         // maybe just simply reject the error?
-        let message = ''
+        let message = '';
         if (error instanceof Error) {
-            message = error.message
+            message = error.message;
         } else {
             message =
                 error && typeof error.toString === 'function'
                     ? error.toString()
-                    : JSON.stringify(error)
+                    : JSON.stringify(error);
         }
-        return Promise.reject(`failed to wait due to error: ${message}`)
+        return Promise.reject(`failed to wait due to error: ${message}`);
     }
-    return Promise.resolve(result)
+    return Promise.resolve(result);
 }
 
 export function configSetResourceFinder(resObject: {}, nodePath: string): {} | string | null {
     if (Object.entries(resObject).length === 0 || !nodePath) {
-        return ''
+        return '';
     }
-    let nodePathMatcher: RegExpMatchArray = nodePath.match(/^{(.+)}$/i)
-    let nodes: string[] = nodePathMatcher[1].split('.')
-    let ref: { [k: string]: string | any[] } = resObject
+    const nodePathMatcher: RegExpMatchArray = nodePath.match(/^{(.+)}$/i);
+    const nodes: string[] = nodePathMatcher[1].split('.');
+    let ref: { [k: string]: string | any[] } = resObject;
 
     // TODO: what is the correct type for ref and the function return?
     // TODO: how to convert this properly with Array.find()
     nodes.forEach(nodeName => {
-        let matches = nodeName.match(/^([A-Za-z_@-]+)#([0-9])+$/i)
+        const matches = nodeName.match(/^([A-Za-z_@-]+)#([0-9])+$/i);
         if (matches && matches.length > 0) {
-            const refName: string = matches[1]
-            const refIndex: number = (matches[2] && parseInt(matches[2])) || 0
+            const refName: string = matches[1];
+            const refIndex: number = (matches[2] && parseInt(matches[2])) || 0;
             if (Array.isArray(ref[refName]) && ref[refName].length > refIndex) {
-                ref = ref[refName][refIndex]
+                ref = ref[refName][refIndex];
             } else if (!ref[nodeName]) {
-                ref = null
+                ref = null;
             } else {
                 ref =
                     Array.isArray(ref[nodeName]) && ref[nodeName].length > 0
                         ? ref[nodeName][0]
-                        : ref[nodeName]
+                        : ref[nodeName];
             }
         }
-    })
-    return ref
+    });
+    return ref;
 }
 
 /**
  * get the time lapse (in millisecond) in the current program runtime.
+ * @returns {number} time lapse in millisecond
  */
 export function getTimeLapse(): number {
-    return Date.now() - scriptStartTime
+    return Date.now() - scriptStartTime;
 }
 
-export type Convertor<InputType, OutputType> = (o: InputType) => OutputType
+export type Convertor<InputType, OutputType> = (o: InputType) => OutputType;

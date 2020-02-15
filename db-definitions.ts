@@ -9,451 +9,451 @@ export enum Tables {
     LICENSESTOCK = 'LICENSESTOCK',
     LICENSEUSAGE = 'LICENSEUSAGE',
     CUSTOMLOG = 'CUSTOMLOG',
-    VPNATTACHMENT = 'VPNATTACHMENT',
+    VPNATTACHMENT = 'VPNATTACHMENT'
 }
 
 export interface DbDef {
-    [key: string]: TableDef
+    [key: string]: TableDef;
 }
 
 export interface AttributeDef {
-    AttributeName: string
-    AttributeType?: string
-    KeyType?: string
+    AttributeName: string;
+    AttributeType?: string;
+    KeyType?: string;
 }
 
 export interface TableDef {
-    TableName: string
-    AttributeDefinitions: AttributeDef[]
-    KeySchema: AttributeDef[]
+    TableName: string;
+    AttributeDefinitions: AttributeDef[];
+    KeySchema: AttributeDef[];
     ProvisionedThroughput?: {
-        ReadCapacityUnits: number
-        WriteCapacityUnits: number
-    }
-    AdditionalAttributeDefinitions?: AttributeDef[]
+        ReadCapacityUnits: number;
+        WriteCapacityUnits: number;
+    };
+    AdditionalAttributeDefinitions?: AttributeDef[];
 }
 
-//TODO: make the schema more generic
+// TODO: make the schema more generic
 const DB: DbDef = {
     LIFECYCLEITEM: {
         AttributeDefinitions: [
             {
                 AttributeName: 'instanceId',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'actionName',
-                AttributeType: 'S',
-            },
+                AttributeType: 'S'
+            }
         ],
         KeySchema: [
             {
                 AttributeName: 'instanceId',
-                KeyType: 'HASH',
+                KeyType: 'HASH'
             },
             {
                 AttributeName: 'actionName',
-                KeyType: 'RANGE',
-            },
+                KeyType: 'RANGE'
+            }
         ],
         ProvisionedThroughput: {
             ReadCapacityUnits: 1,
-            WriteCapacityUnits: 1,
+            WriteCapacityUnits: 1
         },
         TableName: 'FortiGateLifecycleItem',
-        AdditionalAttributeDefinitions: [],
+        AdditionalAttributeDefinitions: []
     },
     FORTIGATEAUTOSCALE: {
         AttributeDefinitions: [
             {
                 AttributeName: 'instanceId',
-                AttributeType: 'S',
-            },
+                AttributeType: 'S'
+            }
         ],
         KeySchema: [
             {
                 AttributeName: 'instanceId',
-                KeyType: 'HASH',
-            },
+                KeyType: 'HASH'
+            }
         ],
         ProvisionedThroughput: {
             ReadCapacityUnits: 1,
-            WriteCapacityUnits: 1,
+            WriteCapacityUnits: 1
         },
         TableName: 'FortiGateAutoscale',
         AdditionalAttributeDefinitions: [
             {
                 AttributeName: 'scalingGroupName',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'heartBeatLossCount',
-                AttributeType: 'N',
+                AttributeType: 'N'
             },
             {
                 AttributeName: 'heartBeatInterval',
-                AttributeType: 'N',
+                AttributeType: 'N'
             },
             {
                 AttributeName: 'nextHeartBeatTime',
-                AttributeType: 'N',
+                AttributeType: 'N'
             },
             {
                 AttributeName: 'masterIp',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'syncState',
-                AttributeType: 'S',
-            },
-        ],
+                AttributeType: 'S'
+            }
+        ]
     },
     FORTIGATEMASTERELECTION: {
         AttributeDefinitions: [
             {
                 AttributeName: 'scalingGroupName',
-                AttributeType: 'S',
-            },
+                AttributeType: 'S'
+            }
         ],
         KeySchema: [
             {
                 AttributeName: 'scalingGroupName',
-                KeyType: 'HASH',
-            },
+                KeyType: 'HASH'
+            }
         ],
         ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
         TableName: 'FortiGateMasterElection',
         AdditionalAttributeDefinitions: [
             {
                 AttributeName: 'instanceId',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'scalingGroupName',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'ip',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'vpcId',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'subnetId',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'voteEndTime',
-                AttributeType: 'N',
+                AttributeType: 'N'
             },
             {
                 AttributeName: 'voteState',
-                AttributeType: 'S',
-            },
-        ],
+                AttributeType: 'S'
+            }
+        ]
     },
     FORTIANALYZER: {
         AttributeDefinitions: [
             {
                 AttributeName: 'instanceId',
-                AttributeType: 'S',
-            },
+                AttributeType: 'S'
+            }
         ],
         KeySchema: [
             {
                 AttributeName: 'instanceId',
-                KeyType: 'HASH',
-            },
+                KeyType: 'HASH'
+            }
         ],
         ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
         TableName: 'FortiAnalyzer',
         AdditionalAttributeDefinitions: [
             {
                 AttributeName: 'serialNumber',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'ip',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'vip',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'master',
-                AttributeType: 'BOOL',
+                AttributeType: 'BOOL'
             },
             {
                 AttributeName: 'peers',
-                AttributeType: 'S',
-            },
-        ],
+                AttributeType: 'S'
+            }
+        ]
     },
     SETTINGS: {
         AttributeDefinitions: [
             {
                 AttributeName: 'settingKey',
-                AttributeType: 'S',
-            },
+                AttributeType: 'S'
+            }
         ],
         KeySchema: [
             {
                 AttributeName: 'settingKey',
-                KeyType: 'HASH',
-            },
+                KeyType: 'HASH'
+            }
         ],
         ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
         TableName: 'Settings',
         AdditionalAttributeDefinitions: [
             {
                 AttributeName: 'settingValue',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'description',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'jsonEncoded',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'editable',
-                AttributeType: 'S',
-            },
-        ],
+                AttributeType: 'S'
+            }
+        ]
     },
     NICATTACHMENT: {
         AttributeDefinitions: [
             {
                 AttributeName: 'instanceId',
-                AttributeType: 'S',
-            },
+                AttributeType: 'S'
+            }
         ],
         KeySchema: [
             {
                 AttributeName: 'instanceId',
-                KeyType: 'HASH',
-            },
+                KeyType: 'HASH'
+            }
         ],
         ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
         TableName: 'NicAttachment',
         AdditionalAttributeDefinitions: [
             {
                 AttributeName: 'nicId',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'attachmentState',
-                AttributeType: 'S',
-            },
-        ],
+                AttributeType: 'S'
+            }
+        ]
     },
     VMINFOCACHE: {
         AttributeDefinitions: [
             {
                 AttributeName: 'id',
-                AttributeType: 'S',
-            },
+                AttributeType: 'S'
+            }
         ],
         KeySchema: [
             {
                 AttributeName: 'id',
-                KeyType: 'HASH',
-            },
+                KeyType: 'HASH'
+            }
         ],
         ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
         TableName: 'VmInfoCache',
         AdditionalAttributeDefinitions: [
             {
                 AttributeName: 'instanceId',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'vmId',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'scalingGroupName',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'info',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'timestamp',
-                AttributeType: 'N',
+                AttributeType: 'N'
             },
             {
                 AttributeName: 'expireTime',
-                AttributeType: 'N',
-            },
-        ],
+                AttributeType: 'N'
+            }
+        ]
     },
     LICENSESTOCK: {
         AttributeDefinitions: [
             {
                 AttributeName: 'checksum',
-                AttributeType: 'S',
-            },
+                AttributeType: 'S'
+            }
         ],
         KeySchema: [
             {
                 AttributeName: 'checksum',
-                KeyType: 'HASH',
-            },
+                KeyType: 'HASH'
+            }
         ],
         ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
         TableName: 'LicenseStock',
         AdditionalAttributeDefinitions: [
             {
                 AttributeName: 'fileName',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'algorithm',
-                AttributeType: 'S',
-            },
-        ],
+                AttributeType: 'S'
+            }
+        ]
     },
     LICENSEUSAGE: {
         AttributeDefinitions: [
             {
                 AttributeName: 'id',
-                AttributeType: 'S',
-            },
+                AttributeType: 'S'
+            }
         ],
         KeySchema: [
             {
                 AttributeName: 'id',
-                KeyType: 'HASH',
-            },
+                KeyType: 'HASH'
+            }
         ],
         ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
         TableName: 'LicenseUsage',
         AdditionalAttributeDefinitions: [
             {
                 AttributeName: 'id',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'checksum',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'fileName',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'algorithm',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'scalingGroupName',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'instanceId',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'assignedTime',
-                AttributeType: 'N',
+                AttributeType: 'N'
             },
             {
                 AttributeName: 'blobKey',
-                AttributeType: 'S',
-            },
-        ],
+                AttributeType: 'S'
+            }
+        ]
     },
     CUSTOMLOG: {
         AttributeDefinitions: [
             {
                 AttributeName: 'id',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'timestamp',
-                AttributeType: 'N',
-            },
+                AttributeType: 'N'
+            }
         ],
         KeySchema: [
             {
                 AttributeName: 'id',
-                KeyType: 'HASH',
+                KeyType: 'HASH'
             },
             {
                 AttributeName: 'timestamp',
-                KeyType: 'RANGE',
-            },
+                KeyType: 'RANGE'
+            }
         ],
         ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
         TableName: 'CustomLog',
         AdditionalAttributeDefinitions: [
             {
                 AttributeName: 'logContent',
-                AttributeType: 'S',
-            },
-        ],
+                AttributeType: 'S'
+            }
+        ]
     },
     VPNATTACHMENT: {
         AttributeDefinitions: [
             {
                 AttributeName: 'instanceId',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'publicIp',
-                AttributeType: 'S',
-            },
+                AttributeType: 'S'
+            }
         ],
         KeySchema: [
             {
                 AttributeName: 'instanceId',
-                KeyType: 'HASH',
+                KeyType: 'HASH'
             },
             {
                 AttributeName: 'publicIp',
-                KeyType: 'RANGE',
-            },
+                KeyType: 'RANGE'
+            }
         ],
         ProvisionedThroughput: { ReadCapacityUnits: 1, WriteCapacityUnits: 1 },
         TableName: 'VpnAttachment',
         AdditionalAttributeDefinitions: [
             {
                 AttributeName: 'customerGatewayId',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'vpnConnectionId',
-                AttributeType: 'S',
+                AttributeType: 'S'
             },
             {
                 AttributeName: 'configuration',
-                AttributeType: 'S',
-            },
-        ],
-    },
-}
+                AttributeType: 'S'
+            }
+        ]
+    }
+};
 
 export function getTables(namePrefix?: string, nameSuffix?: string, excludedKeys: string[] = null) {
-    let tables: DbDef = {},
+    const tables: DbDef = {},
         prefix = () => {
-            return namePrefix ? `${namePrefix}-` : ''
+            return namePrefix ? `${namePrefix}-` : '';
         },
         suffix = () => {
-            return nameSuffix ? `-${nameSuffix}` : ''
-        }
+            return nameSuffix ? `-${nameSuffix}` : '';
+        };
 
     Object.entries(DB).forEach(([tableKey, tableDef]) => {
         if (!(excludedKeys && excludedKeys.includes(tableKey))) {
-            tableDef.TableName = prefix() + tableDef.TableName + suffix()
-            tables[tableKey] = tableDef
+            tableDef.TableName = prefix() + tableDef.TableName + suffix();
+            tables[tableKey] = tableDef;
         }
-    })
-    return tables
+    });
+    return tables;
 }

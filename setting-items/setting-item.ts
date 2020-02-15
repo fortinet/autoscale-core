@@ -1,9 +1,9 @@
 export interface SettingItemLike {
-    settingKey: string
-    settingValue: string | {}
-    editable: boolean
-    jsonEncoded: boolean
-    description: string
+    settingKey: string;
+    settingValue: string | {};
+    editable: boolean;
+    jsonEncoded: boolean;
+    description: string;
 }
 
 export class SettingItem implements SettingItemLike {
@@ -17,9 +17,9 @@ export class SettingItem implements SettingItemLike {
 
     toString(): string {
         if (this.jsonEncoded && typeof this.settingValue === 'object') {
-            return JSON.stringify(this.settingValue as object)
+            return JSON.stringify(this.settingValue as object);
         } else {
-            return this.settingValue as string
+            return this.settingValue as string;
         }
     }
 }

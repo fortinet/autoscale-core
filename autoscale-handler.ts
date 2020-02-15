@@ -18,11 +18,11 @@ Author: Fortinet
 * needed for the FortiGate config's callback-url parameter.
 */
 
-import * as path from 'path'
-import * as CoreFunctions from './core-functions'
-import { VirtualMachine, NetworkInterfaceLike } from './virtual-machine'
-import { HealthCheck } from './health-check-record'
-import * as MasterElection from './master-election'
+import * as path from 'path';
+import * as CoreFunctions from './core-functions';
+import { VirtualMachine, NetworkInterfaceLike } from './virtual-machine';
+import { HealthCheck } from './health-check-record';
+import * as MasterElection from './master-election';
 import {
     CloudPlatform,
     RequestInfo,
@@ -36,34 +36,33 @@ import {
     HttpStatusCode,
     MaskedResponse,
     USE_EXISTING
-} from './cloud-platform'
-import { LicenseItem } from './license-item'
-import { LicenseRecord } from './license-record'
-import { LifecycleAction } from './lifecycle-item'
-import { URL } from 'url'
-import { Logger } from './logger'
+} from './cloud-platform';
+import { LicenseItem } from './license-item';
+import { LicenseRecord } from './license-record';
+import { LifecycleAction } from './lifecycle-item';
+import { URL } from 'url';
+import { Logger } from './logger';
 
-
-const AUTOSCALE_SECTION_EXPR = /(?:^|(?:\s*))config?\s*system?\s*auto-scale\s*((?:.|\s)*)\bend\b/
-const NO_HEART_BEAT_INTERVAL_SPECIFIED = -1
-const DEFAULT_HEART_BEAT_INTERVAL = 30
+const AUTOSCALE_SECTION_EXPR = /(?:^|(?:\s*))config?\s*system?\s*auto-scale\s*((?:.|\s)*)\bend\b/;
+const NO_HEART_BEAT_INTERVAL_SPECIFIED = -1;
+const DEFAULT_HEART_BEAT_INTERVAL = 30;
 
 export enum ScalingGroupState {
     inService = 'in-service',
     inTransition = 'in-transition',
-    stopped = 'stopped',
+    stopped = 'stopped'
 }
 
 export enum RetrieveMasterOption {
     masterInfo = 'masterInfo',
     masterHealthCheck = 'masterHealthCheck',
-    masterRecord = 'masterRecord',
+    masterRecord = 'masterRecord'
 }
 
 export interface ConfigSetParser {
-    configsetName: string
-    location: string
-    dataSource: any
+    configsetName: string;
+    location: string;
+    dataSource: object;
 }
 
 export abstract class AutoscaleHandler<
@@ -75,41 +74,45 @@ export abstract class AutoscaleHandler<
     VM extends VirtualMachine<VmSourceType, NetworkInterfaceLike>,
     RA extends RuntimeAgent<HttpRequest, RuntimeContext, PlatformLogger>,
     CP extends CloudPlatform<
-        HttpRequest, RuntimeContext, PlatformLogger,
-        KeyValueLike, VmSourceType, VM, RA
+        HttpRequest,
+        RuntimeContext,
+        PlatformLogger,
+        KeyValueLike,
+        VmSourceType,
+        VM,
+        RA
     >
 > {
-    protected _selfInstance: VM | null
-    protected _selfHealthCheck: HealthCheck | null
-    protected _masterHealthCheck: HealthCheck | null
-    protected _masterRecord: MasterElection.MasterRecord | null
-    protected _masterInfo: VM | null
-    protected _requestInfo: RequestInfo | null
-    protected _baseConfig: string
-    protected scalingGroupName: string
-    // protected logger: Logger<PlatformLogger>
+    protected _selfInstance: VM | null;
+    protected _selfHealthCheck: HealthCheck | null;
+    protected _masterHealthCheck: HealthCheck | null;
+    protected _masterRecord: MasterElection.MasterRecord | null;
+    protected _masterInfo: VM | null;
+    protected _requestInfo: RequestInfo | null;
+    protected _baseConfig: string;
+    protected scalingGroupName: string;
     constructor(readonly platform: CP) {
-        this._selfInstance = null
-        this._selfHealthCheck = null
-        this._masterRecord = null
-        this._masterInfo = null
-        this._requestInfo = null
-        this.scalingGroupName = ''
-        this._baseConfig = ''
+        this._selfInstance = null;
+        this._selfHealthCheck = null;
+        this._masterRecord = null;
+        this._masterInfo = null;
+        this._requestInfo = null;
+        this.scalingGroupName = '';
+        this._baseConfig = '';
     }
 
     // TODO: do we still need this?
-    static get NO_HEART_BEAT_INTERVAL_SPECIFIED() {
-        return NO_HEART_BEAT_INTERVAL_SPECIFIED
+    static get NO_HEART_BEAT_INTERVAL_SPECIFIED(): number {
+        return NO_HEART_BEAT_INTERVAL_SPECIFIED;
     }
 
     // TODO: do we still need this?
-    static get DEFAULT_HEART_BEAT_INTERVAL() {
-        return DEFAULT_HEART_BEAT_INTERVAL
+    static get DEFAULT_HEART_BEAT_INTERVAL(): number {
+        return DEFAULT_HEART_BEAT_INTERVAL;
     }
 
     protected get masterScalingGroupName(): string {
-        return this.platform.masterScalingGroupName
+        return this.platform.masterScalingGroupName;
     }
 
     get logger(): Logger<PlatformLogger> {
@@ -122,13 +125,13 @@ export abstract class AutoscaleHandler<
      */
     // TODO: improve this
     get _settings(): SettingItems {
-        return this.platform._settings
+        return this.platform._settings;
     }
 
-    async init() {
-        this.logger.info('calling init [Autoscale handler initialization]')
+    async init(): Promise<boolean> {
+        this.logger.info('calling init [Autoscale handler initialization]');
         // do the cloud platform initialization
-        const success = this.platform.initialized || (await this.platform.init())
+        const success = this.platform.initialized || (await this.platform.init());
         // ensure that the settings are saved properly.
         // check settings availability
 
@@ -141,29 +144,29 @@ export abstract class AutoscaleHandler<
         // if this process cannot be done during the deployment, it must be done once here in the
         // init function of the platform-specific autoscale-handler.
         // by doing so, catch the error 'Deployment settings not saved.' and handle it.
-        this.logger.info('checking deployment setting items')
-        await this.loadSettings()
+        this.logger.info('checking deployment setting items');
+        await this.loadSettings();
         if (!this._settings || (this._settings && !this._settings['deployment-settings-saved'])) {
             // in the init function of each platform autoscale-handler, this error must be caught
             // and provide addtional handling code to save the settings
-            throw new Error('Deployment settings not saved.')
+            throw new Error('Deployment settings not saved.');
         }
 
         // set scaling group names for master and self
         this.setScalingGroup(
             // TODO:
-            //the data structure here for this._settings is not good.Needs to improve it
-            //Because it can hold a value of string or json object type,
-            //However, this will fail if the property is undefined/null.
+            // the data structure here for this._settings is not good.Needs to improve it
+            // Because it can hold a value of string or json object type,
+            // However, this will fail if the property is undefined/null.
             // .toString() actually stringifies the object type value. any better way?
             this._settings['master-scaling-group-name'].toString(),
             this._settings['master-scaling-group-name'].toString()
-        )
-        return success
+        );
+        return success;
     }
 
     // TODO: interim idea for handling. develop it later.
-    abstract async handleWithAgent(): Promise<any>
+    abstract async handleWithAgent(): Promise<any>;
 
     /* eslint-disable max-len */
     /**
@@ -180,90 +183,90 @@ export abstract class AutoscaleHandler<
     // see detailed code review comments on: 75699/1/core/autoscale-handler.ts#149
     async handle(event: any, context: any, callback: any) {
         // eslint-disable-line no-unused-vars
-        let step = 'initializing'
-        let proxyMethod =
-                ('method' in event && event.method) || ('httpMethod' in event && event.httpMethod),
-            result
+        let step = 'initializing';
+        const proxyMethod =
+            ('method' in event && event.method) || ('httpMethod' in event && event.httpMethod);
+        let result;
         try {
-            const platformInitSuccess = await this.init()
+            const platformInitSuccess = await this.init();
             // return 500 error if script cannot finish the initialization.
             if (!platformInitSuccess) {
-                result = 'fatal error, cannot initialize.'
-                this.logger.error(result)
-                callback(null, this.proxyResponse(500, result))
+                result = 'fatal error, cannot initialize.';
+                this.logger.error(result);
+                callback(null, this.proxyResponse(500, result));
             } else if (event.source === 'autoscaling') {
-                step = 'autoscaling'
-                result = await this.handleAutoScalingEvent(event)
-                callback(null, this.proxyResponse(200, result))
+                step = 'autoscaling';
+                result = await this.handleAutoScalingEvent(event);
+                callback(null, this.proxyResponse(200, result));
             } else {
                 // authenticate the calling instance
-                this.parseRequestInfo(event)
+                this.parseRequestInfo(event);
                 if (!this._requestInfo.instanceId) {
-                    callback(null, this.proxyResponse(403, 'Instance id not provided.'))
-                    return
+                    callback(null, this.proxyResponse(403, 'Instance id not provided.'));
+                    return;
                 }
-                await this.parseInstanceInfo(this._requestInfo.instanceId)
+                await this.parseInstanceInfo(this._requestInfo.instanceId);
 
-                await this.checkInstanceAuthorization(this._selfInstance)
+                await this.checkInstanceAuthorization(this._selfInstance);
 
                 if (proxyMethod === 'GET') {
-                    step = 'fortigate:getConfig'
-                    result = await this.handleGetConfig()
-                    callback(null, this.proxyResponse(200, result))
+                    step = 'fortigate:getConfig';
+                    result = await this.handleGetConfig();
+                    callback(null, this.proxyResponse(200, result));
                 } else if (proxyMethod === 'POST') {
-                    step = 'fortigate:handleSyncedCallback'
+                    step = 'fortigate:handleSyncedCallback';
                     // handle status messages
                     if (this._requestInfo.status) {
-                        result = await this.handleStatusMessage(event)
+                        result = await this.handleStatusMessage(event);
                     } else {
-                        result = await this.handleSyncedCallback()
+                        result = await this.handleSyncedCallback();
                     }
-                    callback(null, this.proxyResponse(200, result))
+                    callback(null, this.proxyResponse(200, result));
                 } else {
-                    step = '¯\\_(ツ)_/¯'
+                    step = '¯\\_(ツ)_/¯';
 
-                    this.logger.warn(`${step} unexpected event!`, event)
+                    this.logger.warn(`${step} unexpected event!`, event);
                     // probably a test call?
-                    callback(null, this.proxyResponse(500, result))
+                    callback(null, this.proxyResponse(500, result));
                 }
             }
         } catch (ex) {
             if (ex.message) {
-                ex.message = `${step}: ${ex.message}`
+                ex.message = `${step}: ${ex.message}`;
             }
             try {
-                console.error('ERROR while ', step, proxyMethod, ex)
+                console.error('ERROR while ', step, proxyMethod, ex);
             } catch (ex2) {
-                console.error('ERROR while ', step, proxyMethod, ex.message, ex, ex2)
+                console.error('ERROR while ', step, proxyMethod, ex.message, ex, ex2);
             }
             if (proxyMethod) {
                 callback(
                     null,
                     this.proxyResponse(500, {
                         message: ex.message,
-                        stack: ex.stack,
+                        stack: ex.stack
                     })
-                )
+                );
             } else {
-                callback(ex)
+                callback(ex);
             }
         }
     }
 
     // TODO: this function need to be replace. will use the runtimeAgent & ErrorDataPairLike instead
-    abstract proxyResponse(statusCode: number, res: {}, logOptions?: {}): any
+    abstract proxyResponse(statusCode: number, res: {}, logOptions?: {}): any;
 
     async getConfigSet(configName: string): Promise<string> {
         try {
-            let keyPrefix = this._settings['asset-storage-key-prefix']
+            const keyPrefix = this._settings['asset-storage-key-prefix']
                 ? path.join(this._settings['asset-storage-key-prefix'].toString(), 'configset')
-                : 'configset'
+                : 'configset';
             const parameters: BlobStorageItemDescriptor = {
                 storageName: this._settings['asset-storage-name'].toString(),
                 keyPrefix: keyPrefix,
-                fileName: configName,
-            }
-            let blob = await this.platform.getBlobFromStorage(parameters)
+                fileName: configName
+            };
+            const blob = await this.platform.getBlobFromStorage(parameters);
             // replace Windows line feed \r\n with \n to normalize the config set
             if (
                 blob.content &&
@@ -271,60 +274,60 @@ export abstract class AutoscaleHandler<
                 blob.content.indexOf('\r') >= 0
             ) {
                 // eslint-disable-next-line no-control-regex
-                return blob.content.replace(new RegExp('\r', 'g'), '')
+                return blob.content.replace(new RegExp('\r', 'g'), '');
             } else {
-                return blob.content
+                return blob.content;
             }
         } catch (error) {
-            this.logger.warn(`called getConfigSet > error: ${error}`)
-            throw error
+            this.logger.warn(`called getConfigSet > error: ${error}`);
+            throw error;
         }
     }
 
     async getBaseConfig(): Promise<string> {
-        let baseConfig = await this.getConfigSet('baseconfig')
-        let psksecret = this._settings['fortigate-psk-secret'].toString(),
-            fazConfig = '',
-            fazIp
+        let baseConfig = await this.getConfigSet('baseconfig');
+        const psksecret = this._settings['fortigate-psk-secret'].toString();
+        let fazConfig = '',
+            fazIp;
         if (baseConfig) {
             // check if other config set are required
-            let requiredConfigSet: string = this._settings['required-configset'].toString() || ''
-            let configContent = ''
+            const requiredConfigSet: string = this._settings['required-configset'].toString() || '';
+            let configContent = '';
             // check if second nic is enabled, config for the second nic must be prepended to
             // base config
             if (this._settings['enable-second-nic'].toString() === 'true') {
-                baseConfig = (await this.getConfigSet('port2config')) + baseConfig
+                baseConfig = (await this.getConfigSet('port2config')) + baseConfig;
             }
-            for (let configset of requiredConfigSet.split(',')) {
-                let [name, selected] = configset.trim().split('-')
+            for (const configset of requiredConfigSet.split(',')) {
+                const [name, selected] = configset.trim().split('-');
                 if (selected && selected.toLowerCase() === 'yes') {
                     switch (name) {
                         // handle https routing policy
                         case 'httpsroutingpolicy':
-                            configContent += await this.getConfigSet('internalelbweb')
-                            configContent += await this.getConfigSet(name)
-                            break
+                            configContent += await this.getConfigSet('internalelbweb');
+                            configContent += await this.getConfigSet(name);
+                            break;
                         // handle fortianalyzer logging config
                         case 'storelogtofaz':
-                            fazConfig = await this.getConfigSet(name)
-                            fazIp = await this.getFazIp()
+                            fazConfig = await this.getConfigSet(name);
+                            fazIp = await this.getFazIp();
                             configContent += fazConfig.replace(
                                 new RegExp('{FAZ_PRIVATE_IP}', 'gm'),
                                 fazIp
-                            )
-                            break
+                            );
+                            break;
                         case 'extrastaticroutes':
-                            configContent += await this.getConfigSet('extrastaticroutes')
-                            break
+                            configContent += await this.getConfigSet('extrastaticroutes');
+                            break;
                         case 'extraports':
-                            configContent += await this.getConfigSet('extraports')
-                            break
+                            configContent += await this.getConfigSet('extraports');
+                            break;
                         default:
-                            break
+                            break;
                     }
                 }
             }
-            baseConfig += configContent
+            baseConfig += configContent;
 
             baseConfig = baseConfig
                 .replace(
@@ -359,13 +362,13 @@ export abstract class AutoscaleHandler<
                     (this._settings['fortigate-protected-internal-elb-dns'] &&
                         this._settings['fortigate-protected-internal-elb-dns'].toString()) ||
                         ''
-                )
+                );
         }
-        return baseConfig
+        return baseConfig;
     }
 
     parseRequestInfo(runtimeAgent: RA) {
-        this._requestInfo = this.platform.extractRequestInfo(runtimeAgent)
+        this._requestInfo = this.platform.extractRequestInfo(runtimeAgent);
     }
 
     async parseInstanceInfo(instanceId: string): Promise<void> {
@@ -373,27 +376,27 @@ export abstract class AutoscaleHandler<
         // look from byol first
         this._selfInstance =
             this._selfInstance ||
-            (await this.platform.describeInstance(<VirtualMachineDescriptor>{
+            (await this.platform.describeInstance({
                 instanceId: instanceId,
                 scalingGroupName:
                     this._settings['byol-scaling-group-name'] &&
-                    this._settings['byol-scaling-group-name'].toString(),
-            }))
+                    this._settings['byol-scaling-group-name'].toString()
+            } as VirtualMachineDescriptor));
         if (this._selfInstance) {
             this.setScalingGroup(
                 this._settings['master-scaling-group-name'] &&
                     this._settings['master-scaling-group-name'].toString(),
                 this._settings['byol-scaling-group-name'] &&
                     this._settings['byol-scaling-group-name'].toString()
-            )
+            );
         } else {
             // not found in byol vmss, look from payg
-            this._selfInstance = await this.platform.describeInstance(<VirtualMachineDescriptor>{
+            this._selfInstance = await this.platform.describeInstance({
                 instanceId: instanceId,
                 scalingGroupName:
                     this._settings['payg-scaling-group-name'] &&
-                    this._settings['payg-scaling-group-name'].toString(),
-            })
+                    this._settings['payg-scaling-group-name'].toString()
+            } as VirtualMachineDescriptor);
 
             if (this._selfInstance) {
                 this.setScalingGroup(
@@ -401,7 +404,7 @@ export abstract class AutoscaleHandler<
                         this._settings['master-scaling-group-name'].toString(),
                     this._settings['payg-scaling-group-name'] &&
                         this._settings['payg-scaling-group-name'].toString()
-                )
+                );
             }
         }
         if (this._selfInstance) {
@@ -409,9 +412,9 @@ export abstract class AutoscaleHandler<
                 `instance identification (id: ${this._selfInstance.instanceId}, ` +
                     `scaling group self: ${this.scalingGroupName}, ` +
                     `master: ${this.masterScalingGroupName})`
-            )
+            );
         } else {
-            this.logger.warn(`cannot identify instance: vmid:(${instanceId})`)
+            this.logger.warn(`cannot identify instance: vmid:(${instanceId})`);
         }
     }
 
@@ -428,60 +431,67 @@ export abstract class AutoscaleHandler<
                 'Unauthorized calling instance (' +
                     `instanceId: ${(instance && instance.instanceId) ||
                         null}). Instance not found in VPC.`
-            )
+            );
         }
-        return await Promise.resolve(true)
+        return await Promise.resolve(true);
     }
 
-    //TODO: improve this function
+    // TODO: improve this function
     async handleGetLicense(runtimeAgent?: RA) {
         let result;
-        let ra: RA = runtimeAgent || this.platform.runtimeAgent;
-        this.logger.info('calling handleGetLicense')
+        const ra: RA = runtimeAgent || this.platform.runtimeAgent;
+        this.logger.info('calling handleGetLicense');
         try {
-            const platformInitSuccess = await this.init()
+            const platformInitSuccess = await this.init();
             // return 500 error if script cannot finish the initialization.
             if (!platformInitSuccess) {
-                result = 'fatal error, cannot initialize.'
-                this.logger.error(result)
-                this.platform.respond(<ErrorDataPairLike>{
-                    error: new Error(result),
-                    data: null
-                }, HttpStatusCode.INTERNAL_SERVER_ERROR);
-                return
+                result = 'fatal error, cannot initialize.';
+                this.logger.error(result);
+                this.platform.respond(
+                    {
+                        error: new Error(result),
+                        data: null
+                    } as ErrorDataPairLike,
+                    HttpStatusCode.INTERNAL_SERVER_ERROR
+                );
+                return;
             }
 
             // authenticate the calling instance
             this.parseRequestInfo(ra);
             if (!this._requestInfo.instanceId) {
-                this.platform.respond({
-                    error: null,
-                    data: 'Instance id not provided.'
-                }, HttpStatusCode.FORBIDDEN);
-                return
+                this.platform.respond(
+                    {
+                        error: null,
+                        data: 'Instance id not provided.'
+                    },
+                    HttpStatusCode.FORBIDDEN
+                );
+                return;
             }
-            await this.parseInstanceInfo(this._requestInfo.instanceId)
+            await this.parseInstanceInfo(this._requestInfo.instanceId);
 
-            await this.checkInstanceAuthorization(this._selfInstance)
+            await this.checkInstanceAuthorization(this._selfInstance);
 
+            // eslint-disable-next-line prefer-const
             let [licenseFiles, stockRecords, usageRecords] = await Promise.all([
                 this.platform.listLicenseFiles(), // expect it to return a map
                 this.platform.listLicenseStock(), // expect it to return a map
-                this.platform.listLicenseUsage(), // expect it to return a map
-            ])
+                this.platform.listLicenseUsage() // expect it to return a map
+            ]);
 
             // update the license stock records on db if any change in file storage
             // this returns the newest stockRecords on the db
-            stockRecords = await this.updateLicenseStockRecord(licenseFiles, stockRecords)
+            stockRecords = await this.updateLicenseStockRecord(licenseFiles, stockRecords);
 
             // start to pick a valid license here.
-            let availStockItem: LicenseItem, availStockRecord: LicenseRecord
+            let availStockItem: LicenseItem, availStockRecord: LicenseRecord;
 
-            let itemKey, itemValue
+            let itemKey, itemValue;
 
-            let promiseEmitter = async () => {
+            const promiseEmitter = async () => {
                 let updateUsage = true,
-                    replaceUsageRecord = false
+                    replaceUsageRecord = false;
                 // TODO: remove the workaround if mantis item: #0534971 is resolved
                 // a workaround for double get call:
                 // check if a license is already assigned to one fgt, if it makes a second get call
@@ -492,10 +502,10 @@ export abstract class AutoscaleHandler<
                         itemValue.scalingGroupName === this.scalingGroupName &&
                         itemValue.instanceId === this._selfInstance.instanceId
                     ) {
-                        availStockRecord = itemValue
-                        availStockItem = licenseFiles.get(itemValue.blobKey)
-                        updateUsage = false
-                        break
+                        availStockRecord = itemValue;
+                        availStockItem = licenseFiles.get(itemValue.blobKey);
+                        updateUsage = false;
+                        break;
                     }
                 }
 
@@ -512,24 +522,24 @@ export abstract class AutoscaleHandler<
                 if (!availStockItem) {
                     for ([itemKey, itemValue] of stockRecords.entries()) {
                         if (itemKey && !usageRecords.has(itemKey)) {
-                            availStockRecord = itemValue
-                            availStockItem = licenseFiles.get(itemValue.blobKey)
-                            break
+                            availStockRecord = itemValue;
+                            availStockItem = licenseFiles.get(itemValue.blobKey);
+                            break;
                         }
                     }
 
                     // if not found available license file
                     if (!availStockItem) {
-                        ;[availStockRecord] = await this.findRecyclableLicense(
+                        [availStockRecord] = await this.findRecyclableLicense(
                             stockRecords,
                             usageRecords,
                             1
-                        )
+                        );
                         availStockItem =
                             availStockRecord &&
                             licenseFiles &&
-                            licenseFiles.get(availStockRecord.blobKey)
-                        replaceUsageRecord = !!availStockItem
+                            licenseFiles.get(availStockRecord.blobKey);
+                        replaceUsageRecord = !!availStockItem;
                     }
                 }
 
@@ -537,66 +547,70 @@ export abstract class AutoscaleHandler<
                 // this will also update the checksum and algorithm which will be saved in the
                 // usage record too.
                 if (!availStockItem.content) {
-                    availStockItem.content = await this.platform.getLicenseFileContent(<
-                        BlobStorageItemDescriptor
-                    >{
+                    availStockItem.content = await this.platform.getLicenseFileContent({
                         storageName: this._settings['asset-storage-name'].toString(),
                         keyPrefix: path.join(
                             this._settings['asset-storage-key-prefix'].toString(),
                             this._settings['fortigate-license-storage-key-prefix'].toString()
                         ),
-                        fileName: availStockItem.fileName,
-                    })
+                        fileName: availStockItem.fileName
+                    } as BlobStorageItemDescriptor);
                 }
 
                 // license file found
                 // update usage records
-                let usageUpdated = false
+                let usageUpdated = false;
                 if (availStockItem && updateUsage) {
                     availStockRecord.updateUsage(
                         this._selfInstance.instanceId,
                         this._selfInstance.scalingGroupName
-                    )
+                    );
                     // if usage record not updated, try to use another one
                     usageUpdated = await this.platform.updateLicenseUsage(
                         availStockRecord,
                         replaceUsageRecord
-                    )
+                    );
                     // reset availStockItem if cannot update
                     if (!usageUpdated) {
-                        availStockItem = null
+                        availStockItem = null;
                         // fetch the latest usage record from db again.
-                        usageRecords = await this.platform.listLicenseUsage()
+                        usageRecords = await this.platform.listLicenseUsage();
                     }
                 }
-                return availStockItem
-            }
+                return availStockItem;
+            };
 
-            let validator = (stockItem: LicenseItem) => {
-                return !!stockItem
-            }
+            const validator = (stockItem: LicenseItem) => {
+                return !!stockItem;
+            };
 
-            await CoreFunctions.waitFor(promiseEmitter, validator, 5000, 3)
+            await CoreFunctions.waitFor(promiseEmitter, validator, 5000, 3);
 
             if (!availStockItem) {
-                throw new Error('No license available.')
+                throw new Error('No license available.');
             }
 
             this.logger.info(
                 `called handleGetLicense, license: ${availStockItem.fileName} is ` +
                     `assigned to instance (id: ${this._selfInstance.instanceId}).`
-            )
+            );
 
-            this.platform.respond(<MaskedResponse>{
-                error: null,
-                data: availStockItem.content,
-                maskResponse: true
-            }, HttpStatusCode.OK);
+            this.platform.respond(
+                {
+                    error: null,
+                    data: availStockItem.content,
+                    maskResponse: true
+                } as MaskedResponse,
+                HttpStatusCode.OK
+            );
         } catch (ex) {
-            this.platform.respond(<ErrorDataPairLike>{
-                error: ex,
-                data: 'Error in getting license. Please check logs.'
-            }, HttpStatusCode.INTERNAL_SERVER_ERROR);
+            this.platform.respond(
+                {
+                    error: ex,
+                    data: 'Error in getting license. Please check logs.'
+                } as ErrorDataPairLike,
+                HttpStatusCode.INTERNAL_SERVER_ERROR
+            );
         }
     }
 
@@ -607,37 +621,39 @@ export abstract class AutoscaleHandler<
      */
     async handleSyncedCallback(): Promise<{} | string> {
         const instanceId = this._requestInfo.instanceId,
-            interval = this._requestInfo.interval === USE_EXISTING ?
-                DEFAULT_HEART_BEAT_INTERVAL : Number(this._requestInfo.interval)
+            interval =
+                this._requestInfo.interval === USE_EXISTING
+                    ? DEFAULT_HEART_BEAT_INTERVAL
+                    : Number(this._requestInfo.interval);
 
         let masterIp,
             isMaster = false,
-            lifecycleShouldAbandon = false
+            lifecycleShouldAbandon = false;
 
         // get selfinstance
         this._selfInstance =
             this._selfInstance ||
-            (await this.platform.describeInstance(<VirtualMachineDescriptor>{
+            (await this.platform.describeInstance({
                 instanceId: instanceId,
-                scalingGroupName: this.scalingGroupName,
-            }))
+                scalingGroupName: this.scalingGroupName
+            } as VirtualMachineDescriptor));
 
         // handle hb monitor
         // get self health check
         this._selfHealthCheck =
             this._selfHealthCheck ||
             (await this.platform.getInstanceHealthCheck(
-                <VirtualMachineDescriptor>{
-                    instanceId: this._selfInstance.instanceId,
-                },
+                {
+                    instanceId: this._selfInstance.instanceId
+                } as VirtualMachineDescriptor,
                 interval
-            ))
+            ));
         // if self is already out-of-sync, skip the monitoring logics
         if (this._selfHealthCheck && !this._selfHealthCheck.inSync) {
-            return {}
+            return {};
         }
         // get master instance monitoring
-        await this.retrieveMaster()
+        await this.retrieveMaster();
 
         // if this instance is the master, skip checking master election
         if (
@@ -646,8 +662,8 @@ export abstract class AutoscaleHandler<
             this.scalingGroupName === this.masterScalingGroupName
         ) {
             // use master health check result as self health check result
-            isMaster = true
-            this._selfHealthCheck = this._masterHealthCheck
+            isMaster = true;
+            this._selfHealthCheck = this._masterHealthCheck;
         } else if (this._selfHealthCheck && !this._selfHealthCheck.healthy) {
             // if this instance is unhealth, skip master election check
         } else if (
@@ -658,7 +674,7 @@ export abstract class AutoscaleHandler<
             // promiseEmitter to handle the master election process by periodically check:
             // 1. if there is a running election, then waits for its final
             // 2. if there isn't a running election, then runs an election and complete it
-            let promiseEmitter = this.checkMasterElection.bind(this),
+            const promiseEmitter = this.checkMasterElection.bind(this),
                 // validator set a condition to determine if the fgt needs to keep waiting or not.
                 validator = (masterInfo: VM) => {
                     // if i am the new master, don't wait, continue to finalize the election.
@@ -668,8 +684,8 @@ export abstract class AutoscaleHandler<
                         masterInfo.primaryPrivateIpAddress ===
                             this._selfInstance.primaryPrivateIpAddress
                     ) {
-                        isMaster = true
-                        return true
+                        isMaster = true;
+                        return true;
                     } else if (
                         this._masterRecord &&
                         this._masterRecord.voteState === MasterElection.VoteState.pending
@@ -679,13 +695,13 @@ export abstract class AutoscaleHandler<
                         // They will receive the new master ip on one of their following
                         // heartbeat sync callback
                         if (this._settings['master-election-no-wait'].toString() === 'true') {
-                            return true
+                            return true;
                         } else {
                             // if i am not the new master, and the new master hasn't come up to
                             // finalize the election, I should keep on waiting.
                             // should return false to continue.
-                            this._masterRecord = null // clear the master record cache
-                            return false
+                            this._masterRecord = null; // clear the master record cache
+                            return false;
                         }
                     } else if (
                         this._masterRecord &&
@@ -694,7 +710,7 @@ export abstract class AutoscaleHandler<
                         // if i am not the new master, and the master election is final, then no
                         // need to wait.
                         // should return true to end the waiting.
-                        return true
+                        return true;
                     } else {
                         // no master elected yet
                         // entering this syncedCallback function means i am already insync so
@@ -704,11 +720,11 @@ export abstract class AutoscaleHandler<
                         // i stay as is and hoping for someone in the master scaling group
                         // triggers a master election. Then I will be notified at some point.
                         if (this.scalingGroupName !== this.masterScalingGroupName) {
-                            return true
+                            return true;
                         } else {
                             // for new instance or instance in the master scaling group
                             // they should keep on waiting
-                            return false
+                            return false;
                         }
                     }
                 },
@@ -718,11 +734,11 @@ export abstract class AutoscaleHandler<
                 counter = (currentCount: number) => {
                     // eslint-disable-line no-unused-vars
                     if (Date.now() < this.platform.getExecutionTimeRemaining() - 6000) {
-                        return false
+                        return false;
                     }
-                    this.logger.warn('script execution is about to expire')
-                    return true
-                }
+                    this.logger.warn('script execution is about to expire');
+                    return true;
+                };
 
             try {
                 this._masterInfo = await CoreFunctions.waitFor(
@@ -730,7 +746,7 @@ export abstract class AutoscaleHandler<
                     validator,
                     5000,
                     counter
-                )
+                );
                 // after new master is elected, get the new master healthcheck
                 // there are two possible results here:
                 // 1. a new instance comes up and becomes the new master, master healthcheck won't
@@ -740,26 +756,26 @@ export abstract class AutoscaleHandler<
                 // because the instance in under monitoring.
                 //   2.1. in this case, the instance will take actions based on its healthcheck
                 //        result.
-                this._masterHealthCheck = null // invalidate the master health check object
+                this._masterHealthCheck = null; // invalidate the master health check object
                 // reload the master health check object
-                await this.retrieveMaster()
+                await this.retrieveMaster();
             } catch (error) {
                 // if error occurs, check who is holding a master election, if it is this instance,
                 // terminates this election. then continue
-                await this.retrieveMaster(null, true)
+                await this.retrieveMaster(null, true);
 
                 if (
                     this._masterRecord.instanceId === this._selfInstance.instanceId &&
                     this._masterRecord.scalingGroupName === this._selfInstance.scalingGroupName
                 ) {
-                    await this.platform.removeMasterRecord()
+                    await this.platform.removeMasterRecord();
                 }
-                await this.removeInstance(this._selfInstance)
+                await this.removeInstance(this._selfInstance);
                 throw new Error(
                     'Failed to determine the master instance within ' +
                         `${this.platform.getExecutionTimeRemaining() / 1000} seconds. ` +
                         'This instance is unable to bootstrap. Please report this to administrators.'
-                )
+                );
             }
         }
 
@@ -768,11 +784,11 @@ export abstract class AutoscaleHandler<
         this._selfHealthCheck =
             this._selfHealthCheck ||
             (await this.platform.getInstanceHealthCheck(
-                <VirtualMachineDescriptor>{
-                    instanceId: this._selfInstance.instanceId,
-                },
+                {
+                    instanceId: this._selfInstance.instanceId
+                } as VirtualMachineDescriptor,
                 interval
-            ))
+            ));
 
         // if this instance is the master instance and the master record is still pending, it will
         // finalize the master election.
@@ -783,7 +799,7 @@ export abstract class AutoscaleHandler<
             this._masterRecord &&
             this._masterRecord.voteState === MasterElection.VoteState.pending
         ) {
-            isMaster = true
+            isMaster = true;
             if (
                 !this._selfHealthCheck ||
                 (this._selfHealthCheck && this._selfHealthCheck.healthy)
@@ -791,9 +807,9 @@ export abstract class AutoscaleHandler<
                 // if election couldn't be finalized, remove the current election so someone else
                 // could start another election
                 if (!(await this.platform.finalizeMasterElection())) {
-                    await this.platform.removeMasterRecord()
-                    this._masterRecord = null
-                    lifecycleShouldAbandon = true
+                    await this.platform.removeMasterRecord();
+                    this._masterRecord = null;
+                    lifecycleShouldAbandon = true;
                 }
             }
         }
@@ -807,15 +823,15 @@ export abstract class AutoscaleHandler<
         if (!this._selfHealthCheck) {
             // check if a lifecycle event waiting
             // handle the lifecycle action
-            //NOTE: for those platforms don't offer lifecycle handling, the handleLifecycleAction()
+            // NOTE: for those platforms don't offer lifecycle handling, the handleLifecycleAction()
             // could be implemented as always returning true.
             await this.handleLifecycleAction(
                 this._selfInstance.instanceId,
                 LifecycleAction.ACTION_NAME_GET_CONFIG,
                 !lifecycleShouldAbandon
-            )
+            );
 
-            masterIp = this._masterInfo ? this._masterInfo.primaryPrivateIpAddress : null
+            masterIp = this._masterInfo ? this._masterInfo.primaryPrivateIpAddress : null;
             // if slave finds master is pending, don't update master ip to the health check record
             if (
                 !isMaster &&
@@ -823,17 +839,17 @@ export abstract class AutoscaleHandler<
                 this._masterRecord.voteState === MasterElection.VoteState.pending &&
                 this._settings['master-election-no-wait'].toString() === 'true'
             ) {
-                masterIp = null
+                masterIp = null;
             }
-            await this.addInstanceToMonitor(this._selfInstance, interval, masterIp)
-            let logMessagMasterIp =
+            await this.addInstanceToMonitor(this._selfInstance, interval, masterIp);
+            const logMessagMasterIp =
                 !masterIp && this._settings['master-election-no-wait'].toString() === 'true'
                     ? ' without master ip)'
-                    : ` master-ip: ${masterIp})`
+                    : ` master-ip: ${masterIp})`;
             this.logger.info(
                 `instance (id:${this._selfInstance.instanceId}, ` +
                     `${logMessagMasterIp} is added to monitor at timestamp: ${Date.now()}.`
-            )
+            );
             // if this newly come-up instance is the new master, save its instance id as the
             // default password into settings because all other instance will sync password from
             // the master there's a case if users never changed the master's password, when the
@@ -850,13 +866,13 @@ export abstract class AutoscaleHandler<
                     'default password comes from the new elected master.',
                     false,
                     false
-                )
+                );
             }
             return masterIp
                 ? {
-                      'master-ip': this._masterInfo.primaryPrivateIpAddress,
+                      'master-ip': this._masterInfo.primaryPrivateIpAddress
                   }
-                : ''
+                : '';
         } else if (this._selfHealthCheck && this._selfHealthCheck.healthy) {
             // this instance is already in monitor. if the master has changed (i.e.: the current
             // master is different from the one this instance is holding), and the new master
@@ -869,8 +885,8 @@ export abstract class AutoscaleHandler<
             masterIp =
                 this._masterInfo && this._masterHealthCheck && this._masterHealthCheck.healthy
                     ? this._masterInfo.primaryPrivateIpAddress
-                    : this._selfHealthCheck.masterIp
-            let now = Date.now()
+                    : this._selfHealthCheck.masterIp;
+            const now = Date.now();
             await this.platform.updateInstanceHealthCheck(
                 this._selfHealthCheck,
                 interval,
@@ -878,7 +894,7 @@ export abstract class AutoscaleHandler<
                 now,
                 false,
                 this.scalingGroupName
-            )
+            );
             this.logger.info(
                 `hb record updated on (timestamp: ${now}, instance id:` +
                     `${this._selfInstance.instanceId}, ` +
@@ -887,17 +903,17 @@ export abstract class AutoscaleHandler<
                     `heartBeatLossCount: ${this._selfHealthCheck.heartBeatLossCount}, ` +
                     `nextHeartBeatTime: ${this._selfHealthCheck.nextHeartBeatTime}` +
                     `syncState: ${this._selfHealthCheck.syncState}, master-ip: ${masterIp}).`
-            )
+            );
             return masterIp && this._selfHealthCheck && this._selfHealthCheck.masterIp !== masterIp
                 ? {
-                      'master-ip': this._masterInfo.primaryPrivateIpAddress,
+                      'master-ip': this._masterInfo.primaryPrivateIpAddress
                   }
-                : ''
+                : '';
         } else {
             this.logger.info(
                 'instance is unhealthy. need to remove it. healthcheck record:',
                 JSON.stringify(this._selfHealthCheck)
-            )
+            );
             // for unhealthy instances, fail this instance
             // if it is previously on 'in-sync' state, mark it as 'out-of-sync' so script will stop
             // keeping it in sync and stop doing any other logics for it any longer.
@@ -909,14 +925,14 @@ export abstract class AutoscaleHandler<
                     this._selfHealthCheck.masterIp,
                     Date.now(),
                     true
-                )
+                );
                 // terminate it from autoscaling group
-                await this.removeInstance(this._selfInstance)
+                await this.removeInstance(this._selfInstance);
             }
             // for unhealthy instances, keep responding with action 'shutdown'
             return {
-                action: 'shutdown',
-            }
+                action: 'shutdown'
+            };
         }
     }
 
@@ -926,13 +942,14 @@ export abstract class AutoscaleHandler<
      * @returns {Object} return messages
      */
     handleStatusMessage(event: {}) {
-        this.logger.info('calling handleStatusMessage.')
+        this.logger.info('calling handleStatusMessage.');
         // do not process status messages till further requriements (Mar 27, 2019)
-        this.logger.info(JSON.stringify(event))
-        this.logger.info(`Status: ${this._requestInfo.status}`)
-        return ''
+        this.logger.info(JSON.stringify(event));
+        this.logger.info(`Status: ${this._requestInfo.status}`);
+        return '';
     }
 
+    // TODO: figure and fix wrong parameter JSDoc for parser here.
     /**
      * Parse a configset with given data sources. This function should be implemented in
      * a platform-specific one if needed.
@@ -950,12 +967,12 @@ export abstract class AutoscaleHandler<
      * The leaf property of a nested object must be a primitive.
      * @returns {String} a pasred config string
      */
-    abstract async parseConfigSet(configSet: string, parser: ConfigSetParser): Promise<string>
+    abstract async parseConfigSet(configSet: string, parser: ConfigSetParser): Promise<string>;
 
     /**
      * get master configuration
-     * @param heartbeatSyncEndpoint the enpoint for heartbeat sync callback
-     * @param moreConfigSets more configsets to parse here. parse each element
+     * @param {URL} heartbeatSyncEndpoint the enpoint for heartbeat sync callback
+     * @param {ConfigSetParser[]} moreConfigSets more configsets to parse here. parse each element
      * in their order in this array.
      */
     async getMasterConfig(
@@ -963,28 +980,27 @@ export abstract class AutoscaleHandler<
         moreConfigSets?: ConfigSetParser[]
     ): Promise<string> {
         // no dollar sign in place holders
-        let config = ''
-        this._baseConfig = await this.getBaseConfig()
+        let config = '';
+        this._baseConfig = await this.getBaseConfig();
         // parse additional configsets
         if (moreConfigSets) {
-            let self = this
             moreConfigSets.forEach(async parser => {
-                config = await self.getConfigSet(parser.configsetName)
-                config = await this.parseConfigSet(config, parser)
-                this._baseConfig += config
-            })
+                config = await this.getConfigSet(parser.configsetName);
+                config = await this.parseConfigSet(config, parser);
+                this._baseConfig += config;
+            });
         }
 
-        config = this._baseConfig.replace(/\{CALLBACK_URL}/, heartbeatSyncEndpoint.toString())
-        return config
+        config = this._baseConfig.replace(/\{CALLBACK_URL}/, heartbeatSyncEndpoint.toString());
+        return config;
     }
 
     /**
      * get slave configuration
-     * @param heartbeatSyncEndpoint the enpoint for heartbeat sync callback
-     * @param allowHeadless allow this instance to boot up without masterIp specified
-     * @param masterIp the ip address of the master instance to communicate with
-     * @param moreConfigSets more configsets to parse here. parse each element
+     * @param {URL}  heartbeatSyncEndpoint the enpoint for heartbeat sync callback
+     * @param {boolean} allowHeadless allow this instance to boot up without masterIp specified
+     * @param {string | null} masterIp the ip address of the master instance to communicate with
+     * @param {ConfigSetParser[]} moreConfigSets more configsets to parse here. parse each element
      * in their order in this array.
      */
     async getSlaveConfig(
@@ -993,25 +1009,25 @@ export abstract class AutoscaleHandler<
         masterIp: string | null,
         moreConfigSets?: ConfigSetParser[]
     ): Promise<string> {
-        this._baseConfig = await this.getBaseConfig()
+        this._baseConfig = await this.getBaseConfig();
         const autoScaleSectionMatch = AUTOSCALE_SECTION_EXPR.exec(this._baseConfig),
             autoScaleSection = autoScaleSectionMatch && autoScaleSectionMatch[1],
             matches = [
                 /set\s+sync-interface\s+(.+)/.exec(autoScaleSection),
-                /set\s+psksecret\s+(.+)/.exec(autoScaleSection),
-            ]
+                /set\s+psksecret\s+(.+)/.exec(autoScaleSection)
+            ];
         const [syncInterface, pskSecret] = matches.map(m => m && m[1]),
-            apiEndpoint = heartbeatSyncEndpoint.toString()
+            apiEndpoint = heartbeatSyncEndpoint.toString();
         let config = '',
-            errorMessage
+            errorMessage;
         if (!apiEndpoint) {
-            errorMessage = 'Api endpoint is missing'
+            errorMessage = 'Api endpoint is missing';
         }
         if (masterIp === null && allowHeadless) {
-            errorMessage = 'Master ip is missing'
+            errorMessage = 'Master ip is missing';
         }
         if (!pskSecret) {
-            errorMessage = 'psksecret is missing'
+            errorMessage = 'psksecret is missing';
         }
         if (!pskSecret || !apiEndpoint || (masterIp === null && allowHeadless)) {
             throw new Error(
@@ -1019,36 +1035,35 @@ export abstract class AutoscaleHandler<
                     syncInterface: syncInterface,
                     apiEndpoint: apiEndpoint,
                     masterIp: masterIp,
-                    pskSecret: pskSecret && typeof pskSecret,
+                    pskSecret: pskSecret && typeof pskSecret
                 })}`
-            )
+            );
         }
         // parse additional configsets
         if (moreConfigSets) {
-            let self = this
             moreConfigSets.forEach(async parser => {
-                config = await self.getConfigSet(parser.configsetName)
-                config = await this.parseConfigSet(config, parser)
-                this._baseConfig += config
-            })
+                config = await this.getConfigSet(parser.configsetName);
+                config = await this.parseConfigSet(config, parser);
+                this._baseConfig += config;
+            });
         }
         const setMasterIp =
-            masterIp === null && allowHeadless ? '' : `\n    set master-ip ${masterIp}`
+            masterIp === null && allowHeadless ? '' : `\n    set master-ip ${masterIp}`;
         return await this._baseConfig
             .replace(new RegExp('set role master', 'gm'), `set role slave${setMasterIp}`)
-            .replace(new RegExp('{CALLBACK_URL}', 'gm'), apiEndpoint)
+            .replace(new RegExp('{CALLBACK_URL}', 'gm'), apiEndpoint);
     }
 
     async checkMasterElection(): Promise<VM | null> {
-        this.logger.info('calling checkMasterElection')
+        this.logger.info('calling checkMasterElection');
         let needElection = false,
             purgeMaster = false,
             electionLock = false,
-            electionComplete = false
+            electionComplete = false;
 
         // reload the master
-        await this.retrieveMaster(null, true)
-        this.logger.info('current master healthcheck:', JSON.stringify(this._masterHealthCheck))
+        await this.retrieveMaster(null, true);
+        this.logger.info('current master healthcheck:', JSON.stringify(this._masterHealthCheck));
         // is there a master election done?
         // check the master record and its voteState
         // if there's a complete election, get master health check
@@ -1059,9 +1074,9 @@ export abstract class AutoscaleHandler<
                 !this._masterHealthCheck.healthy ||
                 !this._masterHealthCheck.inSync
             ) {
-                purgeMaster = needElection = true
+                purgeMaster = needElection = true;
             } else {
-                purgeMaster = needElection = false
+                purgeMaster = needElection = false;
             }
         } else if (
             this._masterRecord &&
@@ -1070,11 +1085,11 @@ export abstract class AutoscaleHandler<
             // if there's a pending master election, and if this election is incomplete by
             // the end-time, purge this election and starta new master election. otherwise, wait
             // until it's finished
-            needElection = purgeMaster = Date.now() > this._masterRecord.voteEndTime
+            needElection = purgeMaster = Date.now() > this._masterRecord.voteEndTime;
         } else {
             // if no master, try to hold a master election
-            needElection = true
-            purgeMaster = false
+            needElection = true;
+            purgeMaster = false;
         }
         // if we need a new master, let's hold a master election!
         // 2019/01/14 add support for cross-scaling groups election
@@ -1085,22 +1100,22 @@ export abstract class AutoscaleHandler<
             if (this.scalingGroupName === this.masterScalingGroupName) {
                 // can I run the election? (diagram: anyone's holding master election?)
                 // try to put myself as the master candidate
-                electionLock = await this.putMasterElectionVote(this._selfInstance, purgeMaster)
+                electionLock = await this.putMasterElectionVote(this._selfInstance, purgeMaster);
                 if (electionLock) {
                     // yes, you run it!
                     this.logger.info(
                         `This instance (id: ${this._selfInstance.instanceId})` +
                             ' is running an election.'
-                    )
+                    );
                     try {
                         // (diagram: elect new master from queue (existing instances))
-                        electionComplete = await this.electMaster()
-                        this.logger.info(`Election completed: ${electionComplete}`)
+                        electionComplete = await this.electMaster();
+                        this.logger.info(`Election completed: ${electionComplete}`);
                         // (diagram: master exists?)
-                        this._masterRecord = null
-                        this._masterInfo = electionComplete && (await this.getMasterInfo())
+                        this._masterRecord = null;
+                        this._masterInfo = electionComplete && (await this.getMasterInfo());
                     } catch (error) {
-                        this.logger.error('Something went wrong in the master election.')
+                        this.logger.error('Something went wrong in the master election.');
                     }
                 }
             } else {
@@ -1109,30 +1124,30 @@ export abstract class AutoscaleHandler<
                     `This instance (id: ${this._selfInstance.instanceId}) not in ` +
                         'the master group, cannot hold election but wait for someone else to hold ' +
                         'an election.'
-                )
+                );
             }
         }
-        return Promise.resolve(this._masterInfo) // return the new master
+        return Promise.resolve(this._masterInfo); // return the new master
     }
 
     /**
      * get the elected master instance info from the platform
      */
     async getMasterInfo(): Promise<VM> {
-        this.logger.info('calling getMasterInfo')
-        let instanceId
+        this.logger.info('calling getMasterInfo');
+        let instanceId;
         try {
-            this._masterRecord = this._masterRecord || (await this.platform.getMasterRecord())
-            instanceId = this._masterRecord && this._masterRecord.instanceId
+            this._masterRecord = this._masterRecord || (await this.platform.getMasterRecord());
+            instanceId = this._masterRecord && this._masterRecord.instanceId;
         } catch (ex) {
-            this.logger.error(ex)
+            this.logger.error(ex);
         }
         return (
             this._masterRecord &&
-            (await this.platform.describeInstance(<VirtualMachineDescriptor>{
-                instanceId: instanceId,
-            }))
-        )
+            (await this.platform.describeInstance({
+                instanceId: instanceId
+            } as VirtualMachineDescriptor))
+        );
     }
 
     /**
@@ -1145,30 +1160,30 @@ export abstract class AutoscaleHandler<
         purgeMasterRecord?: boolean
     ): Promise<boolean> {
         try {
-            this.logger.log('masterElectionVote, purge master?', JSON.stringify(purgeMasterRecord))
+            this.logger.log('masterElectionVote, purge master?', JSON.stringify(purgeMasterRecord));
             if (purgeMasterRecord) {
                 try {
-                    const purged = await this.purgeMaster()
-                    this.logger.log('purged: ', purged)
+                    const purged = await this.purgeMaster();
+                    this.logger.log('purged: ', purged);
                 } catch (error) {
-                    this.logger.log('no master purge')
+                    this.logger.log('no master purge');
                 }
             } else {
-                this.logger.log('no master purge')
+                this.logger.log('no master purge');
             }
             return await this.platform.putMasterRecord(
                 candidateInstance,
                 MasterElection.VoteState.pending,
                 MasterElection.VoteMethod.new
-            )
+            );
         } catch (ex) {
             this.logger.warn(
                 'exception while putMasterElectionVote',
                 JSON.stringify(candidateInstance),
                 JSON.stringify(purgeMasterRecord),
                 ex.stack
-            )
-            return false
+            );
+            return false;
         }
     }
 
@@ -1178,46 +1193,46 @@ export abstract class AutoscaleHandler<
      */
     async electMaster() {
         // return the current master record
-        return !!(await this.platform.getMasterRecord())
+        return !!(await this.platform.getMasterRecord());
     }
 
-    abstract async getFazIp(): Promise<string>
+    abstract async getFazIp(): Promise<string>;
 
     // TODO: refactor the input and return type here
-    abstract async handleNicAttachment(): Promise<boolean>
+    abstract async handleNicAttachment(): Promise<boolean>;
 
     // TODO: refactor the input and return type here
-    abstract async handleNicDetachment(): Promise<boolean>
+    abstract async handleNicDetachment(): Promise<boolean>;
 
     async loadSubnetPairs() {
-        return await this.platform.getSettingItem('subnets-pairs')
+        return await this.platform.getSettingItem('subnets-pairs');
     }
 
     async saveSubnetPairs(subnetPairs: SubnetPair[]) {
-        return await this.platform.setSettingItem('subnets-pairs', subnetPairs, null, true, false)
+        return await this.platform.setSettingItem('subnets-pairs', subnetPairs, null, true, false);
     }
 
-    //TODO: I believe this was aws specific. If so could we add a comment and in the future
+    // TODO: I believe this was aws specific. If so could we add a comment and in the future
     // think about just moving it to the AWS code?
     async loadAutoScalingSettings() {
-        let [desiredCapacity, minSize, maxSize, groupSetting] = await Promise.all([
+        const [desiredCapacity, minSize, maxSize, groupSetting] = await Promise.all([
             this.platform.getSettingItem('scaling-group-desired-capacity'),
             this.platform.getSettingItem('scaling-group-min-size'),
             this.platform.getSettingItem('scaling-group-max-size'),
-            this.platform.getSettingItem('auto-scaling-group'),
-        ])
+            this.platform.getSettingItem('auto-scaling-group')
+        ]);
 
         if (!(desiredCapacity && minSize && maxSize) && groupSetting) {
-            return groupSetting
+            return groupSetting;
         }
-        return { desiredCapacity: desiredCapacity, minSize: minSize, maxSize: maxSize }
+        return { desiredCapacity: desiredCapacity, minSize: minSize, maxSize: maxSize };
     }
 
     async loadSettings() {
         if (!(this._settings && Object.keys(this._settings).length > 0)) {
-            await this.platform.getSettingItems() // initialize the platform settings
+            await this.platform.getSettingItems(); // initialize the platform settings
         }
-        return this._settings
+        return this._settings;
     }
 
     /**
@@ -1226,313 +1241,318 @@ export abstract class AutoscaleHandler<
      * @param {Object} settings settings to save
      */
     // TODO: use Map type for the settings parameter.
-    async saveSettings(settings: { [key: string]: any}) {
-        let tasks = [],
-            errorTasks = []
+    async saveSettings(settings: { [key: string]: any }) {
+        const tasks = [],
+            errorTasks = [];
+        // eslint-disable-next-line prefer-const
         for (let [key, value] of Object.entries(settings)) {
             let keyName: string | null = null,
                 description: string | null = null,
-                jsonEncoded: boolean = false,
-                editable: boolean = false
+                // TODO: is this variable intended to be reassignable?
+                // eslint-disable-next-line prefer-const
+                jsonEncoded = false,
+                editable = false;
             switch (key.toLowerCase()) {
                 case 'servicetype':
                     // ignore service type
-                    break
+                    break;
                 case 'deploymentsettingssaved':
-                    keyName = 'deployment-settings-saved'
+                    keyName = 'deployment-settings-saved';
                     description =
                         'A flag setting item that indicates all deployment ' +
-                        'settings have been saved.'
-                    editable = false
-                    break
+                        'settings have been saved.';
+                    editable = false;
+                    break;
                 case 'byolscalinggroupdesiredcapacity':
-                    keyName = 'byol-scaling-group-desired-capacity'
-                    description = 'BYOL Scaling group desired capacity.'
-                    editable = true
-                    break
+                    keyName = 'byol-scaling-group-desired-capacity';
+                    description = 'BYOL Scaling group desired capacity.';
+                    editable = true;
+                    break;
                 case 'byolscalinggroupminsize':
-                    keyName = 'byol-scaling-group-min-size'
-                    description = 'BYOL Scaling group min size.'
-                    editable = true
-                    break
+                    keyName = 'byol-scaling-group-min-size';
+                    description = 'BYOL Scaling group min size.';
+                    editable = true;
+                    break;
                 case 'byolscalinggroupmaxsize':
-                    keyName = 'byol-scaling-group-max-size'
-                    description = 'BYOL Scaling group max size.'
-                    editable = true
-                    break
+                    keyName = 'byol-scaling-group-max-size';
+                    description = 'BYOL Scaling group max size.';
+                    editable = true;
+                    break;
                 case 'scalinggroupdesiredcapacity':
-                    keyName = 'scaling-group-desired-capacity'
-                    description = 'PAYG Scaling group desired capacity.'
-                    editable = true
-                    break
+                    keyName = 'scaling-group-desired-capacity';
+                    description = 'PAYG Scaling group desired capacity.';
+                    editable = true;
+                    break;
                 case 'scalinggroupminsize':
-                    keyName = 'scaling-group-min-size'
-                    description = 'PAYG Scaling group min size.'
-                    editable = true
-                    break
+                    keyName = 'scaling-group-min-size';
+                    description = 'PAYG Scaling group min size.';
+                    editable = true;
+                    break;
                 case 'scalinggroupmaxsize':
-                    keyName = 'scaling-group-max-size'
-                    description = 'PAYG Scaling group max size.'
-                    editable = true
-                    break
+                    keyName = 'scaling-group-max-size';
+                    description = 'PAYG Scaling group max size.';
+                    editable = true;
+                    break;
                 case 'resourcetagprefix':
-                    keyName = 'resource-tag-prefix'
-                    description = 'Resource tag prefix.'
-                    editable = false
-                    break
+                    keyName = 'resource-tag-prefix';
+                    description = 'Resource tag prefix.';
+                    editable = false;
+                    break;
                 case 'customidentifier':
-                    keyName = 'custom-id'
-                    description = 'Custom Identifier.'
-                    editable = false
-                    break
+                    keyName = 'custom-id';
+                    description = 'Custom Identifier.';
+                    editable = false;
+                    break;
                 case 'uniqueid':
-                    keyName = 'unique-id'
-                    description = 'Unique ID.'
-                    editable = false
-                    break
+                    keyName = 'unique-id';
+                    description = 'Unique ID.';
+                    editable = false;
+                    break;
                 case 'assetstoragename':
-                    keyName = 'asset-storage-name'
-                    description = 'Asset storage name.'
-                    editable = false
-                    break
+                    keyName = 'asset-storage-name';
+                    description = 'Asset storage name.';
+                    editable = false;
+                    break;
                 case 'assetstoragekeyprefix':
-                    keyName = 'asset-storage-key-prefix'
-                    description = 'Asset storage key prefix.'
-                    editable = false
-                    break
+                    keyName = 'asset-storage-key-prefix';
+                    description = 'Asset storage key prefix.';
+                    editable = false;
+                    break;
                 case 'fortigateautoscalevpcid':
-                    keyName = 'fortigate-autoscale-vpc-id'
-                    description = 'VPC ID of the FortiGate Autoscale.'
-                    editable = false
-                    break
+                    keyName = 'fortigate-autoscale-vpc-id';
+                    description = 'VPC ID of the FortiGate Autoscale.';
+                    editable = false;
+                    break;
                 case 'fortigateautoscalesubnet1':
-                    keyName = 'fortigate-autoscale-subnet-1'
+                    keyName = 'fortigate-autoscale-subnet-1';
                     description =
                         'The ID of the subnet 1 (in the first selected AZ) ' +
-                        'of the FortiGate Autoscale.'
-                    editable = false
-                    break
+                        'of the FortiGate Autoscale.';
+                    editable = false;
+                    break;
                 case 'fortigateautoscalesubnet2':
-                    keyName = 'fortigate-autoscale-subnet-2'
+                    keyName = 'fortigate-autoscale-subnet-2';
                     description =
                         'The ID of the subnet 2 (in the second selected AZ) ' +
-                        'of the FortiGate Autoscale.'
-                    editable = false
-                    break
+                        'of the FortiGate Autoscale.';
+                    editable = false;
+                    break;
                 case 'fortigateautoscaleprotectedsubnet1':
-                    keyName = 'fortigate-autoscale-protected-subnet1'
+                    keyName = 'fortigate-autoscale-protected-subnet1';
                     description =
                         'The ID of the protected subnet 1 (in the first selected AZ) ' +
-                        'of the FortiGate Autoscale.'
-                    editable = true
-                    break
+                        'of the FortiGate Autoscale.';
+                    editable = true;
+                    break;
                 case 'fortigateautoscaleprotectedsubnet2':
-                    keyName = 'fortigate-autoscale-protected-subnet2'
+                    keyName = 'fortigate-autoscale-protected-subnet2';
                     description =
                         'The ID of the protected subnet 2 (in the second selected AZ) ' +
-                        'of the FortiGate Autoscale.'
-                    editable = true
-                    break
+                        'of the FortiGate Autoscale.';
+                    editable = true;
+                    break;
                 case 'fortigatepsksecret':
-                    keyName = 'fortigate-psk-secret'
-                    description = 'The PSK for FortiGate Autoscale Synchronization.'
-                    break
+                    keyName = 'fortigate-psk-secret';
+                    description = 'The PSK for FortiGate Autoscale Synchronization.';
+                    break;
                 case 'fortigateadminport':
-                    keyName = 'fortigate-admin-port'
-                    description = 'The port number for administrative login to FortiGate.'
-                    break
+                    keyName = 'fortigate-admin-port';
+                    description = 'The port number for administrative login to FortiGate.';
+                    break;
                 case 'fortigatetrafficport':
-                    keyName = 'fortigate-traffic-port'
+                    keyName = 'fortigate-traffic-port';
                     description =
                         'The port number for load balancer to route traffic through ' +
-                        'FortiGate to the protected services behind the load balancer.'
-                    break
+                        'FortiGate to the protected services behind the load balancer.';
+                    break;
                 case 'fortigatesyncinterface':
-                    keyName = 'fortigate-sync-interface'
+                    keyName = 'fortigate-sync-interface';
                     description =
-                        'The interface the FortiGate uses for configuration ' + 'synchronization.'
-                    editable = true
-                    break
+                        'The interface the FortiGate uses for configuration ' + 'synchronization.';
+                    editable = true;
+                    break;
                 case 'lifecyclehooktimeout':
-                    keyName = 'lifecycle-hook-timeout'
-                    description = 'The auto scaling group lifecycle hook timeout time in second.'
-                    editable = true
-                    break
+                    keyName = 'lifecycle-hook-timeout';
+                    description = 'The auto scaling group lifecycle hook timeout time in second.';
+                    editable = true;
+                    break;
                 case 'heartbeatinterval':
-                    keyName = 'heartbeat-interval'
-                    description = 'The FortiGate sync heartbeat interval in second.'
-                    editable = true
-                    break
+                    keyName = 'heartbeat-interval';
+                    description = 'The FortiGate sync heartbeat interval in second.';
+                    editable = true;
+                    break;
                 case 'masterelectiontimeout':
-                    keyName = 'master-election-timeout'
-                    description = 'The FortiGate master election timtout time in second.'
-                    editable = true
-                    break
+                    keyName = 'master-election-timeout';
+                    description = 'The FortiGate master election timtout time in second.';
+                    editable = true;
+                    break;
                 case 'masterelectionnowait':
-                    keyName = 'master-election-no-wait'
+                    keyName = 'master-election-no-wait';
                     description =
                         'Do not wait for the new master to come up. This FortiGate ' +
-                        'can receive the new master ip in one of its following heartbeat sync.'
-                    editable = true
-                    break
+                        'can receive the new master ip in one of its following heartbeat sync.';
+                    editable = true;
+                    break;
                 case 'heartbeatlosscount':
-                    keyName = 'heartbeat-loss-count'
-                    description = 'The FortiGate sync heartbeat loss count.'
-                    editable = true
-                    break
+                    keyName = 'heartbeat-loss-count';
+                    description = 'The FortiGate sync heartbeat loss count.';
+                    editable = true;
+                    break;
                 case 'heartbeatdelayallowance':
-                    keyName = 'heartbeat-delay-allowance'
-                    description = 'The FortiGate sync heartbeat delay allowance time in second.'
-                    editable = true
-                    break
+                    keyName = 'heartbeat-delay-allowance';
+                    description = 'The FortiGate sync heartbeat delay allowance time in second.';
+                    editable = true;
+                    break;
                 case 'autoscalehandlerurl':
-                    keyName = 'autoscale-handler-url'
-                    description = 'The FortiGate Autoscale handler URL.'
-                    editable = false
-                    break
+                    keyName = 'autoscale-handler-url';
+                    description = 'The FortiGate Autoscale handler URL.';
+                    editable = false;
+                    break;
                 case 'masterscalinggroupname':
-                    keyName = 'master-scaling-group-name'
-                    description = 'The name of the master auto scaling group.'
-                    editable = false
-                    break
+                    keyName = 'master-scaling-group-name';
+                    description = 'The name of the master auto scaling group.';
+                    editable = false;
+                    break;
                 case 'paygscalinggroupname':
-                    keyName = 'payg-scaling-group-name'
-                    description = 'The name of the PAYG auto scaling group.'
-                    editable = false
-                    break
+                    keyName = 'payg-scaling-group-name';
+                    description = 'The name of the PAYG auto scaling group.';
+                    editable = false;
+                    break;
                 case 'byolscalinggroupname':
-                    keyName = 'byol-scaling-group-name'
-                    description = 'The name of the BYOL auto scaling group.'
-                    editable = false
-                    break
+                    keyName = 'byol-scaling-group-name';
+                    description = 'The name of the BYOL auto scaling group.';
+                    editable = false;
+                    break;
                 case 'requiredconfigset':
-                    keyName = 'required-configset'
-                    description = 'A comma-delimited list of required configsets.'
-                    editable = false
-                    break
+                    keyName = 'required-configset';
+                    description = 'A comma-delimited list of required configsets.';
+                    editable = false;
+                    break;
                 case 'requireddbtable':
-                    keyName = 'required-db-table'
-                    description = 'A comma-delimited list of required DB table names.'
-                    editable = false
-                    break
+                    keyName = 'required-db-table';
+                    description = 'A comma-delimited list of required DB table names.';
+                    editable = false;
+                    break;
                 case 'transitgatewayid':
-                    keyName = 'transit-gateway-id'
+                    keyName = 'transit-gateway-id';
                     description =
-                        'The ID of the Transit Gateway the FortiGate Autoscale is ' + 'attached to.'
-                    editable = false
-                    break
+                        'The ID of the Transit Gateway the FortiGate Autoscale is ' +
+                        'attached to.';
+                    editable = false;
+                    break;
                 case 'enabletransitgatewayvpn':
-                    keyName = 'enable-transit-gateway-vpn'
-                    value = value && value !== 'false' ? 'true' : 'false'
+                    keyName = 'enable-transit-gateway-vpn';
+                    value = value && value !== 'false' ? 'true' : 'false';
                     description =
                         'Toggle ON / OFF the Transit Gateway VPN creation on each ' +
-                        'FortiGate instance'
-                    editable = false
-                    break
+                        'FortiGate instance';
+                    editable = false;
+                    break;
                 case 'enablesecondnic':
-                    keyName = 'enable-second-nic'
-                    value = value && value !== 'false' ? 'true' : 'false'
+                    keyName = 'enable-second-nic';
+                    value = value && value !== 'false' ? 'true' : 'false';
                     description =
-                        'Toggle ON / OFF the secondary eni creation on each ' + 'FortiGate instance'
-                    editable = false
-                    break
+                        'Toggle ON / OFF the secondary eni creation on each ' +
+                        'FortiGate instance';
+                    editable = false;
+                    break;
                 case 'bgpasn':
-                    keyName = 'bgp-asn'
+                    keyName = 'bgp-asn';
                     description =
                         'The BGP Autonomous System Number of the Customer Gateway ' +
-                        'of each FortiGate instance in the Auto Scaling Group.'
-                    editable = true
-                    break
+                        'of each FortiGate instance in the Auto Scaling Group.';
+                    editable = true;
+                    break;
                 case 'transitgatewayvpnhandlername':
-                    keyName = 'transit-gateway-vpn-handler-name'
-                    description = 'The Transit Gateway VPN handler function name.'
-                    editable = false
-                    break
+                    keyName = 'transit-gateway-vpn-handler-name';
+                    description = 'The Transit Gateway VPN handler function name.';
+                    editable = false;
+                    break;
                 case 'transitgatewayroutetableinbound':
-                    keyName = 'transit-gateway-route-table-inbound'
-                    description = 'The Id of the Transit Gateway inbound route table.'
-                    editable = true
-                    break
+                    keyName = 'transit-gateway-route-table-inbound';
+                    description = 'The Id of the Transit Gateway inbound route table.';
+                    editable = true;
+                    break;
                 case 'transitgatewayroutetableoutbound':
-                    keyName = 'transit-gateway-route-table-outbound'
-                    description = 'The Id of the Transit Gateway outbound route table.'
-                    break
+                    keyName = 'transit-gateway-route-table-outbound';
+                    description = 'The Id of the Transit Gateway outbound route table.';
+                    break;
                 case 'enablehybridlicensing':
-                    keyName = 'enable-hybrid-licensing'
-                    description = 'Toggle ON / OFF the hybrid licensing feature.'
-                    editable = false
-                    break
+                    keyName = 'enable-hybrid-licensing';
+                    description = 'Toggle ON / OFF the hybrid licensing feature.';
+                    editable = false;
+                    break;
                 case 'enablefortigateelb':
-                    keyName = 'enable-fortigate-elb'
+                    keyName = 'enable-fortigate-elb';
                     description =
                         'Toggle ON / OFF the elastic load balancing for the FortiGate ' +
-                        'scaling groups.'
-                    editable = false
-                    break
+                        'scaling groups.';
+                    editable = false;
+                    break;
                 case 'enableinternalelb':
-                    keyName = 'enable-internal-elb'
+                    keyName = 'enable-internal-elb';
                     description =
                         'Toggle ON / OFF the internal elastic load balancing for ' +
-                        'the protected services by FortiGate.'
-                    editable = true
-                    break
+                        'the protected services by FortiGate.';
+                    editable = true;
+                    break;
                 case 'fortigateautoscaleelbdns':
-                    keyName = 'fortigate-autoscale-elb-dns'
+                    keyName = 'fortigate-autoscale-elb-dns';
                     description =
                         'The DNS name of the elastic load balancer for the FortiGate ' +
-                        'scaling groups.'
-                    editable = false
-                    break
+                        'scaling groups.';
+                    editable = false;
+                    break;
                 case 'fortigateautoscaletargetgrouparn':
-                    keyName = 'fortigate-autoscale-target-group-arn'
+                    keyName = 'fortigate-autoscale-target-group-arn';
                     description =
                         'The ARN of the target group for FortiGate to receive ' +
-                        'load balanced traffic.'
-                    editable = false
-                    break
+                        'load balanced traffic.';
+                    editable = false;
+                    break;
                 case 'fortigateprotectedinternalelbdns':
-                    keyName = 'fortigate-protected-internal-elb-dns'
+                    keyName = 'fortigate-protected-internal-elb-dns';
                     description =
                         'The DNS name of the elastic load balancer for the scaling ' +
-                        'groups of services protected by FortiGate'
-                    editable = true
-                    break
+                        'groups of services protected by FortiGate';
+                    editable = true;
+                    break;
                 case 'enabledynamicnatgateway':
-                    keyName = 'enable-dynamic-nat-gateway'
-                    description = 'Toggle ON / OFF the dynamic NAT gateway feature.'
-                    editable = true
-                    break
+                    keyName = 'enable-dynamic-nat-gateway';
+                    description = 'Toggle ON / OFF the dynamic NAT gateway feature.';
+                    editable = true;
+                    break;
                 case 'dynamicnatgatewayroutetables':
-                    keyName = 'dynamic-nat-gateway-route-tables'
-                    description = 'The dynamic NAT gateway managed route tables.'
-                    editable = true
-                    break
+                    keyName = 'dynamic-nat-gateway-route-tables';
+                    description = 'The dynamic NAT gateway managed route tables.';
+                    editable = true;
+                    break;
                 case 'enablevminfocache':
-                    keyName = 'enable-vm-info-cache'
+                    keyName = 'enable-vm-info-cache';
                     description =
                         'Toggle ON / OFF the vm info cache feature. It caches the ' +
-                        'vm info in db to reduce API calls to query a vm from the platform.'
-                    editable = true
-                    break
+                        'vm info in db to reduce API calls to query a vm from the platform.';
+                    editable = true;
+                    break;
                 case 'vminfocachetime':
-                    keyName = 'vm-info-cache-time'
-                    description = 'The vm info cache time in seconds.'
-                    editable = true
-                    break
+                    keyName = 'vm-info-cache-time';
+                    description = 'The vm info cache time in seconds.';
+                    editable = true;
+                    break;
                 case 'fortigatelicensestoragekeyprefix':
-                    keyName = 'fortigate-license-storage-key-prefix'
-                    description = 'The key prefix for FortiGate licenses in the access storage.'
-                    editable = true
-                    break
+                    keyName = 'fortigate-license-storage-key-prefix';
+                    description = 'The key prefix for FortiGate licenses in the access storage.';
+                    editable = true;
+                    break;
                 case 'getlicensegraceperiod':
-                    keyName = 'get-license-grace-period'
+                    keyName = 'get-license-grace-period';
                     description =
                         'The period (time in seconds) for preventing a newly assigned ' +
-                        ' license to be recycled.'
-                    editable = true
-                    break
+                        ' license to be recycled.';
+                    editable = true;
+                    break;
                 default:
-                    break
+                    break;
             }
             if (keyName) {
                 tasks.push(
@@ -1542,14 +1562,14 @@ export abstract class AutoscaleHandler<
                             this.logger.error(
                                 `failed to save setting for key: ${keyName}. ` +
                                     `Error: ${JSON.stringify(error)}`
-                            )
-                            errorTasks.push({ key: keyName, value: value })
+                            );
+                            errorTasks.push({ key: keyName, value: value });
                         })
-                )
+                );
             }
         }
-        await Promise.all(tasks)
-        return errorTasks.length === 0
+        await Promise.all(tasks);
+        return errorTasks.length === 0;
     }
 
     // TODO: restrict the parameter type to number only
@@ -1558,28 +1578,30 @@ export abstract class AutoscaleHandler<
         desiredCapacity: number | null,
         minSize: number | null,
         maxSize: number | null
-    ): Promise<boolean>
+    ): Promise<boolean>;
 
     /**
      * check state of one scaling groups
      * @param scalingGroupName scaling group name
      */
-    abstract async checkAutoScalingGroupState(scalingGroupName: string): Promise<ScalingGroupState|string>
+    abstract async checkAutoScalingGroupState(
+        scalingGroupName: string
+    ): Promise<ScalingGroupState | string>;
 
     async resetMasterElection() {
-        this.logger.info('calling resetMasterElection')
+        this.logger.info('calling resetMasterElection');
         try {
             this.setScalingGroup(
                 this._settings['master-scaling-group-name'] &&
                     this._settings['master-scaling-group-name'].toString(),
                 null
-            )
-            await this.platform.removeMasterRecord()
-            this.logger.info('called resetMasterElection. done.')
-            return true
+            );
+            await this.platform.removeMasterRecord();
+            this.logger.info('called resetMasterElection. done.');
+            return true;
         } catch (error) {
-            this.logger.info('called resetMasterElection. failed.', error)
-            return false
+            this.logger.info('called resetMasterElection. failed.', error);
+            return false;
         }
     }
 
@@ -1588,30 +1610,30 @@ export abstract class AutoscaleHandler<
         instance: VM,
         heartBeatInterval: ValidHeartbeatInterval,
         masterIp?: string
-    ): Promise<boolean>
+    ): Promise<boolean>;
 
     async removeInstanceFromMonitor(instanceId: string) {
-        this.logger.info('calling removeInstanceFromMonitor')
-        return await this.platform.deleteInstanceHealthCheck(instanceId, this.scalingGroupName)
+        this.logger.info('calling removeInstanceFromMonitor');
+        return await this.platform.deleteInstanceHealthCheck(instanceId, this.scalingGroupName);
     }
 
     /**
      *
-     * @param filters accepted filter key: masterInfo, masterHealthCheck, or masterRecord
-     * @param reload
+     * @param {Map<RetrieveMasterOption, boolean> | null} filters accepted filter key: masterInfo, masterHealthCheck, or masterRecord
+     * @param {boolean} reload force reload
      */
     async retrieveMaster(
         filters: Map<RetrieveMasterOption, boolean> | null = null,
         reload = false
     ): Promise<{
-        masterInfo: VM | null
-        masterHealthCheck: HealthCheck | null
-        masterRecord: MasterElection.MasterRecord | null
+        masterInfo: VM | null;
+        masterHealthCheck: HealthCheck | null;
+        masterRecord: MasterElection.MasterRecord | null;
     }> {
         if (reload) {
-            this._masterInfo = null
-            this._masterHealthCheck = null
-            this._masterRecord = null
+            this._masterInfo = null;
+            this._masterHealthCheck = null;
+            this._masterRecord = null;
         }
         if (
             filters === null ||
@@ -1619,38 +1641,40 @@ export abstract class AutoscaleHandler<
             filters.get(RetrieveMasterOption.masterHealthCheck)
         ) {
             // if reload not needed, return the current object or retrive it.
-            this._masterInfo = (!reload && this._masterInfo) || (await this.getMasterInfo())
+            this._masterInfo = (!reload && this._masterInfo) || (await this.getMasterInfo());
         }
 
-        if (this._masterInfo &&
-            (filters === null || filters.get(RetrieveMasterOption.masterHealthCheck))) {
+        if (
+            this._masterInfo &&
+            (filters === null || filters.get(RetrieveMasterOption.masterHealthCheck))
+        ) {
             // if reload not needed, return the current object or retrive it.
             this._masterHealthCheck =
                 (!reload && this._masterHealthCheck) ||
-                (await this.platform.getInstanceHealthCheck(<VirtualMachineDescriptor>{
-                    instanceId: this._masterInfo.instanceId,
-                }))
+                (await this.platform.getInstanceHealthCheck({
+                    instanceId: this._masterInfo.instanceId
+                } as VirtualMachineDescriptor));
         }
 
         if (filters === null || filters.get(RetrieveMasterOption.masterRecord)) {
             // if reload not needed, return the current object or retrive it.
             this._masterRecord =
-                (!reload && this._masterRecord) || (await this.platform.getMasterRecord())
+                (!reload && this._masterRecord) || (await this.platform.getMasterRecord());
         }
 
         return {
             masterInfo: this._masterInfo,
             masterHealthCheck: this._masterHealthCheck,
-            masterRecord: this._masterRecord,
-        }
+            masterRecord: this._masterRecord
+        };
     }
 
     async purgeMaster() {
         // TODO: double check that the work flow of terminating the master instance here
         // is appropriate
         try {
-            let asyncTasks: Promise<any>[] = []
-            await this.retrieveMaster()
+            const asyncTasks: Promise<any>[] = [];
+            await this.retrieveMaster();
             // if has master health check record, make it out-of-sync
             if (this._masterInfo && this._masterHealthCheck) {
                 asyncTasks.push(
@@ -1661,28 +1685,28 @@ export abstract class AutoscaleHandler<
                         Date.now(),
                         true
                     )
-                )
+                );
             }
             asyncTasks.push(
                 this.platform.removeMasterRecord(),
                 this.removeInstance(this._masterInfo)
-            )
-            let result = await Promise.all(asyncTasks)
-            return !!result
+            );
+            const result = await Promise.all(asyncTasks);
+            return !!result;
         } catch (error) {
-            this.logger.error('called purgeMaster > error: ', JSON.stringify(error))
-            return false
+            this.logger.error('called purgeMaster > error: ', JSON.stringify(error));
+            return false;
         }
     }
 
-    abstract async removeInstance(instance: VM): Promise<boolean>
+    abstract async removeInstance(instance: VM): Promise<boolean>;
 
     setScalingGroup(master: string | null, self: string | null) {
         if (master) {
-            this.platform.masterScalingGroupName = master
+            this.platform.masterScalingGroupName = master;
         }
         if (self) {
-            this.scalingGroupName = self
+            this.scalingGroupName = self;
         }
     }
 
@@ -1701,8 +1725,8 @@ export abstract class AutoscaleHandler<
         existingRecords: Map<string, LicenseRecord>
     ): Promise<Map<string, LicenseRecord>> {
         if (licenseFiles instanceof Map && existingRecords instanceof Map) {
-            let untrackedFiles = new Map(licenseFiles.entries()) // copy the map
-            let recordsToDelete = new Map()
+            let untrackedFiles = new Map(licenseFiles.entries()); // copy the map
+            const recordsToDelete = new Map();
             try {
                 if (existingRecords.size > 0) {
                     // filter out tracked license files
@@ -1710,18 +1734,18 @@ export abstract class AutoscaleHandler<
                     // record
                     existingRecords.forEach(licenseRecord => {
                         if (licenseFiles.has(licenseRecord.blobKey)) {
-                            untrackedFiles.delete(licenseRecord.blobKey)
+                            untrackedFiles.delete(licenseRecord.blobKey);
                         } else {
-                            recordsToDelete.set(licenseRecord.checksum, licenseRecord)
+                            recordsToDelete.set(licenseRecord.checksum, licenseRecord);
                         }
-                    }, this)
+                    }, this);
                 }
-                let platform = this.platform,
-                    logger = this.logger
+                const platform = this.platform,
+                    logger = this.logger;
                 // fetch the content for each untrack license file
                 let updateTasks: Promise<any>[] = [],
                     updateTasksResult: LicenseItem[],
-                    doneTaskCount = 0
+                    doneTaskCount = 0;
 
                 if (recordsToDelete.size > 0) {
                     recordsToDelete.forEach(licenseRecord => {
@@ -1732,28 +1756,28 @@ export abstract class AutoscaleHandler<
                                     logger.info(
                                         `remove license file (${licenseRecord.fileName}) ` +
                                             'from stock.'
-                                    )
-                                    return true
+                                    );
+                                    return true;
                                 })
                                 .catch((error: any) => {
                                     logger.error(
                                         'cannot remove license file ' +
                                             `(${licenseRecord.fileName}) from stock. ` +
                                             `error: ${JSON.stringify(error)}`
-                                    )
-                                    return false
+                                    );
+                                    return false;
                                 })
-                        )
-                    })
+                        );
+                    });
 
                     await Promise.all(updateTasks).then(doneTasks => {
-                        doneTaskCount = 0
-                        doneTasks.forEach(done => (doneTaskCount = done && doneTaskCount + 1))
-                        return doneTaskCount
-                    })
+                        doneTaskCount = 0;
+                        doneTasks.forEach(done => (doneTaskCount = done && doneTaskCount + 1));
+                        return doneTaskCount;
+                    });
 
                     if (doneTaskCount > 0) {
-                        logger.info(`${doneTaskCount} files removed from stock.`)
+                        logger.info(`${doneTaskCount} files removed from stock.`);
                     }
                 }
 
@@ -1762,7 +1786,7 @@ export abstract class AutoscaleHandler<
                         if (!licenseItem.content) {
                             updateTasks.push(
                                 platform
-                                    .getLicenseFileContent(<BlobStorageItemDescriptor>{
+                                    .getLicenseFileContent({
                                         storageName: this._settings[
                                             'asset-storage-name'
                                         ].toString(),
@@ -1772,51 +1796,51 @@ export abstract class AutoscaleHandler<
                                                 'fortigate-license-storage-key-prefix'
                                             ].toString()
                                         ),
-                                        fileName: licenseItem.fileName,
-                                    })
+                                        fileName: licenseItem.fileName
+                                    } as BlobStorageItemDescriptor)
                                     .then(content => {
-                                        licenseItem.content = content
-                                        return licenseItem
+                                        licenseItem.content = content;
+                                        return licenseItem;
                                     })
                                     .catch(error => {
                                         logger.error(
                                             'cannot get the content of license file ' +
                                                 `(${licenseItem.fileName}). ` +
                                                 `error: ${JSON.stringify(error)}`
-                                        )
-                                        return null
+                                        );
+                                        return null;
                                     })
-                            )
+                            );
                         } else {
-                            updateTasks.push(Promise.resolve(licenseItem))
+                            updateTasks.push(Promise.resolve(licenseItem));
                         }
-                    })
+                    });
 
                     updateTasksResult = await Promise.all(updateTasks).then(
                         (result: LicenseItem[]) => {
-                            return result
+                            return result;
                         }
-                    )
+                    );
                     untrackedFiles = new Map(
                         updateTasksResult
                             .filter(licenseItem => {
-                                return !!licenseItem
+                                return !!licenseItem;
                             })
                             .map(licenseItem => {
-                                return [licenseItem.checksum, licenseItem]
+                                return [licenseItem.checksum, licenseItem];
                             })
-                    )
+                    );
                 }
 
                 if (untrackedFiles.size > 0) {
-                    updateTasks = []
+                    updateTasks = [];
                     untrackedFiles.forEach(licenseItem => {
                         if (existingRecords.has(licenseItem.checksum)) {
                             logger.warn(
                                 'updateLicenseStockRecord > warning: duplicate' +
                                     ` license found: filename: ${licenseItem.fileName}`
-                            )
-                            return licenseItem
+                            );
+                            return licenseItem;
                         } else {
                             updateTasks.push(
                                 platform
@@ -1825,55 +1849,55 @@ export abstract class AutoscaleHandler<
                                         logger.info(
                                             `added license file (${licenseItem.fileName}) ` +
                                                 'to stock.'
-                                        )
-                                        return licenseItem
+                                        );
+                                        return licenseItem;
                                     })
                                     .catch(error => {
                                         logger.error(
                                             'cannot add license file ' +
                                                 `(${licenseItem.fileName}) to stock. ` +
                                                 `error: ${JSON.stringify(error)}`
-                                        )
-                                        logger.error(error)
+                                        );
+                                        logger.error(error);
                                     })
-                            )
-                            return null
+                            );
+                            return null;
                         }
-                    })
-                    updateTasksResult = await Promise.all(updateTasks)
+                    });
+                    updateTasksResult = await Promise.all(updateTasks);
                     untrackedFiles = new Map(
                         updateTasksResult
                             .filter(licenseItem => {
-                                return !!licenseItem
+                                return !!licenseItem;
                             })
                             .map(licenseItem => {
-                                return [licenseItem.checksum, licenseItem]
+                                return [licenseItem.checksum, licenseItem];
                             })
-                    )
+                    );
                 }
 
                 return (
                     ((untrackedFiles.size > 0 || recordsToDelete.size > 0) &&
                         this.platform.listLicenseStock()) ||
                     existingRecords
-                )
+                );
             } catch (error) {
                 // NOTE: throw the error out here? or catch it? then what should return when error?
-                this.logger.error(error)
-                throw error
+                this.logger.error(error);
+                throw error;
             }
         } else {
-            return existingRecords
+            return existingRecords;
         }
     }
 
     // TODO: this should be called in the lamba function implementation
     // FIXME: this function is intended for handling AWS lifecycle events. move to AWS library,
     // not need to be abstract
-    abstract async handleAutoScalingEvent(event?: unknown): Promise<ErrorDataPairLike>
+    abstract async handleAutoScalingEvent(event?: unknown): Promise<ErrorDataPairLike>;
 
     // TODO: this should be called in the lamba function implementation
-    abstract async handleGetConfig(event?: unknown): Promise<ErrorDataPairLike>
+    abstract async handleGetConfig(event?: unknown): Promise<ErrorDataPairLike>;
 
     /**
      * To handle and move on the lifecycle to its next stage
@@ -1889,7 +1913,7 @@ export abstract class AutoscaleHandler<
         instanceId: string,
         action: LifecycleAction,
         fulfilled: boolean
-    ): Promise<boolean>
+    ): Promise<boolean>;
 
     /**
      * Find a recyclable license from those been previously used by a device but now the device
@@ -1904,11 +1928,11 @@ export abstract class AutoscaleHandler<
         stockRecords: Map<string, LicenseRecord>,
         usageRecords: Map<string, LicenseRecord>,
         limit?: number | 'all'
-    ): Promise<LicenseRecord[]>
+    ): Promise<LicenseRecord[]>;
 
     /**
      * Check and update the route to the NAT gateway instance (which is one healthy ForitGate
      * from the scaling groups)
      */
-    abstract async updateNatGatewayRoute(): Promise<void>
+    abstract async updateNatGatewayRoute(): Promise<void>;
 }

@@ -1,5 +1,3 @@
-'use strict'
-
 /*
 Author: Fortinet
 *
@@ -7,63 +5,63 @@ Author: Fortinet
 * Class used to define the capabilities required from cloud platform.
 */
 
-import { Blob } from './blob'
-import * as CoreFunctions from './core-functions'
-import { HealthCheck } from './health-check-record'
-import { LicenseItem } from './license-item'
-import { LicenseRecord } from './license-record'
-import { LifecycleItem } from './lifecycle-item'
-import { NicAttachmentRecord, NicAttachmentState } from './nic-attachment'
-import { Logger } from './logger'
-import * as MasterElection from './master-election'
-import { SettingItem } from './setting-items/setting-item'
-import { VirtualNetworkLike, SubnetLike } from './virtual-network'
-import { NetworkInterfaceLike, VirtualMachine, ScalingGroupLike } from './virtual-machine'
-import { URL } from 'url'
-import * as HttpStatusCode from 'http-status-codes'
+import { Blob } from './blob';
+import * as CoreFunctions from './core-functions';
+import { HealthCheck } from './health-check-record';
+import { LicenseItem } from './license-item';
+import { LicenseRecord } from './license-record';
+import { LifecycleItem } from './lifecycle-item';
+import { NicAttachmentRecord, NicAttachmentState } from './nic-attachment';
+import { Logger } from './logger';
+import * as MasterElection from './master-election';
+import { SettingItem } from './setting-items/setting-item';
+import { VirtualNetworkLike, SubnetLike } from './virtual-network';
+import { NetworkInterfaceLike, VirtualMachine, ScalingGroupLike } from './virtual-machine';
+import { URL } from 'url';
+import * as HttpStatusCode from 'http-status-codes';
 
-export { HttpStatusCode }
+export { HttpStatusCode };
 
 export const USE_EXISTING: unique symbol = Symbol('Use existing value from the data store');
 
 export type ValidHeartbeatInterval = number | typeof USE_EXISTING;
 
 export interface RequestInfo {
-    instanceId: string
-    interval: ValidHeartbeatInterval
-    status: string | null
+    instanceId: string;
+    interval: ValidHeartbeatInterval;
+    status: string | null;
 }
 
 export interface AutoscaleRequestLike {
-    //exists in header in GET configuration call
-    'Fos-instance-id'?: string,
-    //exists in body in heartbeat sync POST call
-    instance?: string,
-    //exists in body in heartbeat sync POST call
-    interval?: string,
+    // exists in header in GET configuration call
+    'Fos-instance-id'?: string;
+    // exists in body in heartbeat sync POST call
+    instance?: string;
+    // exists in body in heartbeat sync POST call
+    interval?: string;
     // only exists in status message
-    success?: string,
-    [key: string]: any
+    success?: string;
+    [key: string]: string | object;
 }
 
 /**
  * A function template that takes one certain input type and returns one certain output type.
  */
-export type DataProcessor<InputType, OutputType> = (data: InputType) => OutputType
+export type DataProcessor<InputType, OutputType> = (data: InputType) => OutputType;
 
 /**
  * An asynchronous function template that takes one certain input type and returns
  * one certain output type.
  */
-export type AsyncDataProcessor<InputType, OutputType> = (data: InputType) => Promise<OutputType>
+export type AsyncDataProcessor<InputType, OutputType> = (data: InputType) => Promise<OutputType>;
 
 /**
  * A paired two subnets for a cetain purpose. For example, Traffic going into the subnet with
  * subnetId will be routed to the subnet with pairId
  */
 export interface SubnetPair {
-    subnetId: string
-    pairId: string
+    subnetId: string;
+    pairId: string;
 }
 
 /**
@@ -72,7 +70,7 @@ export interface SubnetPair {
 export interface ResourceLike {
     // define the key property of this resource. When the id property needs to be referenced,
     // program can retrieve it by this property.
-    idPropertyName: string
+    idPropertyName: string;
 }
 
 /**
@@ -80,13 +78,13 @@ export interface ResourceLike {
  * functions.
  */
 export interface ErrorDataPairLike {
-    error: any
-    data: any
-    [key:string]:any
+    error: any;
+    data: any;
+    [key: string]: any;
 }
 
 export interface MaskedResponse extends ErrorDataPairLike {
-    maskResponse: boolean
+    maskResponse: boolean;
 }
 
 /**
@@ -95,8 +93,8 @@ export interface MaskedResponse extends ErrorDataPairLike {
  * It's able to be easily passed from one handler to another within the same runtime.
  */
 export abstract class RuntimeAgent<HttpRequest, RuntimeContext, PlatformLogger> {
-    response: ErrorDataPairLike
-    readonly createdTime: number
+    response: ErrorDataPairLike;
+    readonly createdTime: number;
     constructor(
         readonly request: HttpRequest,
         readonly context: RuntimeContext,
@@ -110,8 +108,8 @@ export abstract class RuntimeAgent<HttpRequest, RuntimeContext, PlatformLogger> 
  * It's a typical key-value pair with 'key' and 'value' properties.
  */
 export interface KeyValuePair<VALUE_TYPE> {
-    key: string
-    value: VALUE_TYPE
+    key: string;
+    value: VALUE_TYPE;
 }
 
 /**
@@ -122,30 +120,30 @@ export interface KeyValuePair<VALUE_TYPE> {
  * @see: https://github.com/Microsoft/TypeScript/wiki/What's-new-in-TypeScript#tagged-union-types
  */
 export interface FilterLikeResourceQuery<KeyValueLike> {
-    filter?: KeyValueLike[]
-    excluded?: KeyValueLike[]
-    included?: KeyValueLike[]
+    filter?: KeyValueLike[];
+    excluded?: KeyValueLike[];
+    included?: KeyValueLike[];
 }
 
 /**
  * Carry neccesarry information about how to describe a virtual machine instance in a platform.
  */
-//TODO: need to rename it to VirtualMachineDescriptor
+// TODO: need to rename it to VirtualMachineDescriptor
 export interface VirtualMachineDescriptor extends ResourceLike {
     // ResourceLike definition
-    idPropertyName: 'instanceId'
+    idPropertyName: 'instanceId';
     // instance id of a cloud-computing device that has an OS, network interface, ip, etc.
     // e.g.: AWS EC2 Instance
-    instanceId: string
+    instanceId: string;
     // scaling group name (or id) when it comes to auto scaling.
     // such device may be placed in an scaling group. Some other device may not need to set this.
-    scalingGroupName?: string
+    scalingGroupName?: string;
     // refers to its primary private ip address
-    privateIp?: string
+    privateIp?: string;
     // refers to its primary public ip address if it has one
-    publicIp?: string
+    publicIp?: string;
     // defines that any other proerty should have a string key and any value type
-    [key: string]: any
+    [key: string]: any;
 }
 
 /**
@@ -153,9 +151,9 @@ export interface VirtualMachineDescriptor extends ResourceLike {
  * etc.
  */
 export interface VirtualNetworkDescriptor extends ResourceLike {
-    idPropertyName: 'virtualNetworkId'
-    virtualNetworkId: string
-    subnetId?: string[]
+    idPropertyName: 'virtualNetworkId';
+    virtualNetworkId: string;
+    subnetId?: string[];
 }
 
 /**
@@ -163,15 +161,15 @@ export interface VirtualNetworkDescriptor extends ResourceLike {
  * in a platform.
  */
 export interface NetworkInterfaceDescriptor extends ResourceLike {
-    idPropertyName: 'networkInterfaceId'
-    networkInterfaceId: string
-    subnetId?: string
+    idPropertyName: 'networkInterfaceId';
+    networkInterfaceId: string;
+    subnetId?: string;
 }
 
 export interface ScalingGroupDecriptor extends ResourceLike {
-    idPropertyName: 'scalingGroupName' | 'scalingGroupId',
-    scalingGroupName?: string,
-    scalingGroupId?: string
+    idPropertyName: 'scalingGroupName' | 'scalingGroupId';
+    scalingGroupName?: string;
+    scalingGroupId?: string;
 }
 
 // TODO:
@@ -184,8 +182,7 @@ export interface ScalingGroupDecriptor extends ResourceLike {
 //     description: string
 // }
 
-
-export type SettingItems = { [k: string]: SettingItem }
+export type SettingItems = { [k: string]: SettingItem };
 
 /**
  * BlobStorageItemDescriptor holds only information necessary to describe a blob in a storage
@@ -193,9 +190,9 @@ export type SettingItems = { [k: string]: SettingItem }
  * It includes the blob location and file name
  */
 export interface BlobStorageItemDescriptor {
-    storageName: string
-    keyPrefix: string
-    fileName?: string
+    storageName: string;
+    keyPrefix: string;
+    fileName?: string;
 }
 
 /**
@@ -204,8 +201,8 @@ export interface BlobStorageItemDescriptor {
  * It includes the blob location and 3 optional file name filters: filter, included, excluded.
  */
 export interface BlobStorageItemQuery extends FilterLikeResourceQuery<string> {
-    storageName: string
-    keyPrefix: string
+    storageName: string;
+    keyPrefix: string;
 }
 
 /**
@@ -213,37 +210,37 @@ export interface BlobStorageItemQuery extends FilterLikeResourceQuery<string> {
  */
 export interface HttpRequestLike {
     headers: {
-        [key: string]: any
-    }
+        [key: string]: any;
+    };
     body?: {
-        [key: string]: any
-    }
-    [key: string]: any
+        [key: string]: any;
+    };
+    [key: string]: any;
 }
 
 export interface HttpRequest extends HttpRequestLike {
     // note that different platform may provide the http method property in different names
     // here the httpMethod should return the method per platform
-    httpMethod: HttpMethodType
+    httpMethod: HttpMethodType;
 }
 
 /**
  * Http methods are defined as all capticalized letters.
  */
-export type HttpMethodType = 'POST' | 'GET' | 'PUT' | 'DELETE' | 'HEAD' | 'OPTIONS'
+export type HttpMethodType = 'POST' | 'GET' | 'PUT' | 'DELETE' | 'HEAD' | 'OPTIONS';
 
 /**
  * Custom log request is expected with this headers
  */
 export interface CustomLogRequestHeaders {
-    token?: string,
-    timefrom?: string,
-    timeto?: string,
-    timezoneoffset?: string,
-    [key:string]: any
+    token?: string;
+    timefrom?: string;
+    timeto?: string;
+    timezoneoffset?: string;
+    [key: string]: any;
 }
 
-export type PlatformCallback = (...args:any[]) => void;
+export type PlatformCallback = (...args: any[]) => void;
 
 /**
  * Class used to define the capabilities required from cloud platform.
@@ -257,12 +254,12 @@ export type PlatformCallback = (...args:any[]) => void;
  * to throw it to upper level of the calling stack or not depends on how this abstract function
  * is required for implementation.
  *
- * @argument HttpRequest: generic type parameter used by RA
- * @argument RuntimeContext: generic type parameter used by RA
- * @argument KeyValueLike: a KeyValueLike parameter kind generic type
- * @argument VmSourceType: generic type parameter used by VM
- * @argument VM: a concrete VirtualMachine kind parameter for a specific platform
- * @argument RA: a concrete RuntimeAgent kind parameter for a specific platform
+ * @template HttpRequest: generic type parameter used by RA
+ * @template RuntimeContext: generic type parameter used by RA
+ * @template KeyValueLike: a KeyValueLike parameter kind generic type
+ * @template VmSourceType: generic type parameter used by VM
+ * @template VM: a concrete VirtualMachine kind parameter for a specific platform
+ * @template RA: a concrete RuntimeAgent kind parameter for a specific platform
  */
 export abstract class CloudPlatform<
     HttpRequest,
@@ -276,44 +273,44 @@ export abstract class CloudPlatform<
     // TODO: NOTE:ugly naming here. should remove the underscore
     // to use accessor style here, have to make it double underscore.
     // will remove it while improving the way to use setting
-    protected __settings: SettingItems | null
-    protected _initialized: boolean
-    protected _masterRecord: MasterElection.MasterRecord
-    masterScalingGroupName: string
+    protected __settings: SettingItems | null;
+    protected _initialized: boolean;
+    protected _masterRecord: MasterElection.MasterRecord;
+    masterScalingGroupName: string;
     constructor(public runtimeAgent: RA) {
-        this.__settings = null
-        this._initialized = false
+        this.__settings = null;
+        this._initialized = false;
     }
 
     get _settings(): SettingItems {
-        return this.__settings
+        return this.__settings;
     }
 
     /**
      * return the instance of the platform-specific logger class
      */
-    abstract get logger(): Logger<PlatformLogger>
+    abstract get logger(): Logger<PlatformLogger>;
 
     /**
      * initialization flag. probably check it to avoid multiple init calls in a workflow?
      * @returns {Boolean} whether the CloudPlatform is initialzied or not
      */
     get initialized() {
-        return this._initialized
+        return this._initialized;
     }
 
     /**
      * Initialize (and wait for) any required resources such as database tables etc.
      * Abstract class method.
      */
-    abstract async init(): Promise<boolean>
+    abstract async init(): Promise<boolean>;
 
     /**
      * Send response to platform.
      * @param response
      * @param httpStatusCode
      */
-    abstract async respond(response: ErrorDataPairLike, httpStatusCode?: number):Promise<void>;
+    abstract async respond(response: ErrorDataPairLike, httpStatusCode?: number): Promise<void>;
 
     /**
      * Submit an master record for election with a vote state.
@@ -327,24 +324,24 @@ export abstract class CloudPlatform<
         candidateInstance: VM,
         voteState: MasterElection.VoteState,
         method: MasterElection.VoteMethod
-    ): Promise<boolean>
+    ): Promise<boolean>;
     /**
      * Get the master record from db.
      * Abstract class method.
      */
-    abstract async getMasterRecord(): Promise<MasterElection.MasterRecord>
+    abstract async getMasterRecord(): Promise<MasterElection.MasterRecord>;
 
     /**
      * Remove the current master record from db.
      * Abstract class method.
      */
-    abstract async removeMasterRecord(): Promise<void>
+    abstract async removeMasterRecord(): Promise<void>;
     /**
      * Get all existing lifecyle actions for a FortiGate instance from the database.
      * Abstract class method.
      * @param instanceId Instance ID of a FortiGate.
      */
-    abstract async getLifecycleItems(instanceId: string): Promise<LifecycleItem[]>
+    abstract async getLifecycleItems(instanceId: string): Promise<LifecycleItem[]>;
     /**
      * Update one life cycle action item hooked with an instance.
      * Abstract class method.
@@ -352,14 +349,14 @@ export abstract class CloudPlatform<
      *  a lifecycleAction.
      */
     // TODO: what should be return?
-    abstract async updateLifecycleItem(item: LifecycleItem): Promise<boolean>
+    abstract async updateLifecycleItem(item: LifecycleItem): Promise<boolean>;
     /**
      * remove one life cycle action item hooked with an instance.
      * Abstract class method.
      * @param {LifecycleItem} item Item used by the platform to complete
      *  a lifecycleAction.
      */
-    abstract async removeLifecycleItem(item: LifecycleItem): Promise<boolean>
+    abstract async removeLifecycleItem(item: LifecycleItem): Promise<boolean>;
     /**
      * Clean up database the current LifeCycleItem entries (or any expired entries).
      * Abstract class method.
@@ -369,12 +366,12 @@ export abstract class CloudPlatform<
      */
     abstract async cleanUpDbLifeCycleActions(
         items: LifecycleItem[] | null
-    ): Promise<LifecycleItem[] | boolean>
+    ): Promise<LifecycleItem[] | boolean>;
     /**
      * Get the url for the callback-url portion of the config.
      * @param processor a data processor function that returns the url string
      */
-    abstract async getCallbackEndpointUrl(processor?: DataProcessor<RA, URL>): Promise<URL>
+    abstract async getCallbackEndpointUrl(processor?: DataProcessor<RA, URL>): Promise<URL>;
 
     /**
      * Extract useful info from request event.
@@ -382,14 +379,14 @@ export abstract class CloudPlatform<
      * @returns an object of required info per platform.
      */
     // TODO: refactor this function
-    abstract extractRequestInfo(runtimeAgent: RA): RequestInfo
+    abstract extractRequestInfo(runtimeAgent: RA): RequestInfo;
 
     /**
      * Describe an instance and retrieve its information, with given parameters.
      * Abstract class method.
      * @param descriptor a descriptor for describing an instance.
      */
-    abstract async describeInstance(descriptor: VirtualMachineDescriptor): Promise<VM>
+    abstract async describeInstance(descriptor: VirtualMachineDescriptor): Promise<VM>;
 
     /**
      * do the instance health check.
@@ -400,7 +397,7 @@ export abstract class CloudPlatform<
     abstract async getInstanceHealthCheck(
         descriptor: VirtualMachineDescriptor,
         heartBeatInterval?: ValidHeartbeatInterval
-    ): Promise<HealthCheck | null>
+    ): Promise<HealthCheck | null>;
 
     /**
      * update the instance health check result to DB.
@@ -420,7 +417,7 @@ export abstract class CloudPlatform<
         checkPointTime: number,
         forceOutOfSync?: boolean,
         scalingGroupName?: string
-    ): Promise<boolean>
+    ): Promise<boolean>;
 
     /**
      * delete the instance health check monitoring record from DB.
@@ -428,58 +425,63 @@ export abstract class CloudPlatform<
      * @param instanceId the instanceId of instance
      * @param scalingGroupName the scaling group the isntance is located
      */
-    abstract async deleteInstanceHealthCheck(instanceId: string, scalingGroupName?:string): Promise<boolean>
+    abstract async deleteInstanceHealthCheck(
+        instanceId: string,
+        scalingGroupName?: string
+    ): Promise<boolean>;
 
     /**
      * Delete one or more instances from the auto scaling group.
      * Abstract class method.
      * @param {Object} parameters parameters necessary for instance deletion.
      */
-    //FIXME: parameters -> descriptors
-    abstract async deleteInstances(parameters: VirtualMachineDescriptor[]): Promise<boolean>
+    // FIXME: parameters -> descriptors
+    abstract async deleteInstances(parameters: VirtualMachineDescriptor[]): Promise<boolean>;
 
     /**
      * describe a scaling group
      * @param decriptor a descriptor for describing a scaling group.
      */
-    //FIXME: decriptor -> descriptor, it's spelt wrong in multiple places
-    abstract async describeScalingGroup(decriptor: ScalingGroupDecriptor): Promise<ScalingGroupLike | null>
+    // FIXME: decriptor -> descriptor, it's spelt wrong in multiple places
+    abstract async describeScalingGroup(
+        decriptor: ScalingGroupDecriptor
+    ): Promise<ScalingGroupLike | null>;
 
     /**
      * Create a network interface in the platform
      * @param parameters
      */
-    //FIXME: parameters -> descriptor
+    // FIXME: parameters -> descriptor
     abstract async createNetworkInterface(
         parameters: NetworkInterfaceDescriptor
-    ): Promise<NetworkInterfaceLike | boolean>
+    ): Promise<NetworkInterfaceLike | boolean>;
 
     /**
      * Delete a network interface in the platform
      * @param parameters
      */
-    //FIXME: parameters -> descriptor
-    abstract async deleteNetworkInterface(parameters: NetworkInterfaceDescriptor): Promise<boolean>
+    // FIXME: parameters -> descriptor
+    abstract async deleteNetworkInterface(parameters: NetworkInterfaceDescriptor): Promise<boolean>;
 
     /**
      * query a network interface in the platform
      * @param parameters
      */
-    //FIXME: parameters -> descriptor
+    // FIXME: parameters -> descriptor
     abstract async describeNetworkInterface(
         parameters: NetworkInterfaceDescriptor
-    ): Promise<NetworkInterfaceLike> | null
+    ): Promise<NetworkInterfaceLike> | null;
 
     /**
      * query a or multiple network interfaces in a platform
      * @param parameters
      * @param statusToInclude a list of platform-specific status strings
      */
-    //FIXME: parameters -> resourceQuery
+    // FIXME: parameters -> resourceQuery
     abstract async listNetworkInterfaces(
         parameters: FilterLikeResourceQuery<KeyValueLike>,
         statusToInclude?: string[]
-    ): Promise<NetworkInterfaceLike[]>
+    ): Promise<NetworkInterfaceLike[]>;
 
     /**
      * Attach one network interface to a virtual machine.
@@ -490,14 +492,17 @@ export abstract class CloudPlatform<
     abstract async attachNetworkInterface(
         instance: VM,
         nic: NetworkInterfaceLike
-    ): Promise<string | boolean>
+    ): Promise<string | boolean>;
 
     /**
      * Detach one network interface to a virtual machine.
      * @param instance
      * @param nic
      */
-    abstract async detachNetworkInterface(instance: VM, nic: NetworkInterfaceLike): Promise<boolean>
+    abstract async detachNetworkInterface(
+        instance: VM,
+        nic: NetworkInterfaceLike
+    ): Promise<boolean>;
 
     /**
      * Insert / update the network interface record managed by the Autoscale project
@@ -511,19 +516,19 @@ export abstract class CloudPlatform<
         nicId: string,
         state: NicAttachmentState,
         conditionState?: NicAttachmentState
-    ): Promise<boolean>
+    ): Promise<boolean>;
 
     /**
      * List all network interface records managed by the Autoscale project
      */
-    abstract async listNicAttachmentRecord(): Promise<NicAttachmentRecord[]>
+    abstract async listNicAttachmentRecord(): Promise<NicAttachmentRecord[]>;
 
     /**
      * query the network interface record attached to the given instance. currently can only
      * be able to manage one additional nic per vm via the Autoscale project
      * @param instanceId
      */
-    abstract async getNicAttachmentRecord(instanceId: string): Promise<NicAttachmentRecord | null>
+    abstract async getNicAttachmentRecord(instanceId: string): Promise<NicAttachmentRecord | null>;
 
     /**
      * delete the Autoscale managed network interface record attached to the given instance.
@@ -534,7 +539,7 @@ export abstract class CloudPlatform<
     abstract async deleteNicAttachmentRecord(
         instanceId: string,
         conditionState?: NicAttachmentState
-    ): Promise<boolean>
+    ): Promise<boolean>;
 
     /**
      * get one saved setting of the current Autoscale deployment from DB
@@ -544,7 +549,7 @@ export abstract class CloudPlatform<
     // TODO: need to refactor
     async getSettingItem(key: string, valueOnly?: boolean): Promise<string | {}> {
         // check _setting first
-        if (this._settings && this._settings.hasOwnProperty(key)) {
+        if (this._settings && this._settings[key]) {
             // if get full item object
             if (
                 !valueOnly &&
@@ -552,16 +557,16 @@ export abstract class CloudPlatform<
                 // of type checking
                 this._settings[key].settingKey
             ) {
-                return this._settings[key]
+                return this._settings[key];
             }
             // if not get full item object
             // _settings is not an object of item objects
             if (valueOnly && this._settings[key]) {
-                return this._settings[key].settingKey || this._settings[key]
+                return this._settings[key].settingKey || this._settings[key];
             }
         }
-        await this.getSettingItems([key], valueOnly)
-        return this._settings[key]
+        await this.getSettingItems([key], valueOnly);
+        return this._settings[key];
     }
 
     /**
@@ -570,7 +575,10 @@ export abstract class CloudPlatform<
      * @param {Boolean} valueOnly return setting value only or full detail
      * @returns {Object} Json object
      */
-    abstract async getSettingItems(keyFilter?: string[], valueOnly?: boolean): Promise<SettingItems>
+    abstract async getSettingItems(
+        keyFilter?: string[],
+        valueOnly?: boolean
+    ): Promise<SettingItems>;
 
     /**
      * save one setting of the current Autoscale deployment to DB
@@ -584,31 +592,31 @@ export abstract class CloudPlatform<
      */
     abstract async setSettingItem(
         key: string,
-        value: string | {}, //TODO: could it be a JSON form?
+        value: string | {}, // TODO: could it be a JSON form?
         description?: string,
         jsonEncoded?: boolean,
         editable?: boolean
-    ): Promise<boolean>
+    ): Promise<boolean>;
 
     /**
      * get the blob from storage
      * @param descriptor descriptor for this blob
      * @returns the object must have the property 'content' containing the blob content
      */
-    abstract async getBlobFromStorage(descriptor: BlobStorageItemDescriptor): Promise<Blob>
+    abstract async getBlobFromStorage(descriptor: BlobStorageItemDescriptor): Promise<Blob>;
 
     /**
      * query blob items in the storage
      * @param parameters a filter-like resource query
      */
-    //FIXME: parameters -> resourceQuery
-    abstract async listBlobFromStorage(parameters: BlobStorageItemQuery): Promise<Blob[]>
+    // FIXME: parameters -> resourceQuery
+    abstract async listBlobFromStorage(parameters: BlobStorageItemQuery): Promise<Blob[]>;
 
     /**
      * retrieve the blob content in string format
      * @param descriptor
      */
-    abstract async getLicenseFileContent(descriptor: BlobStorageItemDescriptor): Promise<string>
+    abstract async getLicenseFileContent(descriptor: BlobStorageItemDescriptor): Promise<string>;
 
     /**
      * List license files in storage
@@ -616,10 +624,10 @@ export abstract class CloudPlatform<
      * @returns {Map<LicenseItem>} must return a Map of LicenseItem with blobKey as key,
      * and LicenseItem as value
      */
-    //FIXME: parameters -> descriptor
+    // FIXME: parameters -> descriptor
     abstract async listLicenseFiles(
         parameters?: BlobStorageItemDescriptor
-    ): Promise<Map<string, LicenseItem>>
+    ): Promise<Map<string, LicenseItem>>;
 
     /**
      * Update a license record to the DB
@@ -629,39 +637,42 @@ export abstract class CloudPlatform<
     abstract async updateLicenseUsage(
         licenseRecord: LicenseRecord,
         replace?: boolean
-    ): Promise<boolean>
+    ): Promise<boolean>;
     /**
      * List license usage records including records for used licenses and only
      * @returns {Map<licenseRecord>} must return a Map of licenseRecord with checksum as key,
      * and LicenseItem as value
      */
-    abstract async listLicenseUsage(): Promise<Map<string, LicenseRecord>>
+    abstract async listLicenseUsage(): Promise<Map<string, LicenseRecord>>;
 
     /**
      * List license usage records including records for non-used and used licenses
      *  @returns {Map<licenseRecord>} must return a Map of LicenseItem with blochecksumbKey as key,
      * and LicenseItem as value
      */
-    abstract async listLicenseStock(): Promise<Map<string, LicenseRecord>>
+    abstract async listLicenseStock(): Promise<Map<string, LicenseRecord>>;
 
     /**
      * Update the given license item to db
      * @param {LicenseItem} licenseItem the license item to update
      * @param {Boolean} replace update method: replace existing or not. Default true
      */
-    abstract async updateLicenseStock(licenseItem: LicenseItem, replace?: boolean): Promise<boolean>
+    abstract async updateLicenseStock(
+        licenseItem: LicenseItem,
+        replace?: boolean
+    ): Promise<boolean>;
 
     /**
      * Delete the given license item from db
      * @param {LicenseItem} licenseItem the license item to update
      */
-    abstract async deleteLicenseStock(licenseItem: LicenseItem): Promise<boolean>
+    abstract async deleteLicenseStock(licenseItem: LicenseItem): Promise<boolean>;
 
     /**
      * issue a virtual machine termination request to the auto scaling group in a platform
      * @param instance
      */
-    abstract async terminateInstanceInAutoScalingGroup(instance: VM): Promise<boolean>
+    abstract async terminateInstanceInAutoScalingGroup(instance: VM): Promise<boolean>;
 
     /**
      * Retrieve the cached vm info from DB
@@ -673,7 +684,7 @@ export abstract class CloudPlatform<
         scaleSetName: string,
         instanceId: string,
         vmId?: string
-    ): Promise<{} | null>
+    ): Promise<{} | null>;
 
     /**
      * save the vm info object to the DB.
@@ -682,20 +693,26 @@ export abstract class CloudPlatform<
      * @param {Object} info the json object of the info to cache in database
      * @param {Integer} cacheTime the maximum time in seconds to keep the cache in database
      */
-    abstract async setVmInfoCache(scaleSetName: string, info: {}, cacheTime?: number): Promise<void>
+    abstract async setVmInfoCache(
+        scaleSetName: string,
+        info: {},
+        cacheTime?: number
+    ): Promise<void>;
+
     /**
      * get the execution time lapse in millisecond.
      * Intend to be the time lapse since the very beginning the serverless function is called
+     * @returns {number} the milisecond in number
      */
     getExecutionTimeLapse(): number {
-        return CoreFunctions.getTimeLapse()
+        return CoreFunctions.getTimeLapse();
     }
 
     /**
      * get the execution time remaining in millisecond. Some platforms such as AWS provide a
      * way to calculate the remaining time to serverless function timeout.
      */
-    abstract getExecutionTimeRemaining(): number
+    abstract getExecutionTimeRemaining(): number;
 
     /**
      * To finalize a master role in the master-slave HA context.
@@ -704,22 +721,22 @@ export abstract class CloudPlatform<
      * If election timeout, this pending master will be purged and a new pending master will be
      * elected.
      */
-    abstract async finalizeMasterElection(): Promise<boolean>
+    abstract async finalizeMasterElection(): Promise<boolean>;
 
     /**
      * Get information about a Virtual Network (terminology varies in different platform) by
      * the given parameters. For example: VPC in AWS.
      * @param parameters parameters
      */
-    //FIXME: parameters -> descriptor
+    // FIXME: parameters -> descriptor
     abstract async describeVirtualNetwork(
         parameters: VirtualNetworkDescriptor
-    ): Promise<VirtualNetworkLike>
+    ): Promise<VirtualNetworkLike>;
 
     /**
      * Get information about the subnets in a given virtual network.
      * @param parameters parameters
      */
-    //FIXME: parameters -> descriptor
-    abstract async listSubnets(parameters: VirtualNetworkDescriptor): Promise<SubnetLike[]>
+    // FIXME: parameters -> descriptor
+    abstract async listSubnets(parameters: VirtualNetworkDescriptor): Promise<SubnetLike[]>;
 }
