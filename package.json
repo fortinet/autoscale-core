@@ -9,7 +9,8 @@
     "ts-compile": "rm -rf ./compiled && node node_modules/typescript/bin/tsc",
     "build": "npm install && npm run ts-compile && npm run copy-package-files && npm run make-dist",
     "test": "nyc mocha './{,!(node_modules|dist|scripts)/**/}test/mocha*/*.js'",
-    "check": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js c  -F .prettierignore -L .eslintignore \"{*,**/*}{.js,.json,.ts}\"",
+    "check": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js c  -fl -F .prettierignore -L .eslintignore \"{*,**/*}{.js,.json,.ts}\"",
+    "fix": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js f  -fl -F .prettierignore -L .eslintignore \"{*,**/*}{.js,.json,.ts}\"",
     "pre-commit": "npm audit && npm test"
   },
   "repository": {
@@ -35,6 +36,7 @@
     "eslint-config-prettier": "^6.10.0",
     "eslint-plugin-mocha": "^5.3.0",
     "eslint-plugin-prettier": "^3.1.2",
+    "ftnt-devops-ci": "github:fortinet/ftnt-devops-ci",
     "mocha": "^7.0.1",
     "nyc": "^15.0.0",
     "prettier": "^1.19.1",
