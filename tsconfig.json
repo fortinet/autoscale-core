@@ -1,9 +1,11 @@
 {
     "compilerOptions": {
         /* VSCode Plugins*/
-        "plugins": [{
-            "name": "typescript-tslint-plugin", /* Need the node package: typescript-tslint-plugin. See: https://github.com/Microsoft/typescript-tslint-plugin*/
-        }],
+        "plugins": [
+            {
+                "name": "typescript-tslint-plugin" /* Need the node package: typescript-tslint-plugin. See: https://github.com/Microsoft/typescript-tslint-plugin*/
+            }
+        ],
         /* Basic Options */
         "target": "es2017",
         /* Specify ECMAScript target version: 'ES3' (default), 'ES5', 'ES2015', 'ES2016', 'ES2017', 'ES2018', 'ES2019' or 'ESNEXT'. */
@@ -16,7 +18,7 @@
         // "jsx": "preserve",                     /* Specify JSX code generation: 'preserve', 'react-native', or 'react'. */
         // "declaration": true,                   /* Generates corresponding '.d.ts' file. */
         // "declarationMap": true,                /* Generates a sourcemap for each corresponding '.d.ts' file. */
-        "sourceMap": true,                     /* Generates corresponding '.map' file. */
+        "sourceMap": true /* Generates corresponding '.map' file. */,
         // "outFile": "./",                       /* Concatenate and emit output to single file. */
         "outDir": "out",
         /* Redirect output structure to the directory. */
@@ -74,8 +76,5 @@
         // "experimentalDecorators": true,        /* Enables experimental support for ES7 decorators. */
         // "emitDecoratorMetadata": true,         /* Enables experimental support for emitting type metadata for decorators. */
     },
-    "exclude": [
-        "dist/**/*",
-        "out"
-    ]
+    "exclude": ["dist/**/*", "out"]
 }

@@ -1,6 +1,6 @@
 export interface Blob {
-    content: string,
-    filePath?: string,
-    fileName?: string,
-    fileETag?: string
+    content: string;
+    filePath?: string;
+    fileName?: string;
+    fileETag?: string;
 }
