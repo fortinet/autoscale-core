@@ -29,6 +29,7 @@ node('devops-aws') {
 
     stage('Test') {
         echo 'Testing..'
+        sh 'npm run build:test'
         sh 'npm test'
     }
 }
