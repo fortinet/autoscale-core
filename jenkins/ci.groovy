@@ -3,7 +3,7 @@ node('devops-aws') {
         sh 'rm -rf *'
     }
 
-    stage('Checkout') {
+    stage('Checkout Changes') {
         def changeBranch = "change-${GERRIT_CHANGE_NUMBER}-${GERRIT_PATCHSET_NUMBER}"
         def scmVars = checkout scm
         git url: scmVars.GIT_URL
@@ -11,25 +11,20 @@ node('devops-aws') {
         sh "git checkout ${changeBranch}"
     }
 
-    stage('NPM Install') {
-        echo 'NPM Install..'
+    stage('Install NPM Dependency') {
+        echo 'NPM install..'
         sh 'npm install'
         sh 'npm install fortinet/ftnt-devops-ci'
     }
 
-    stage('Format check:: .js & .json') {
-        echo 'Format checking..'
-        sh './node_modules/.bin/ftnt-devops-ci check -f "**/*.{js,json}"'
-    }
-
-    stage('Eslint') {
-        echo 'Eslinting..'
-        sh './node_modules/.bin/ftnt-devops-ci check -l "**/*.js"'
-    }
-
-    stage('NPM Audit') {
+    stage('Check NPM Dependency Vulnerability') {
         echo 'running npm audit..'
         sh 'npm audit'
+    }
+
+    stage('Analyze Source Code') {
+        echo 'running linter..'
+        sh 'npm run linter:check'
     }
 
     stage('Test') {

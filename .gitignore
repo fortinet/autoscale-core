@@ -118,7 +118,4 @@ dist
 
 # local dev / test / dist / compile directories and files
 local
-package.json
-package-lock.json
 out
-test
