@@ -152,8 +152,8 @@ export interface PlatformAdapter {
     equalToVm(vmA: VirtualMachine, vmB: VirtualMachine): boolean;
     describeVm(desc: VmDescriptor): Promise<VirtualMachine>;
     deleteVm(vm: VirtualMachine): Promise<void>;
-    createHealthCheckRecord(rec: HealthCheckRecord);
-    updateHealthCheckRecord(rec: HealthCheckRecord);
+    createHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
+    updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
     /**
      * create the master record in the db system.
      * @param rec the new master record

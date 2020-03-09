@@ -281,10 +281,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     deleteVm(vm: VirtualMachine): Promise<void> {
         throw new Error('Method not implemented.');
     }
-    createHealthCheckRecord(rec: HealthCheckRecord) {
+    createHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
         throw new Error('Method not implemented.');
     }
-    updateHealthCheckRecord(rec: HealthCheckRecord) {
+    updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
         throw new Error('Method not implemented.');
     }
     async createMasterRecord(rec: MasterRecord, oldRec: MasterRecord | null): Promise<void> {

@@ -1,4 +1,3 @@
-
 import * as Assert from 'assert';
 import {} from 'mocha';
 describe('Dummy test', function() {

@@ -1,29 +1,31 @@
 {
     "name": "autoscale-core",
-    "version": "3.1.0-alpha.0",
-    "description": "Fortinet Autoscale Project Core module.",
-    "main": "index.js",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
     "scripts": {
-        "build:test": "tsc",
-        "test": "nyc mocha './out/{,!(node_modules|dist|scripts)/**/test/mocha/}*.js'",
-        "linter:check": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js c -l  -F .eslintignore -L .eslintignore \"{*,**/**/*}{.js,.json,.ts}\"",
-        "linter:fix": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js f -l  -F .eslintignore -L .eslintignore \"{*,**/**/*}{.js,.json,.ts}\""
+        "build": "node scripts/make-dist.js",
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "lint-check": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js c -fl  -F .eslintignore -L .eslintignore \"{*,**/*}{.js,.json,.ts}\"",
+        "lint-fix": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js f -fl  -F .eslintignore -L .eslintignore \"**/*{.js,.json,.ts}\""
     },
     "keywords": [],
     "author": "Fortinet <github@fortinet.com>",
     "license": "MIT",
     "devDependencies": {
-        "@types/mocha": "^7.0.2",
+        "@types/comment-json": "^1.1.1",
+        "@types/shelljs": "^0.8.6",
         "@typescript-eslint/eslint-plugin": "^2.21.0",
         "@typescript-eslint/parser": "^2.21.0",
+        "chalk": "^3.0.0",
+        "comment-json": "^3.0.2",
         "eslint": "^6.8.0",
         "eslint-config-prettier": "^6.10.0",
         "eslint-plugin-mocha": "^6.3.0",
         "eslint-plugin-prettier": "^3.1.2",
         "ftnt-devops-ci": "github:fortinet/ftnt-devops-ci",
-        "mocha": "^7.1.0",
-        "nyc": "^15.0.0",
         "prettier": "^1.19.1",
+        "shelljs": "^0.8.3",
         "typescript": "^3.8.2"
     },
     "dependencies": {
@@ -34,10 +36,11 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/fortinet/autoscale-core"
+        "url": "git+https://github.com/fortinet/autoscale-core.git"
     },
     "bugs": {
         "url": "https://github.com/fortinet/autoscale-core/issues"
     },
-    "homepage": "https://github.com/fortinet/autoscale-core#readme"
+    "homepage": "https://github.com/fortinet/autoscale-core#readme",
+    "description": ""
 }
