@@ -158,7 +158,15 @@ export class AwsPlatform
     getReqType(
         proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
     ): ReqType {
-        throw new Error('Method not implemented.');
+        const httpMethod = proxy.request.httpMethod;
+        if (
+            proxy.request.headers['Fos-instance-id'] !== null &&
+            httpMethod.toUpperCase() === 'GET'
+        ) {
+            return ReqType.BootstrapConfig;
+        } else {
+            throw new Error('Method partially implemented. Reached unimplemented section.');
+        }
     }
 
     /**
