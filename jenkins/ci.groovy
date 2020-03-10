@@ -14,7 +14,6 @@ node('devops-aws') {
     stage('Install NPM Dependency') {
         echo 'NPM install..'
         sh 'npm install'
-        sh 'npm install fortinet/ftnt-devops-ci'
     }
 
     stage('Check NPM Dependency Vulnerability') {
@@ -24,12 +23,11 @@ node('devops-aws') {
 
     stage('Analyze Source Code') {
         echo 'running linter..'
-        sh 'npm run linter:check'
+        sh 'npm run lint-check'
     }
 
     stage('Test') {
-        echo 'Testing..'
-        sh 'npm run build:test'
+        echo 'run testing..'
         sh 'npm test'
     }
 }

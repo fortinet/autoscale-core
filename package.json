@@ -6,7 +6,7 @@
     "types": "dist/index.d.ts",
     "scripts": {
         "build": "node scripts/make-dist.js",
-        "test": "echo \"Error: no test specified\" && exit 1",
+        "test": "echo \"no test specified\" && exit 0",
         "lint-check": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js c -fl  -F .eslintignore -L .eslintignore \"{*,**/*}{.js,.json,.ts}\"",
         "lint-fix": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js f -fl  -F .eslintignore -L .eslintignore \"**/*{.js,.json,.ts}\""
     },
