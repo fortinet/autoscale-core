@@ -1,8 +1,7 @@
-'use strict';
-
-var assert = require('assert');
+import * as Assert from 'assert';
+import {} from 'mocha';
 describe('Dummy test', function() {
-    describe('#void', function() {
-        assert.equal(1, 1);
+    it('# 1 equal to 1 is a truth', function() {
+        Assert.equal(1, 1);
     });
 });
