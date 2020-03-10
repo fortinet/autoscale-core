@@ -1,5 +1,6 @@
 {
     "name": "autoscale-core",
+    "description": "Fortinet Autoscale project(s), core module.",
     "version": "1.0.0",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -41,6 +42,5 @@
     "bugs": {
         "url": "https://github.com/fortinet/autoscale-core/issues"
     },
-    "homepage": "https://github.com/fortinet/autoscale-core#readme",
-    "description": ""
+    "homepage": "https://github.com/fortinet/autoscale-core#readme"
 }
