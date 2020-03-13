@@ -1,20 +1,28 @@
 import * as HttpStatusCodes from 'http-status-codes';
 import {
-    AutoscaleCore,
-    MasterElectionStrategy,
-    Strategy,
-    HeartbeatSyncTiming,
-    MasterElection,
-    PlatformAdapter,
-    CloudFunctionProxyAdapter,
     FunctionHandlerContext,
-    CloudFunctionProxy,
     AutoscaleEnvironment,
-    NicAttachmentContext,
+    HttpError,
+    Autoscale,
+    BootstrapContext,
+    BootstrapConfigurationStrategy,
+    LicensingStrategy,
+    MasterElection,
+    HeartbeatSyncTiming,
+    MasterElectionStrategy,
+    MasterElectionStrategyResult,
+    HeartbeatSyncStrategy,
+    CloudFunctionProxyAdapter,
+    CloudFunctionProxy,
+    PlatformAdapter,
     ReqType,
-    HttpError
-} from '../autoscale-core';
+    NicAttachmentContext,
+    NicAttachmentStrategy,
+    VpnAttachmentStrategy,
+    ScalingGroupStrategy
+} from '../index';
 import { TransitGatewayContext } from './aws/aws-platform';
+
 export * from './aws/aws-platform';
 
 export class FortiGateMasterElectionStrategy implements MasterElectionStrategy {
@@ -34,30 +42,24 @@ export class FortiGateMasterElectionStrategy implements MasterElectionStrategy {
     result(): Promise<MasterElection> {
         throw new Error('Method not implemented.');
     }
-    apply(): Promise<string> {
+    apply(): Promise<MasterElectionStrategyResult> {
         throw new Error('Method not implemented.');
     }
 }
 
-export class FortiGateAutoscale<TReq, TContext, TRes>
+export class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
     implements
-        AutoscaleCore,
         FunctionHandlerContext<TReq, TContext, TRes>,
+        BootstrapContext,
         NicAttachmentContext,
         TransitGatewayContext {
-    vnpAttachmentStrategy: Strategy;
-    vnpDetachmentStrategy: Strategy;
-    cleanupUnusedVpnStrategy: Strategy;
-    nicAttachmentStrategy: Strategy;
-    nicDetachmentStrategy: Strategy;
-    cleanupUnusedNicStrategy: Strategy;
+    vpnAttachmentStrategy: VpnAttachmentStrategy;
+    nicAttachmentStrategy: NicAttachmentStrategy;
     masterElectionStrategy: FortiGateMasterElectionStrategy;
-    heartbeatSyncStrategy: Strategy;
-    launchingVmStrategy: Strategy;
-    launchedVmStrategy: Strategy;
-    terminatingVmStrategy: Strategy;
-    terminatedVmStrategy: Strategy;
-    licenseAssignmentStrategy: Strategy;
+    heartbeatSyncStrategy: HeartbeatSyncStrategy;
+    scalingGroupStrategy: ScalingGroupStrategy;
+    licensingStrategy: LicensingStrategy;
+    bootstrapConfigStrategy: BootstrapConfigurationStrategy;
     handleVpnAttachment(): Promise<string> {
         throw new Error('Method not implemented.');
     }
@@ -67,14 +69,8 @@ export class FortiGateAutoscale<TReq, TContext, TRes>
     cleanupUnusedVpn(): Promise<string> {
         throw new Error('Method not implemented.');
     }
-    setVpnAttachmentStrategy(strategy: Strategy): void {
-        this.vnpAttachmentStrategy = strategy;
-    }
-    setVpnDetachmentStrategy(strategy: Strategy): void {
-        this.vnpDetachmentStrategy = strategy;
-    }
-    setCleanupUnusedVpnStrategy(strategy: Strategy): void {
-        this.cleanupUnusedVpnStrategy = strategy;
+    setVpnAttachmentStrategy(strategy: VpnAttachmentStrategy): void {
+        this.vpnAttachmentStrategy = strategy;
     }
     handleNicAttachment(): Promise<string> {
         throw new Error('Method not implemented.');
@@ -85,20 +81,12 @@ export class FortiGateAutoscale<TReq, TContext, TRes>
     cleanupUnusedNic(): Promise<string> {
         throw new Error('Method not implemented.');
     }
-    setNicAttachmentStrategy(strategy: Strategy): void {
+    setNicAttachmentStrategy(strategy: NicAttachmentStrategy): void {
         this.nicAttachmentStrategy = strategy;
-    }
-    setNicDetachmentStrategy(strategy: Strategy): void {
-        this.nicDetachmentStrategy = strategy;
-    }
-    setCleanupUnusedNicStrategy(strategy: Strategy): void {
-        this.cleanupUnusedNicStrategy = strategy;
     }
     async handleRequest(
         proxy: CloudFunctionProxy<TReq, TContext, TRes>,
         platform: PlatformAdapter,
-        // TODO: remove the disabled rule when applicable
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         env: AutoscaleEnvironment
     ): Promise<TRes> {
         let responseBody: string;
@@ -136,16 +124,67 @@ export class FortiGateAutoscale<TReq, TContext, TRes>
             return proxy.formatResponse(httpError.status, '', {});
         }
     }
-    handleBootstrap(): Promise<string> {
-        throw new Error('Method not implemented.');
+    setBootstrapConfigurationStrategy(strategy: BootstrapConfigurationStrategy): void {
+        this.bootstrapConfigStrategy = strategy;
+    }
+    async handleBootstrap(): Promise<string> {
+        this.proxy.logAsInfo('calling handleBootstrap.');
+        let error: Error;
+        // load target vm
+        if (!this.env.targetVm) {
+            this.env.targetVm = await this.platform.getTargetVm();
+        }
+        // if target vm doesn't exist, unknown request
+        if (!this.env.targetVm) {
+            error = new Error(`Requested non-existing vm (id:${this.env.targetId}).`);
+            this.proxy.logForError('', error);
+            throw error;
+        }
+        // load target healthcheck record
+        this.env.targetHealthCheckRecord =
+            this.env.targetHealthCheckRecord ||
+            (await this.platform.getHealthCheckRecord(this.env.targetVm));
+
+        // if there exists a health check record for this vm, this request may probably be
+        // a redundant request. ignore it.
+        if (this.env.targetHealthCheckRecord) {
+            this.proxy.logAsWarning(
+                `Health check record for vm (id: ${this.env.targetId}) ` +
+                    'already exists. It looks like this bootstrap configuration request' +
+                    " isn't normal. ignore it by returning empty."
+            );
+            this.proxy.logAsInfo('called handleBootstrap.');
+            return '';
+        }
+        // if master is elected?
+        // get master vm
+        if (!this.env.masterVm) {
+            this.env.masterVm = await this.platform.getMasterVm();
+        }
+        // get master record
+        this.env.masterRecord = this.env.masterRecord || (await this.platform.getMasterRecord());
+        // handle master election. the expected result should be one of:
+        // master election is triggered
+        // master election is finalized
+        // master election isn't needed
+        await this.handleMasterElection();
+
+        // assert master record should be available now
+        // get master record again
+        this.env.masterRecord = this.env.masterRecord || (await this.platform.getMasterRecord());
+
+        this.bootstrapConfigStrategy.prepare(this.platform, this.proxy, this.env);
+        await this.bootstrapConfigStrategy.apply();
+        const bootstrapConfig = this.bootstrapConfigStrategy.getConfiguration();
+        // output configuration content in debug level so that we can turn it off on production
+        this.proxy.logAsDebug(`configuration: ${bootstrapConfig}`);
+        this.proxy.logAsInfo('called handleBootstrap.');
+        return bootstrapConfig;
     }
     setMasterElectionStrategy(strategy: FortiGateMasterElectionStrategy): void {
         this.masterElectionStrategy = strategy;
     }
-    handleMasterElection(): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    setHeartbeatSyncStrategy(strategy: Strategy): void {
+    setHeartbeatSyncStrategy(strategy: HeartbeatSyncStrategy): void {
         this.heartbeatSyncStrategy = strategy;
     }
     handleHeartbeatSync(): Promise<string> {
@@ -157,34 +196,23 @@ export class FortiGateAutoscale<TReq, TContext, TRes>
     doMasterHealthCheck(): Promise<HeartbeatSyncTiming> {
         throw new Error('Method not implemented.');
     }
-    setLaunchingVmStrategy(strategy: Strategy): void {
-        this.launchingVmStrategy = strategy;
+    setScalingGroupStrategy(strategy: ScalingGroupStrategy): void {
+        this.scalingGroupStrategy = strategy;
     }
     handleLaunchingVm(): Promise<string> {
         throw new Error('Method not implemented.');
     }
-    setLaunchedVmStrategy(strategy: Strategy): void {
-        this.launchedVmStrategy = strategy;
-    }
     handleLaunchedVm(): Promise<string> {
-        // NOTE: there's nothing much to do for FortiGate when the vm state changes to
-        // 'launched' in the platform so leave this handling function empty
-        return Promise.resolve('');
-    }
-    setTerminatingVmStrategy(strategy: Strategy): void {
-        this.terminatingVmStrategy = strategy;
+        throw new Error('Method not implemented.');
     }
     handleTerminatingVm(): Promise<string> {
         throw new Error('Method not implemented.');
     }
-    setTerminatedVmStrategy(strategy: Strategy): void {
-        this.terminatedVmStrategy = strategy;
-    }
     handleTerminatedVm(): Promise<string> {
         throw new Error('Method not implemented.');
     }
-    setLicenseAssignmentStrategy(strategy: Strategy): void {
-        this.licenseAssignmentStrategy = strategy;
+    setLicensingStrategy(strategy: LicensingStrategy): void {
+        this.licensingStrategy = strategy;
     }
     handleLicenseAssignment(): Promise<string> {
         throw new Error('Method not implemented.');

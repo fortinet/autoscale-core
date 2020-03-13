@@ -1,24 +1,26 @@
 import { describe, it } from 'mocha';
 import * as Sinon from 'sinon';
+import { Autoscale, AutoscaleEnvironment } from '../autoscale-core';
+import { Settings, SettingItem, AutoscaleSetting } from '../autoscale-setting';
 import {
-    Autoscale,
-    PlatformAdapter,
-    ReqType,
-    VirtualMachine,
     HealthCheckRecord,
+    HealthCheckSyncState,
     MasterRecord,
-    VmDescriptor,
-    AutoscaleEnvironment,
+    MasterRecordVoteState,
+    MasterElection,
+    HeartbeatSyncTiming
+} from '../master-election';
+import { VirtualMachine } from '../virtual-machine';
+import { PlatformAdapter, ReqType, VmDescriptor } from '../platform-adapter';
+import {
     CloudFunctionProxyAdapter,
     CloudFunctionResponseBody,
-    LogLevel,
-    HealthCheckSyncState,
-    HeartbeatSyncTiming,
-    MasterRecordVoteState,
+    LogLevel
+} from '../cloud-function-proxy';
+import {
     MasterElectionStrategy,
-    MasterElection
-} from '../autoscale-core';
-import { Settings, SettingItem, AutoscaleSetting } from '../autoscale-setting';
+    MasterElectionStrategyResult
+} from '../context-strategy/autoscale-context';
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
@@ -62,14 +64,20 @@ const TEST_MASTER_ELECTION: MasterElection = {
 };
 
 class TestPlatformAdapter implements PlatformAdapter {
+    loadConfigSet(name: string): Promise<string> {
+        throw new Error('Method not implemented.');
+    }
     adaptee: {};
+    init(): Promise<void> {
+        throw new Error('Method not implemented.');
+    }
     getRequestType(): ReqType {
         throw new Error('Method not implemented.');
     }
     getReqHeartbeatInterval(): number {
         throw new Error('Method not implemented.');
     }
-    getSettings(): Settings {
+    getSettings(): Promise<Settings> {
         throw new Error('Method not implemented.');
     }
     getTargetVm(): Promise<VirtualMachine> {
@@ -112,22 +120,22 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
         throw new Error('Method not implemented.');
     }
     log(message: string, level: LogLevel): void {
-        throw new Error('Method not implemented.');
+        console.log(message);
     }
     logAsDebug(message: string): void {
-        throw new Error('Method not implemented.');
+        console.log(message);
     }
     logAsInfo(message: string): void {
-        throw new Error('Method not implemented.');
+        console.log(message);
     }
     logAsWarning(message: string): void {
-        throw new Error('Method not implemented.');
+        console.log(message);
     }
     logAsError(message: string): void {
-        throw new Error('Method not implemented.');
+        console.log(message);
     }
     logForError(messagePrefix: string, error: Error): void {
-        throw new Error('Method not implemented.');
+        console.log(error);
     }
 }
 
@@ -147,16 +155,7 @@ describe('sanity test', () => {
             masterRecord: TEST_MASTER_RECORD
         };
         x = new TestCloudFunctionProxyAdapter();
-        si = {
-            key: '1',
-            value: '2',
-            description: '3',
-            editable: true,
-            jsonEncoded: false,
-            toJSON() {
-                return {};
-            }
-        };
+        si = new SettingItem('1', '2', '3', 'true', 'true');
         s = new Map<string, SettingItem>();
         s.set(AutoscaleSetting.MasterElectionTimeout, si);
         ms = {
@@ -164,19 +163,19 @@ describe('sanity test', () => {
                 return Promise.resolve();
             },
             apply() {
-                return Promise.resolve('');
+                return Promise.resolve(MasterElectionStrategyResult.ShouldContinue);
             },
             result() {
                 return Promise.resolve(TEST_MASTER_ELECTION);
             }
         };
-        autoscale = new Autoscale(p, e, x, s);
+        autoscale = new Autoscale(p, e, x);
         autoscale.setMasterElectionStrategy(ms);
     });
     it('handleMasterElection', async () => {
         const stub1 = Sinon.stub(x, 'logAsInfo');
         const stub2 = Sinon.stub(p, 'getSettings').callsFake(() => {
-            return s;
+            return Promise.resolve(s);
         });
         const stub3 = Sinon.stub(ms, 'prepare').callsFake((ms1, p1, x1) => {
             Sinon.assert.match(ms1.candidate, TEST_VM);

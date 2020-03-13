@@ -2,27 +2,28 @@ import { APIGatewayProxyEvent, Context, APIGatewayProxyResult } from 'aws-lambda
 import * as EC2 from 'aws-sdk/clients/ec2';
 import { DocumentClient } from 'aws-sdk/clients/dynamodb';
 import {
-    LogLevel,
-    ReqType,
-    CloudFunctionProxy,
     PlatformAdaptee,
-    PlatformAdapter,
-    CloudFunctionResponseBody,
-    VirtualMachine,
-    HealthCheckRecord,
-    MasterRecord,
-    ReqMethod,
-    mapHttpMethod,
-    VpnAttachmentContext,
+    AutoscaleSetting,
+    SubnetPair,
+    Settings,
+    SettingItem,
+    mapHttpMethod
+} from '../../index';
+import * as DBDefs from './aws-db-definitions';
+import { VirtualMachine } from '../../virtual-machine';
+import {
     NicAttachmentStrategy,
     NicAttachmentRecord,
-    GeneralStrategyResult,
-    NicAttachmentStatus,
-    MasterRecordVoteState,
-    VmDescriptor
-} from '../../autoscale-core';
-import { Settings, AutoscaleSetting, SubnetPair } from '../../autoscale-setting';
-import * as DB from './aws-db-definitions';
+    NicAttachmentStatus
+} from '../../context-strategy/nic-attachment-context';
+import { VpnAttachmentContext } from '../../context-strategy/vpn-attachment-context';
+import {
+    CloudFunctionProxy,
+    LogLevel,
+    CloudFunctionResponseBody
+} from '../../cloud-function-proxy';
+import { ReqMethod, ReqType, PlatformAdapter, VmDescriptor } from '../../platform-adapter';
+import { HealthCheckRecord, MasterRecord, MasterRecordVoteState } from '../../master-election';
 import { Table } from './aws-db-definitions';
 
 /**
@@ -61,18 +62,17 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
         throw new Error('Method not implemented.');
     }
 
-    protected getPairedSubnetId(vm: VirtualMachine): Promise<string> {
-        const subnetPairs: SubnetPair[] = this.platform
-            .getSettings()
-            .get(AutoscaleSetting.SubnetPairs)
-            .toJSON() as SubnetPair[];
+    protected async getPairedSubnetId(vm: VirtualMachine): Promise<string> {
+        const settings = await this.platform.getSettings();
+        const subnetPairs: SubnetPair[] = settings.get(AutoscaleSetting.SubnetPairs)
+            .jsonValue as SubnetPair[];
         const subnets: SubnetPair[] = (Array.isArray(subnetPairs) &&
             subnetPairs.filter(element => element.subnetId === vm.subnetId)) || [null];
         return Promise.resolve(subnets[0].pairId);
     }
 
-    async apply(): Promise<string> {
-        this.proxy.log('applying AwsNicAttachmentStrategy.', LogLevel.Info);
+    async apply(): Promise<void> {
+        this.proxy.logAsInfo('applying AwsNicAttachmentStrategy.');
         // this implementation is to attach a single nic
         // list all attachment records
         const records = await this.listRecord(this.vm);
@@ -80,13 +80,12 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
         // one additional nic is enough.
         // so if there's already an attachment record, do not need to attach another one.
         if (record) {
-            this.proxy.log(
+            this.proxy.logAsInfo(
                 `instance (id: ${record.instanceId} has been in ` +
                     `association with nic (id: ${record.nicId}) ` +
-                    `in state (${record.attachmentState})`,
-                LogLevel.Info
+                    `in state (${record.attachmentState})`
             );
-            return GeneralStrategyResult.Success;
+            return;
         } else {
             // need to create a nic and attach it to the vm
 
@@ -132,7 +131,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
 
             // update nic attachment record again
             await this.updateRecord(this.vm, nic, NicAttachmentStatus.Attached);
-            return GeneralStrategyResult.Success;
+            return;
         }
     }
 }
@@ -149,6 +148,10 @@ export class AwsPlatform
     docClient: DocumentClient;
     constructor() {
         this.docClient = new DocumentClient({ apiVersion: '2012-08-10' });
+    }
+    loadSettings(): Promise<Settings> {
+        // TODO: add real implementation
+        return Promise.resolve(new Map<string, SettingItem>());
     }
     getReqMethod(
         proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
@@ -253,6 +256,7 @@ export class AwsLambdaProxy extends CloudFunctionProxy<
 export class AwsPlatformAdapter implements PlatformAdapter {
     adaptee: AwsPlatform;
     proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>;
+    settings: Settings;
     constructor(
         p: AwsPlatform,
         proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
@@ -260,14 +264,19 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.adaptee = p;
         this.proxy = proxy;
     }
+    async init(): Promise<void> {
+        this.settings = await this.adaptee.loadSettings();
+    }
     getRequestType(): ReqType {
         return this.adaptee.getReqType(this.proxy);
     }
     getReqHeartbeatInterval(): number {
         throw new Error('Method not implemented.');
     }
-    getSettings(): Settings {
-        throw new Error('Method not implemented.');
+    async getSettings(): Promise<Settings> {
+        return (
+            (this.settings && Promise.resolve(this.settings)) || (await this.adaptee.loadSettings())
+        );
     }
     getTargetVm(): Promise<VirtualMachine> {
         throw new Error('Method not implemented.');
@@ -299,8 +308,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async createMasterRecord(rec: MasterRecord, oldRec: MasterRecord | null): Promise<void> {
         this.proxy.log('calling createMasterRecord.', LogLevel.Log);
         try {
-            const table = new DB.AwsMasterElection(
-                this.getSettings().get(AutoscaleSetting.ResourceTagPrefix).value
+            const settings = await this.getSettings();
+            const table = new DBDefs.AwsMasterElection(
+                settings.get(AutoscaleSetting.ResourceTagPrefix).value
             );
             const item: MasterRecord = {
                 id: rec.id,
@@ -330,8 +340,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async updateMasterRecord(rec: MasterRecord): Promise<void> {
         this.proxy.log('calling updateMasterRecord.', LogLevel.Log);
         try {
-            const table = new DB.AwsMasterElection(
-                this.getSettings().get(AutoscaleSetting.ResourceTagPrefix).value
+            const settings = await this.getSettings();
+            const table = new DBDefs.AwsMasterElection(
+                settings.get(AutoscaleSetting.ResourceTagPrefix).value
             );
             const item: MasterRecord = {
                 id: rec.id,
@@ -355,5 +366,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             this.proxy.logForError('called updateMasterRecord.', error);
             throw error;
         }
+    }
+    loadConfigSet(name: string): Promise<string> {
+        throw new Error('Method not implemented.');
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    getTgwVpnAttachmentRecord(id: string): Promise<{ [key: string]: any }> {
+        throw new Error('Method not implemented.');
     }
 }

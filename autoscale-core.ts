@@ -1,13 +1,24 @@
 import { Settings, AutoscaleSetting } from './autoscale-setting';
 import { Table } from './db-definitions';
-
-export enum LogLevel {
-    Log = 'Log',
-    Info = 'Info',
-    Warn = 'Warn',
-    Error = 'Error',
-    Debug = 'Debug'
-}
+import {
+    MasterElectionStrategy,
+    AutoscaleContext,
+    HeartbeatSyncStrategy
+} from './context-strategy/autoscale-context';
+import {
+    ScalingGroupContext,
+    ScalingGroupStrategy
+} from './context-strategy/scaling-group-context';
+import { PlatformAdapter, ReqMethod, ReqType } from './platform-adapter';
+import {
+    MasterElection,
+    HealthCheckRecord,
+    MasterRecord,
+    HeartbeatSyncTiming,
+    MasterRecordVoteState
+} from './master-election';
+import { VirtualMachine } from './virtual-machine';
+import { CloudFunctionProxy, CloudFunctionProxyAdapter } from './cloud-function-proxy';
 
 export class HttpError extends Error {
     public readonly name: string;
@@ -17,31 +28,10 @@ export class HttpError extends Error {
     }
 }
 
-export enum ReqType {
-    LaunchingVm = 'LaunchingVm',
-    TerminatingVm = 'TerminatingVm',
-    BootstrapConfig = 'BootstrapConfig',
-    HeartbeatSync = 'HeartbeatSync',
-    StatusMessage = 'StatusMessage'
-}
-
-export enum ReqMethod {
-    GET,
-    POST,
-    PUT,
-    DELETE,
-    PATCH,
-    HEAD,
-    TRACE,
-    OPTIONS,
-    CONNECT
-}
-
-export type StrategyResult = string;
-export enum GeneralStrategyResult {
-    Success = 'Success',
-    Failure = 'Failure'
-}
+// export enum CommonStrategyResult {
+//     Success = 'Success',
+//     Failure = 'Failure'
+// }
 
 const reqMethod: Map<string, ReqMethod> = new Map([
     ['GET', ReqMethod.GET],
@@ -73,101 +63,31 @@ export interface AutoscaleEnvironment {
     [key: string]: {};
 }
 
-export interface VirtualMachine {
-    instanceId: string;
-    scalingGroupName: string;
-    primaryPrivateIpAddress: string;
-    primaryPublicIpAddress: string;
-    virtualNetworkId: string;
-    subnetId: string;
-    securityGroups?: {}[];
-    networkInterfaces?: {}[];
-    sourceData?: {};
-}
-
-export type CloudFunctionResponseBody = string | {};
-
-export interface CloudFunctionProxyAdapter {
-    formatResponse(httpStatusCode: number, body: CloudFunctionResponseBody, headers: {}): {};
-    log(message: string, level: LogLevel): void;
-    logAsDebug(message: string): void;
-    logAsInfo(message: string): void;
-    logAsWarning(message: string): void;
-    logAsError(message: string): void;
-    logForError(messagePrefix: string, error: Error): void;
-}
-
-export abstract class CloudFunctionProxy<TReq, TContext, TRes>
-    implements CloudFunctionProxyAdapter {
-    request: TReq;
-    context: TContext;
-    constructor(req: TReq, context: TContext) {
-        this.request = req;
-        this.context = context;
-    }
-    abstract log(message: string, level: LogLevel): void;
-    logAsDebug(message: string): void {
-        this.log(message, LogLevel.Debug);
-    }
-    logAsError(message: string): void {
-        this.log(message, LogLevel.Error);
-    }
-    logAsInfo(message: string): void {
-        this.log(message, LogLevel.Info);
-    }
-    logAsWarning(message: string): void {
-        this.log(message, LogLevel.Warn);
-    }
-    logForError(messagePrefix: string, error: Error): void {
-        const errMessage = error.message || '(no error message available)';
-        const errStack = (error.stack && ` Error stack:${error.stack}`) || '';
-
-        this.log(`${messagePrefix}. Error: ${errMessage}${errStack}`, LogLevel.Error);
-    }
-    abstract formatResponse(
-        httpStatusCode: number,
-        body: CloudFunctionResponseBody,
-        headers: {}
-    ): TRes;
-}
-
-export interface VmDescriptor {
-    id: string;
-}
-
 export interface PlatformAdaptee<TReq, TContext, TRes> {
+    loadSettings(): Promise<Settings>;
     getReqType(proxy: CloudFunctionProxy<TReq, TContext, TRes>): ReqType;
     getReqMethod(proxy: CloudFunctionProxy<TReq, TContext, TRes>): ReqMethod;
     saveItemToDb(table: Table, item: {}, conditionExp: string): Promise<void>;
 }
 
-export interface PlatformAdapter {
-    adaptee: {};
-    getRequestType(): ReqType;
-    getReqHeartbeatInterval(): number;
-    getSettings(): Settings;
-    getTargetVm(): Promise<VirtualMachine>;
-    getMasterVm(): Promise<VirtualMachine>;
-    getHealthCheckRecord(vm: VirtualMachine): Promise<HealthCheckRecord>;
-    getMasterRecord(): Promise<MasterRecord>;
-    equalToVm(vmA: VirtualMachine, vmB: VirtualMachine): boolean;
-    describeVm(desc: VmDescriptor): Promise<VirtualMachine>;
-    deleteVm(vm: VirtualMachine): Promise<void>;
-    createHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
-    updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
-    /**
-     * create the master record in the db system.
-     * @param rec the new master record
-     * @param oldRec the old master record, if provided, will try to replace this record by
-     * matching the key properties.
-     */
-    createMasterRecord(rec: MasterRecord, oldRec: MasterRecord | null): Promise<void>;
-    /**
-     * update the master record using the given rec. update only when the record key match
-     * the record in the db.
-     * @param rec master record to be updated.
-     */
-    updateMasterRecord(rec: MasterRecord): Promise<void>;
+export enum BootstrapConfigStrategyResult {
+    SUCCESS,
+    FAILED
+}
+
+export interface BootstrapConfigurationStrategy {
+    prepare(
+        platform: PlatformAdapter,
+        proxy: CloudFunctionProxyAdapter,
+        env: AutoscaleEnvironment
+    ): Promise<void>;
+    getConfiguration(): string;
+    apply(): Promise<BootstrapConfigStrategyResult>;
+}
+
+export interface BootstrapContext {
+    setBootstrapConfigurationStrategy(strategy: BootstrapConfigurationStrategy): void;
+    handleBootstrap(): Promise<string>;
 }
 
 /**
@@ -182,79 +102,19 @@ export interface FunctionHandlerContext<TReq, TContext, TRes> {
 }
 
 /**
- * To provide Autoscale basic logics
- */
-export interface AutoscaleContext {
-    setMasterElectionStrategy(strategy: MasterElectionStrategy): void;
-    handleMasterElection(): Promise<string>;
-    setHeartbeatSyncStrategy(strategy: Strategy): void;
-    handleBootstrap(): Promise<string>;
-    handleHeartbeatSync(): Promise<string>;
-    doTargetHealthCheck(): Promise<HeartbeatSyncTiming>;
-    doMasterHealthCheck(): Promise<HeartbeatSyncTiming>;
-}
-
-/**
  * To provide Licensing model related logics such as license assignment.
  */
 export interface LicensingModelContext {
-    setLicenseAssignmentStrategy(strategy: Strategy): void;
     handleLicenseAssignment(): Promise<string>;
 }
 
-/**
- * To provide auto scaling group related logics such as scaling out, scaling in.
- */
-export interface ScalingGroupContext {
-    setLaunchingVmStrategy(strategy: Strategy): void;
-    handleLaunchingVm(): Promise<string>;
-    setLaunchedVmStrategy(strategy: Strategy): void;
-    handleLaunchedVm(): Promise<string>;
-    setTerminatingVmStrategy(strategy: Strategy): void;
-    handleTerminatingVm(): Promise<string>;
-    setTerminatedVmStrategy(strategy: Strategy): void;
-    handleTerminatedVm(): Promise<string>;
-}
-
-/**
- * To provide secondary network interface attachment related logics
- */
-export interface NicAttachmentContext {
-    handleNicAttachment(): Promise<string>;
-    handleNicDetachment(): Promise<string>;
-    cleanupUnusedNic(): Promise<string>;
-    setNicAttachmentStrategy(strategy: Strategy): void;
-}
-
-export enum NicAttachmentStatus {
-    Attaching = 'Attaching',
-    Attached = 'Attached',
-    Detaching = 'Detaching',
-    Detached = 'Detached'
-}
-
-export interface NicAttachmentStrategy extends Strategy {
+export interface LicensingStrategy {
     prepare(
         platform: PlatformAdapter,
         proxy: CloudFunctionProxyAdapter,
         vm: VirtualMachine
     ): Promise<void>;
-}
-
-export interface NicAttachmentRecord {
-    instanceId: string;
-    nicId: string;
-    attachmentState: string;
-}
-
-/**
- * To provide VPN connection attachment related logics
- */
-export interface VpnAttachmentContext {
-    handleVpnAttachment(): Promise<string>;
-    handleVpnDetachment(): Promise<string>;
-    cleanupUnusedVpn(): Promise<string>;
-    setVpnAttachmentStrategy(strategy: Strategy): void;
+    apply(): Promise<string>;
 }
 
 export interface AutoscaleCore
@@ -262,68 +122,7 @@ export interface AutoscaleCore
         ScalingGroupContext,
         LicensingModelContext {}
 
-export interface Strategy {
-    apply(): Promise<string>;
-}
-
-export enum HealthCheckSyncState {
-    InSync = 'in-sync',
-    OutOfSync = 'out-of-sync'
-}
-export interface HealthCheckRecord {
-    instanceId: string;
-    ip: string;
-    masterIp: string;
-    heartbeatInterval: number;
-    heartbeatLossCount: number;
-    nextHeartbeatCheckTime: number;
-    syncState: HealthCheckSyncState;
-    healthy: boolean;
-    inSync: boolean;
-}
-
-export enum HeartbeatSyncTiming {
-    OnTime = 'OnTime',
-    Late = 'Late',
-    TooLate = 'TooLate',
-    Dropped = 'Dropped'
-}
-
-export enum MasterRecordVoteState {
-    Pending = 'pending',
-    Done = 'done',
-    Timeout = 'Timeout'
-}
-
-export enum MasterElectionStrategyResult {
-    ShouldStop = 'ShouldStop',
-    ShouldContinue = 'ShouldContinue'
-}
-
-export interface MasterRecord {
-    id: string;
-    instanceId: string;
-    ip: string;
-    scalingGroupName: string;
-    virtualNetworkId: string;
-    subnetId: string;
-    voteEndTime: number;
-    voteState: MasterRecordVoteState;
-}
-
-export interface MasterElection {
-    oldMaster?: VirtualMachine;
-    oldMasterRecord?: MasterRecord;
-    newMaster: VirtualMachine;
-    newMasterRecord: MasterRecord;
-    candidate: VirtualMachine;
-    candidateHealthCheck?: HealthCheckRecord;
-    preferredScalingGroup?: string;
-    electionDuration?: number;
-    signature: string;
-}
-
-export interface MasterElectionStrategy extends Strategy {
+export interface HAActivePassiveBoostrapStrategy {
     prepare(
         election: MasterElection,
         platform: PlatformAdapter,
@@ -332,48 +131,40 @@ export interface MasterElectionStrategy extends Strategy {
     result(): Promise<MasterElection>;
 }
 
+export interface TaggingVmStrategy {
+    prepare(
+        election: MasterElection,
+        platform: PlatformAdapter,
+        proxy: CloudFunctionProxyAdapter
+    ): Promise<void>;
+    apply(): Promise<void>;
+}
+
 export class Autoscale implements AutoscaleCore {
     platform: PlatformAdapter;
-    launchingVmStrategy: Strategy;
-    launchedVmStrategy: Strategy;
-    terminatingVmStrategy: Strategy;
-    heartbeatSyncTimingStrategy: Strategy;
-    taggingVmStrategy: Strategy;
+    scalingGroupStrategy: ScalingGroupStrategy;
+    heartbeatSyncTimingStrategy: HeartbeatSyncStrategy;
+    taggingVmStrategy: TaggingVmStrategy;
     env: AutoscaleEnvironment;
     proxy: CloudFunctionProxyAdapter;
     settings: Settings;
     masterElectionStrategy: MasterElectionStrategy;
-    licenseAssignmentStrategy: Strategy;
-    terminatedVmStrategy: Strategy;
-    constructor(
-        p: PlatformAdapter,
-        e: AutoscaleEnvironment,
-        x: CloudFunctionProxyAdapter,
-        s: Settings
-    ) {
+    licensingStrategy: LicensingStrategy;
+    constructor(p: PlatformAdapter, e: AutoscaleEnvironment, x: CloudFunctionProxyAdapter) {
         this.platform = p;
         this.env = e;
         this.proxy = x;
-        this.settings = s;
     }
 
     async handleLaunchingVm(): Promise<string> {
-        return await this.launchingVmStrategy.apply();
+        return await this.scalingGroupStrategy.onLaunchingVm();
     }
     async handleTerminatingVm(): Promise<string> {
-        return await this.terminatingVmStrategy.apply();
-    }
-    handleBootstrap(): Promise<string> {
-        throw new Error('Method not implemented.');
+        return await this.scalingGroupStrategy.onTerminatingVm();
     }
     async handleHeartbeatSync(): Promise<string> {
+        this.proxy.logAsInfo('calling handleHeartbeatSync.');
         let error: Error;
-        // load healthcheck
-        if (!this.env.targetHealthCheckRecord) {
-            this.env.targetHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                this.env.targetVm
-            );
-        }
 
         // load target vm
         if (!this.env.targetVm) {
@@ -381,7 +172,7 @@ export class Autoscale implements AutoscaleCore {
         }
         // if target vm doesn't exist, unknown request
         if (!this.env.targetVm) {
-            error = new Error(`Requested non-exist vm (id:${this.env.targetId}).`);
+            error = new Error(`Requested non-existing vm (id:${this.env.targetId}).`);
             this.proxy.logForError('', error);
             throw error;
         }
@@ -446,6 +237,7 @@ export class Autoscale implements AutoscaleCore {
         } else {
             await this.platform.updateHealthCheckRecord(this.env.targetHealthCheckRecord);
         }
+        this.proxy.logAsInfo('called handleHeartbeatSync.');
         return '';
     }
     handleTerminatedVm(): Promise<string> {
@@ -457,9 +249,8 @@ export class Autoscale implements AutoscaleCore {
 
     async handleMasterElection(): Promise<string> {
         this.proxy.logAsInfo('calling handleMasterElection.');
-        const electionTimeout = Number(
-            this.platform.getSettings().get(AutoscaleSetting.MasterElectionTimeout).value
-        );
+        const settings = await this.platform.getSettings();
+        const electionTimeout = Number(settings.get(AutoscaleSetting.MasterElectionTimeout).value);
         await this.masterElectionStrategy.prepare(
             {
                 oldMaster: this.env.masterVm,
@@ -536,7 +327,7 @@ export class Autoscale implements AutoscaleCore {
     }
     async handleLaunchedVm(): Promise<string> {
         this.proxy.logAsInfo('calling handleLaunchedVm.');
-        await this.launchedVmStrategy.apply();
+        await this.scalingGroupStrategy.onLaunchedVm();
         this.proxy.logAsInfo('called handleLaunchedVm.');
         return '';
     }
@@ -550,28 +341,19 @@ export class Autoscale implements AutoscaleCore {
         // TODO:
         // await this.terminatingVmStrategy.apply();
     }
-    setLaunchingVmStrategy(strategy: Strategy): void {
-        this.launchingVmStrategy = strategy;
-    }
-    setLaunchedVmStrategy(strategy: Strategy): void {
-        this.launchedVmStrategy = strategy;
-    }
-    setTerminatingVmStrategy(strategy: Strategy): void {
-        this.terminatingVmStrategy = strategy;
+    setScalingGroupStrategy(strategy: ScalingGroupStrategy): void {
+        this.scalingGroupStrategy = strategy;
     }
     setMasterElectionStrategy(strategy: MasterElectionStrategy): void {
         this.masterElectionStrategy = strategy;
     }
-    setTerminatedVmStrategy(strategy: Strategy): void {
-        this.terminatedVmStrategy = strategy;
-    }
     handleLicenseAssignment(): Promise<string> {
         throw new Error('Method not implemented.');
     }
-    setLicenseAssignmentStrategy(strategy: Strategy): void {
-        this.licenseAssignmentStrategy = strategy;
+    setLicenseAssignmentStrategy(strategy: LicensingStrategy): void {
+        this.licensingStrategy = strategy;
     }
-    setHeartbeatSyncStrategy(strategy: Strategy): void {
+    setHeartbeatSyncStrategy(strategy: HeartbeatSyncStrategy): void {
         this.heartbeatSyncTimingStrategy = strategy;
     }
     doTargetHealthCheck(): Promise<HeartbeatSyncTiming> {
