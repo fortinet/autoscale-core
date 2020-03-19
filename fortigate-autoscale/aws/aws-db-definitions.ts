@@ -13,7 +13,9 @@ import {
     LicenseUsage,
     CustomLog,
     VpnAttachment
-} from '../db-definitions';
+} from '../../db-definitions';
+
+export { Table } from '../../db-definitions';
 
 export const AwsTypeRefs: TypeRefMap = new Map<TypeRef, string>([
     [TypeRef.StringType, 'S'],
