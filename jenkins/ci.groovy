@@ -9,20 +9,20 @@ node('devops-aws') {
         sh "git fetch origin ${GERRIT_REFSPEC}:${changeBranch}"
         sh "git checkout ${changeBranch}"
     }
-    stage('Install NPM Dependency') {
-        echo 'NPM install..'
+    stage('Install Dependencies') {
+        echo 'running npm install...'
         sh 'npm install'
     }
-    stage('Check NPM Dependency Vulnerability') {
-        echo 'running npm audit..'
-        sh 'npm audit'
-    }
-    stage('Analyze Source Code') {
-        echo 'running linter..'
+    stage('Lint Source Code') {
+        echo 'running linter...'
         sh 'npm run lint-check'
     }
-    stage('Test') {
-        echo 'running test..'
+    stage('Run Tests') {
+        echo 'running test...'
         sh 'npm test'
+    }
+    stage('Verify Build Process') {
+        echo 'verifying build...'
+        sh 'npm run build'
     }
 }

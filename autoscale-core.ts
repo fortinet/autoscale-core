@@ -60,16 +60,17 @@ export function mapHttpMethod(s: string): ReqMethod {
 }
 
 export interface AutoscaleEnvironment {
-    masterId: string;
-    masterVm: VirtualMachine;
-    masterScalingGroup: string;
-    masterHealthCheckRecord: HealthCheckRecord;
+    masterId?: string;
+    masterVm?: VirtualMachine;
+    masterScalingGroup?: string;
+    masterHealthCheckRecord?: HealthCheckRecord;
     masterRecord: MasterRecord;
-    masterRoleChanged: boolean;
-    targetId: string;
-    targetVm: VirtualMachine;
-    targetScalingGroup: string;
-    targetHealthCheckRecord: HealthCheckRecord;
+    masterRoleChanged?: boolean;
+    targetId?: string;
+    targetVm?: VirtualMachine;
+    targetScalingGroup?: string;
+    targetHealthCheckRecord?: HealthCheckRecord;
+    [key: string]: {};
 }
 
 export interface VirtualMachine {
@@ -311,14 +312,14 @@ export interface MasterRecord {
 }
 
 export interface MasterElection {
-    oldMaster: VirtualMachine;
-    oldMasterRecord: MasterRecord;
+    oldMaster?: VirtualMachine;
+    oldMasterRecord?: MasterRecord;
     newMaster: VirtualMachine;
     newMasterRecord: MasterRecord;
     candidate: VirtualMachine;
-    candidateHealthCheck: HealthCheckRecord;
-    preferredScalingGroup: string;
-    electionDuration: number;
+    candidateHealthCheck?: HealthCheckRecord;
+    preferredScalingGroup?: string;
+    electionDuration?: number;
     signature: string;
 }
 
