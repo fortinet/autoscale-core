@@ -5,6 +5,7 @@
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "scripts": {
+        "pre-commit": "npm run lint-check && npm audit && npm test && npm run build && exit 0",
         "tsc": "tsc -d",
         "build": "rm -rf dist/{*,**/*}.d.ts; npm run tsc;",
         "build-artifacts": "npm run build; node dist/scripts/make-dist.js;",

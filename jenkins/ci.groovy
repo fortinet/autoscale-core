@@ -13,10 +13,6 @@ node('devops-aws') {
         echo 'running npm install...'
         sh 'npm install'
     }
-    stage('Audit Dependencies') {
-        echo 'running npm audit...'
-        sh 'npm audit'
-    }
     stage('Lint Source Code') {
         echo 'running linter...'
         sh 'npm run lint-check'
