@@ -1,5 +1,4 @@
 import { AutoscaleSetting } from '../autoscale-setting';
-export * from '../autoscale-setting';
 
 export class FortiGateAutoscaleSetting extends AutoscaleSetting {
     static FortiGatePskSecret = 'fortigate-psk-secret';

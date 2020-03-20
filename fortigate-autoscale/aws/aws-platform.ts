@@ -1,22 +1,17 @@
 import { APIGatewayProxyEvent, Context, APIGatewayProxyResult } from 'aws-lambda';
 import * as EC2 from 'aws-sdk/clients/ec2';
 import { DocumentClient } from 'aws-sdk/clients/dynamodb';
-import {
-    PlatformAdaptee,
-    AutoscaleSetting,
-    SubnetPair,
-    Settings,
-    SettingItem,
-    mapHttpMethod
-} from '../../index';
-import * as DBDefs from './aws-db-definitions';
-import { VirtualMachine } from '../../virtual-machine';
+
+import * as AwsDBDef from './aws-db-definitions';
+import { VpnAttachmentContext } from '../../context-strategy/vpn-attachment-context';
 import {
     NicAttachmentStrategy,
     NicAttachmentRecord,
     NicAttachmentStatus
 } from '../../context-strategy/nic-attachment-context';
-import { VpnAttachmentContext } from '../../context-strategy/vpn-attachment-context';
+import { VirtualMachine } from '../../virtual-machine';
+import { SubnetPair, AutoscaleSetting, SettingItem, Settings } from '../../autoscale-setting';
+import { PlatformAdaptee, mapHttpMethod } from '../../autoscale-core';
 import {
     CloudFunctionProxy,
     LogLevel,
@@ -24,7 +19,7 @@ import {
 } from '../../cloud-function-proxy';
 import { ReqMethod, ReqType, PlatformAdapter, VmDescriptor } from '../../platform-adapter';
 import { HealthCheckRecord, MasterRecord, MasterRecordVoteState } from '../../master-election';
-import { Table } from './aws-db-definitions';
+import { Table } from '../../db-definitions';
 
 /**
  * To provide AWS Transit Gateway integration related logics
@@ -309,7 +304,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.log('calling createMasterRecord.', LogLevel.Log);
         try {
             const settings = await this.getSettings();
-            const table = new DBDefs.AwsMasterElection(
+            const table = new AwsDBDef.AwsMasterElection(
                 settings.get(AutoscaleSetting.ResourceTagPrefix).value
             );
             const item: MasterRecord = {
@@ -341,7 +336,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.log('calling updateMasterRecord.', LogLevel.Log);
         try {
             const settings = await this.getSettings();
-            const table = new DBDefs.AwsMasterElection(
+            const table = new AwsDBDef.AwsMasterElection(
                 settings.get(AutoscaleSetting.ResourceTagPrefix).value
             );
             const item: MasterRecord = {

@@ -28,11 +28,6 @@ export class HttpError extends Error {
     }
 }
 
-// export enum CommonStrategyResult {
-//     Success = 'Success',
-//     Failure = 'Failure'
-// }
-
 const reqMethod: Map<string, ReqMethod> = new Map([
     ['GET', ReqMethod.GET],
     ['POST', ReqMethod.POST],
@@ -70,31 +65,11 @@ export interface PlatformAdaptee<TReq, TContext, TRes> {
     saveItemToDb(table: Table, item: {}, conditionExp: string): Promise<void>;
 }
 
-export enum BootstrapConfigStrategyResult {
-    SUCCESS,
-    FAILED
-}
-
-export interface BootstrapConfigurationStrategy {
-    prepare(
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        env: AutoscaleEnvironment
-    ): Promise<void>;
-    getConfiguration(): string;
-    apply(): Promise<BootstrapConfigStrategyResult>;
-}
-
-export interface BootstrapContext {
-    setBootstrapConfigurationStrategy(strategy: BootstrapConfigurationStrategy): void;
-    handleBootstrap(): Promise<string>;
-}
-
 /**
  * To provide Cloud Function handling logics
  */
-export interface FunctionHandlerContext<TReq, TContext, TRes> {
-    handleRequest(
+export interface CloudFunctionHandler<TReq, TContext, TRes> {
+    handleCloudFunctionRequest(
         proxy: CloudFunctionProxy<TReq, TContext, TRes>,
         platform: PlatformAdapter,
         env: AutoscaleEnvironment
@@ -143,7 +118,7 @@ export interface TaggingVmStrategy {
 export class Autoscale implements AutoscaleCore {
     platform: PlatformAdapter;
     scalingGroupStrategy: ScalingGroupStrategy;
-    heartbeatSyncTimingStrategy: HeartbeatSyncStrategy;
+    heartbeatSyncStrategy: HeartbeatSyncStrategy;
     taggingVmStrategy: TaggingVmStrategy;
     env: AutoscaleEnvironment;
     proxy: CloudFunctionProxyAdapter;
@@ -354,7 +329,7 @@ export class Autoscale implements AutoscaleCore {
         this.licensingStrategy = strategy;
     }
     setHeartbeatSyncStrategy(strategy: HeartbeatSyncStrategy): void {
-        this.heartbeatSyncTimingStrategy = strategy;
+        this.heartbeatSyncStrategy = strategy;
     }
     doTargetHealthCheck(): Promise<HeartbeatSyncTiming> {
         // TODO: implementation required
@@ -366,4 +341,30 @@ export class Autoscale implements AutoscaleCore {
         // await this.heartbeatSyncTimingStrategy.apply();
         throw new Error('Method not implemented.');
     }
+}
+
+type FinderRef = { [key: string]: any } | [] | string | null;
+export function configSetResourceFinder(resObject: FinderRef, nodePath: string): FinderRef {
+    const [, mPath] = nodePath.match(/^{(.+)}$/i);
+    if (!resObject || !nodePath) {
+        return '';
+    }
+    const nodes = mPath.split('.');
+    let ref = resObject;
+
+    nodes.find(nodeName => {
+        const matches = nodeName.match(/^([A-Za-z_@-]+)#([0-9])+$/i);
+        if (matches && Array.isArray(ref[matches[1]]) && ref[matches[1]].length > matches[2]) {
+            ref = ref[matches[1]][matches[2]];
+        } else if (!ref[nodeName]) {
+            ref = null;
+            return null;
+        } else {
+            ref =
+                Array.isArray(ref[nodeName]) && ref[nodeName].length > 0
+                    ? ref[nodeName][0]
+                    : ref[nodeName];
+        }
+    });
+    return ref;
 }
