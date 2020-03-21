@@ -2,7 +2,7 @@ import * as HttpStatusCodes from 'http-status-codes';
 import { TransitGatewayContext } from './aws/aws-platform';
 import { HeartbeatSyncTiming } from '../master-election';
 
-import { FortiGateAutoscaleSetting as AutoscaleSetting } from './fortigate-autoscale-settings';
+import { FortiGateAutoscaleSetting } from './fortigate-autoscale-settings';
 import { PlatformAdapter, ReqType } from '../platform-adapter';
 import { CloudFunctionProxyAdapter, CloudFunctionProxy } from '../cloud-function-proxy';
 import {
@@ -36,7 +36,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
     platform: PlatformAdapter;
     proxy: CloudFunctionProxyAdapter;
     env: AutoscaleEnvironment;
-    prepare(
+    async prepare(
         platform: PlatformAdapter,
         proxy: CloudFunctionProxyAdapter,
         env: AutoscaleEnvironment
@@ -44,6 +44,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         this.platform = platform;
         this.proxy = proxy;
         this.env = env;
+        this.settings = await this.platform.getSettings();
         return Promise.resolve();
     }
     getConfiguration(): string {
@@ -68,7 +69,6 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         return BootstrapConfigStrategyResult.SUCCESS;
     }
     protected async loadBase(): Promise<string> {
-        this.settings = this.settings || (await this.platform.getSettings());
         try {
             const config = await this.platform.loadConfigSet('baseconfig');
             this.alreadyLoaded.push('baseconfig');
@@ -83,7 +83,6 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         }
     }
     protected async loadNic2(): Promise<string> {
-        this.settings = this.settings || (await this.platform.getSettings());
         try {
             const config = await this.platform.loadConfigSet('port2config');
             this.alreadyLoaded.push('port2config');
@@ -98,24 +97,19 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         }
     }
     protected async loadInternalElbWeb(): Promise<string> {
-        this.settings = this.settings || (await this.platform.getSettings());
         try {
-            const config = await this.platform.loadConfigSet('intelbwebserv');
-            this.alreadyLoaded.push('intelbwebserv');
-            // NOTE: add the following two in order to avoid loading them again
-            this.alreadyLoaded.push('httpsroutingpolicy');
-            this.alreadyLoaded.push('internalelbweb');
+            const config = await this.platform.loadConfigSet('internalelbwebserv');
+            this.alreadyLoaded.push('internalelbwebserv');
             return config;
         } catch (error) {
             this.proxy.logAsWarning(
-                "[intelbwebserv] configset doesn't exist in the assets storage. " +
+                "[internalelbwebserv] configset doesn't exist in the assets storage. " +
                     'Configset Not loaded.'
             );
             return '';
         }
     }
     protected async loadFazIntegration(): Promise<string> {
-        this.settings = this.settings || (await this.platform.getSettings());
         try {
             const config = await this.platform.loadConfigSet('fazintegration');
             this.alreadyLoaded.push('fazintegration');
@@ -128,71 +122,42 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
             return '';
         }
     }
-    protected async loadRequired(requiredList: string): Promise<string> {
-        this.settings = this.settings || (await this.platform.getSettings());
-        let config = '';
-        for (const configset of requiredList.split(',')) {
-            const [name, selected] = (configset.includes('-') &&
-                configset
-                    .trim()
-                    .split('-')
-                    .map(str => (str && str.toLowerCase()) || null)) || [null, null];
-            // prevent from adding the same config set multiple times
-            this.alreadyLoaded.push(name);
-            if (selected === 'yes' && !this.alreadyLoaded.includes(name)) {
-                let loadedConfigSet = '';
-                try {
-                    switch (name) {
-                        // handle https routing policy
-                        case 'httpsroutingpolicy':
-                            loadedConfigSet = await this.platform.loadConfigSet('internalelbweb');
-                            loadedConfigSet += await this.platform.loadConfigSet(name);
-                            this.alreadyLoaded.push('internalelbweb');
-                            break;
-                        default:
-                            loadedConfigSet += await this.platform.loadConfigSet(name);
-                            break;
-                    }
-                    config += loadedConfigSet;
-                    this.alreadyLoaded.push(name);
-                } catch (error) {
-                    this.proxy.logForError(
-                        `[${name}] configset doesn't exist in the assets storage. ` +
-                            'Configset Not loaded.',
-                        error
-                    );
-                }
-            }
+    protected async loadCustom(customList: string): Promise<string> {
+        const nameArray = customList.split(',');
+        let customConfigSetContentArray = [];
+        const loaderArray = nameArray.map(customName =>
+            this.platform.loadConfigSet(customName, true)
+        );
+        if (loaderArray.length > 0) {
+            customConfigSetContentArray = await Promise.all(loaderArray);
         }
-        return config;
+        return customConfigSetContentArray.join('');
     }
     protected async loadConfig(): Promise<string> {
-        this.settings = this.settings || (await this.platform.getSettings());
         let baseConfig = '';
         // check if second nic is enabled, config for the second nic must be prepended to
         // base config
-        if (this.settings.get(AutoscaleSetting.EnableNic2).truthValue) {
-            await this.loadNic2();
+        if (this.settings.get(FortiGateAutoscaleSetting.EnableNic2).truthValue) {
+            baseConfig += await this.loadNic2();
         }
         baseConfig += await this.loadBase(); // alwasy load base config
-        // handle internal http and https routing policies depending on the internal elb
-        // if internal elb is enabled, require the 'intelbwebserv' configset
-        // NOTE: intelbwebserv stands for 'internal web service'.
-        // it combines 'httpsroutingpolicy' & 'internalelbweb' which are previously used for
-        // the same purpose. combining them hopefully makes a more business-logical sense
-        if (this.settings.get(AutoscaleSetting.EnableInternalElb).truthValue) {
+        // if internal elb is integrated
+        if (this.settings.get(FortiGateAutoscaleSetting.EnableInternalElb).truthValue) {
             baseConfig += await this.loadInternalElbWeb();
         }
         // if faz integration is enabled, require this 'fazintegration' configset
-        if (this.settings.get(AutoscaleSetting.EnableFazIntegration).truthValue) {
+        if (this.settings.get(FortiGateAutoscaleSetting.EnableFazIntegration).truthValue) {
             baseConfig += await this.loadFazIntegration();
         }
-        // check if other configsets are required
+        // check if other custom configsets are required
         // NOTE: additional required configsets should be processed last
-        const requiredConfigSet = this.settings.get(AutoscaleSetting.RequiredConfigSet).value;
+        let customConfigSetName = this.settings.get(FortiGateAutoscaleSetting.CustomConfigSetName)
+            .value;
+        // remove whitespaces
+        customConfigSetName = customConfigSetName.replace(new RegExp('\\s', 'gm'), '');
         // load additional required configsets
-        if (requiredConfigSet) {
-            baseConfig += await this.loadRequired(requiredConfigSet);
+        if (customConfigSetName) {
+            baseConfig += await this.loadCustom(customConfigSetName);
         }
         return baseConfig;
     }
@@ -202,21 +167,25 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
      * @protected
      * @param {string} config the config sets in string type.
      * @param {{}} sourceData a given object containing sorcce data to be used.
-     * @returns {Promise<string>} a processed config sets in string type.
+     * @returns {string} a processed config sets in string type.
      */
-    protected async processConfig(config: string, sourceData?: {}): Promise<string> {
+    protected processConfig(config: string, sourceData?: {}): string {
         if (sourceData) {
             return this.processConfigV2(config, sourceData);
         }
-        this.settings = this.settings || (await this.platform.getSettings());
-        const psksecret = this.settings.get(AutoscaleSetting.FortiGatePskSecret).value;
+
+        const psksecret = this.settings.get(FortiGateAutoscaleSetting.FortiGatePskSecret).value;
         const syncInterface =
-            this.settings.get(AutoscaleSetting.FortiGateSyncInterface).value || 'port1';
-        const trafficPort = this.settings.get(AutoscaleSetting.FortiGateTrafficPort).value || '443';
-        const adminPort = this.settings.get(AutoscaleSetting.FortiGateAdminPort).value || '8443';
-        const intElbDns = this.settings.get(AutoscaleSetting.FortiGateInternalElbDns).value;
-        const hbInterval = this.settings.get(AutoscaleSetting.HeartbeatInterval).value;
-        const hbCallbackUrl = this.settings.get(AutoscaleSetting.AutoscaleHandlerUrl).value || '';
+            this.settings.get(FortiGateAutoscaleSetting.FortiGateSyncInterface).value || 'port1';
+        const trafficPort =
+            this.settings.get(FortiGateAutoscaleSetting.FortiGateTrafficPort).value || '443';
+        const adminPort =
+            this.settings.get(FortiGateAutoscaleSetting.FortiGateAdminPort).value || '8443';
+        const intElbDns = this.settings.get(FortiGateAutoscaleSetting.FortiGateInternalElbDns)
+            .value;
+        const hbInterval = this.settings.get(FortiGateAutoscaleSetting.HeartbeatInterval).value;
+        const hbCallbackUrl =
+            this.settings.get(FortiGateAutoscaleSetting.AutoscaleHandlerUrl).value || '';
         return config
             .replace(new RegExp('{SYNC_INTERFACE}', 'gm'), syncInterface)
             .replace(new RegExp('{EXTERNAL_INTERFACE}', 'gm'), 'port1')
@@ -234,9 +203,9 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
      * @protected
      * @param {string} config the config sets in string type
      * @param {{}} sourceData a given object containing sorcce data to be used.
-     * @returns {Promise<string>} a processed config sets in string type.
+     * @returns {string} a processed config sets in string type.
      */
-    protected processConfigV2(config: string, sourceData: {}): Promise<string> {
+    protected processConfigV2(config: string, sourceData: {}): string {
         const resourceMap = {};
         Object.assign(resourceMap, sourceData);
         let nodePath;
@@ -254,20 +223,27 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
                     conf = conf.replace(new RegExp(nodePath, 'g'), replaceBy);
                 }
             }
+            return this.processConfig(conf); // process config V1
         } catch (error) {
-            console.log(error);
+            this.proxy.logForError('error in processing config, config not processed.', error);
+            // if error occurs, return the original config
+            return config;
         }
-        return Promise.resolve(conf);
     }
-    protected getActiveRoleConfig(config: string, targetVm: VirtualMachine): string {
-        throw new Error('Method not implemented.');
+    protected getActiveRoleConfig(config: string, targetVm: VirtualMachine): Promise<string> {
+        return Promise.resolve(this.processConfigV2(config, { '@device': targetVm }));
     }
     protected getPassiveRoleConfig(
         config: string,
         targetVm: VirtualMachine,
-        masterVm: VirtualMachine
-    ): string {
-        throw new Error('Method not implemented.');
+        masterVm?: VirtualMachine
+    ): Promise<string> {
+        const setMasterIpSection =
+            (masterVm && `\n    set master-ip ${masterVm.primaryPrivateIpAddress}`) || '';
+        const conf = this.processConfig(config, { '@device': targetVm });
+        return Promise.resolve(
+            conf.replace(new RegExp('set role master', 'gm'), `set role slave${setMasterIpSection}`)
+        );
     }
 }
 
@@ -315,6 +291,7 @@ export class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             this.platform = platform;
             this.env = env;
             this.proxy.logAsInfo('calling handleRequest.');
+            await this.platform.init();
             const requestType = this.platform.getRequestType();
             if (requestType === ReqType.LaunchingVm) {
                 responseBody = await this.handleLaunchedVm();
@@ -396,7 +373,7 @@ export class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
         // get master record again
         this.env.masterRecord = this.env.masterRecord || (await this.platform.getMasterRecord());
 
-        this.bootstrapConfigStrategy.prepare(this.platform, this.proxy, this.env);
+        await this.bootstrapConfigStrategy.prepare(this.platform, this.proxy, this.env);
         await this.bootstrapConfigStrategy.apply();
         const bootstrapConfig = this.bootstrapConfigStrategy.getConfiguration();
         // output configuration content in debug level so that we can turn it off on production
