@@ -49,5 +49,5 @@ export interface MasterElection {
     candidateHealthCheck?: HealthCheckRecord;
     preferredScalingGroup?: string;
     electionDuration?: number;
-    signature: string;
+    signature: string; // to identify a single master election
 }

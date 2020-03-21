@@ -4,18 +4,20 @@
  * @export
  * @enum {number}
  */
-export class AutoscaleSetting {
-    static HeartbeatInterval = 'heartbeat-interval';
-    static HeartbeatLossCount = 'heartbeat-loss-count';
-    static MasterScalingGroupName = 'master-scaling-group-name';
-    static MasterElectionTimeout = 'master-election-timeout';
-    static ResourceTagPrefix = 'resource-tag-prefix';
-    static SubnetPairs = 'subnet-pairs';
-    static RequiredConfigSet = 'required-configset';
-    static EnableNic2 = 'enable-second-nic';
-    static EnableInternalElb = 'enable-internal-elb';
-    static EnableFazIntegration = 'enable-fortianalyzer-integration';
-    static AutoscaleHandlerUrl = 'autoscale-handler-url';
+export enum AutoscaleSetting {
+    HeartbeatInterval = 'heartbeat-interval',
+    HeartbeatLossCount = 'heartbeat-loss-count',
+    MasterScalingGroupName = 'master-scaling-group-name',
+    MasterElectionTimeout = 'master-election-timeout',
+    ResourceTagPrefix = 'resource-tag-prefix',
+    SubnetPairs = 'subnet-pairs',
+    RequiredConfigSet = 'required-configset',
+    EnableNic2 = 'enable-second-nic',
+    EnableInternalElb = 'enable-internal-elb',
+    EnableFazIntegration = 'enable-fortianalyzer-integration',
+    AutoscaleHandlerUrl = 'autoscale-handler-url',
+    AssetStorageContainer = 'asset-storage-name',
+    AssetStorageDirectory = 'asset-storage-key-prefix'
 }
 
 export interface SubnetPair {
@@ -132,4 +134,18 @@ export class SettingItem {
     }
 }
 
-export type Settings = Map<string, SettingItem>;
+export class Settings extends Map<string, SettingItem> {
+    get(key: string): SettingItem {
+        if (this.has(key)) {
+            return super.get(key);
+        } else {
+            return new SettingItem(
+                key,
+                SettingItem.NO_VALUE,
+                `This setting item is created because the key [${key}] doesn't exist in the settings.`,
+                'false',
+                'false'
+            );
+        }
+    }
+}

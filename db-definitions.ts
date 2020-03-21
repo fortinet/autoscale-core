@@ -37,7 +37,7 @@ export class Table {
      * @param {{}} input the input object to be validated
      * @throws an Error object
      */
-    validateInput(input: {}) {
+    validateInput(input: {}): void {
         const keys = Object.keys(input);
         this.attributes.forEach(attrName => {
             if (!keys.includes) {
@@ -50,7 +50,7 @@ export class Table {
      * Set the name of the table (not include prefix or suffix)
      * @param {string} n name of the table
      */
-    protected setName(n: string) {
+    protected setName(n: string): void {
         this._name = n;
     }
     /**
