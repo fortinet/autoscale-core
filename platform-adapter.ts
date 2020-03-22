@@ -1,6 +1,7 @@
 import { Settings } from './autoscale-setting';
-import { VirtualMachine } from './virtual-machine';
+import { VirtualMachine, NetworkInterface } from './virtual-machine';
 import { HealthCheckRecord, MasterRecord } from './master-election';
+import { NicAttachmentRecord } from './context-strategy/nic-attachment-context';
 
 export enum ReqType {
     LaunchingVm = 'LaunchingVm',
@@ -26,6 +27,18 @@ export interface VmDescriptor {
     id: string;
 }
 
+export interface ResourceTag {
+    key: string;
+    value: string;
+}
+
+/**
+ * Contain a returned value of T type or null
+ */
+export interface Returned<T> {
+    value: T | null;
+}
+
 export interface PlatformAdapter {
     adaptee: {};
     init(): Promise<void>;
@@ -47,7 +60,6 @@ export interface PlatformAdapter {
     deleteVm(vm: VirtualMachine): Promise<void>;
     createHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
     updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
-    loadConfigSet(name: string, custom?: boolean): Promise<string>;
     /**
      * create the master record in the db system.
      * @param rec the new master record
@@ -61,4 +73,28 @@ export interface PlatformAdapter {
      * @param rec master record to be updated.
      */
     updateMasterRecord(rec: MasterRecord): Promise<void>;
+    loadConfigSet(name: string, custom?: boolean): Promise<string>;
+    listNicAttachmentRecord(): Promise<NicAttachmentRecord[]>;
+    updateNicAttachmentRecord(vmId: string, nicId: string, status: string): Promise<void>;
+    deleteNicAttachmentRecord(vmId: string, nicId: string): Promise<void>;
+    /**
+     * create a network interface
+     * @param  {string} subnetId? (optional) id of subnet where the network interface is located
+     * @param  {string} description? (optional) description
+     * @param  {string[]} securityGroups? (optional) security groups
+     * @param  {string} privateIpAddress? (optional) private ip address
+     * @returns Promise
+     */
+    createNetworkInterface(
+        subnetId?: string,
+        description?: string,
+        securityGroups?: string[],
+        privateIpAddress?: string
+    ): Promise<NetworkInterface | null>;
+
+    deleteNetworkInterface(nicId: string): Promise<void>;
+    attachNetworkInterface(vmId: string, nicId: string, index?: number): Promise<void>;
+    detachNetworkInterface(vmId: string, nicId: string): Promise<void>;
+    listUnusedNetworkInterface(tags: ResourceTag[]): Promise<NetworkInterface[]>;
+    tagNetworkInterface(nicId: string, tags: ResourceTag[]): Promise<void>;
 }

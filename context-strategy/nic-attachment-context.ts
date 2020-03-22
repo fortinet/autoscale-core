@@ -12,6 +12,11 @@ export interface NicAttachmentContext {
     setNicAttachmentStrategy(strategy: NicAttachmentStrategy): void;
 }
 
+export enum NicAttachmentResult {
+    Success = 'success',
+    Failed = 'failed'
+}
+
 export enum NicAttachmentStatus {
     Attaching = 'Attaching',
     Attached = 'Attached',
@@ -20,7 +25,7 @@ export enum NicAttachmentStatus {
 }
 
 export interface NicAttachmentRecord {
-    instanceId: string;
+    vmId: string;
     nicId: string;
     attachmentState: string;
 }
@@ -31,18 +36,29 @@ export interface NicAttachmentStrategy {
         proxy: CloudFunctionProxyAdapter,
         vm: VirtualMachine
     ): Promise<void>;
-    apply(): Promise<void>;
+    attach(): Promise<NicAttachmentResult>;
+    detach(): Promise<NicAttachmentResult>;
+    cleanUp(): Promise<void>;
 }
 
 export class NoOpNicAttachmentStrategy implements NicAttachmentStrategy {
     prepare(
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         platform: PlatformAdapter,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         proxy: CloudFunctionProxyAdapter,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         vm: VirtualMachine
     ): Promise<void> {
         return Promise.resolve();
     }
-    apply(): Promise<void> {
+    attach(): Promise<NicAttachmentResult> {
+        return Promise.resolve(NicAttachmentResult.Success);
+    }
+    detach(): Promise<NicAttachmentResult> {
+        return Promise.resolve(NicAttachmentResult.Success);
+    }
+    cleanUp(): Promise<void> {
         return Promise.resolve();
     }
 }

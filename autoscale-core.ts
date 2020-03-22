@@ -1,5 +1,4 @@
 import { Settings, AutoscaleSetting } from './autoscale-setting';
-import { Table } from './db-definitions';
 import {
     MasterElectionStrategy,
     AutoscaleContext,
@@ -44,6 +43,66 @@ export function mapHttpMethod(s: string): ReqMethod {
     return s && reqMethod.get(s.toUpperCase());
 }
 
+export function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => {
+        setTimeout(resolve, ms);
+    });
+}
+
+export type WaitForPromiseEmitter<TResult> = () => Promise<TResult>;
+
+export type WaitForConditionChecker<TInput> = (
+    input: TInput,
+    callCount: number,
+    ...args
+) => Promise<boolean>;
+
+export async function waitFor<TResult>(
+    promiseEmitter: WaitForPromiseEmitter<TResult>,
+    conditionChecker: WaitForConditionChecker<TResult>,
+    interval: number,
+    proxy?: CloudFunctionProxyAdapter
+): Promise<TResult> {
+    let count = 0;
+    const maxCount = 30;
+    if (interval <= 0) {
+        interval = 5000; // soft default to 5 seconds
+    }
+    try {
+        const result = await promiseEmitter();
+
+        let complete = false;
+        do {
+            if (proxy) {
+                proxy.logAsInfo('Await condition check result.');
+            }
+            complete = await conditionChecker(result, ++count, proxy || undefined);
+            if (!complete) {
+                if (count >= maxCount) {
+                    throw new Error(`It reached the maximum amount (${maxCount}) of attempts.`);
+                }
+                if (proxy) {
+                    proxy.logAsInfo(
+                        `Condition check not passed, count: ${count}. Retry in ${interval} ms.`
+                    );
+                }
+                await sleep(interval);
+            } else {
+                if (proxy) {
+                    proxy.logAsInfo('Condition check passed. End waiting and returns task result.');
+                }
+                break;
+            }
+        } while (!complete);
+        return result;
+    } catch (error) {
+        if (proxy) {
+            proxy.logForError('WaitFor() is interrupted.', error);
+        }
+        throw error;
+    }
+}
+
 export interface AutoscaleEnvironment {
     masterId?: string;
     masterVm?: VirtualMachine;
@@ -62,7 +121,6 @@ export interface PlatformAdaptee<TReq, TContext, TRes> {
     loadSettings(): Promise<Settings>;
     getReqType(proxy: CloudFunctionProxy<TReq, TContext, TRes>): ReqType;
     getReqMethod(proxy: CloudFunctionProxy<TReq, TContext, TRes>): ReqMethod;
-    saveItemToDb(table: Table, item: {}, conditionExp: string): Promise<void>;
 }
 
 /**
