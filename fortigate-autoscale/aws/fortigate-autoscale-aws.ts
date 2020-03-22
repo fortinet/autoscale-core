@@ -1,12 +1,13 @@
 import { APIGatewayProxyEvent, Context, APIGatewayProxyResult } from 'aws-lambda';
 import { FortiGateAutoscaleSetting as AutoscaleSetting } from '../fortigate-autoscale-settings';
-import { AwsPlatformAdapter } from './aws-platform';
+import { AwsPlatformAdapter, TransitGatewayContext } from './aws-platform';
 import { FortiGateBootstrapConfigStrategy, FortiGateAutoscale } from '../fortigate-autoscale';
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import { AutoscaleEnvironment } from '../../autoscale-core';
 import { VirtualMachine } from '../../virtual-machine';
 import { PlatformAdapter } from '../../platform-adapter';
 import { PreferredGroupMasterElection } from '../../context-strategy/autoscale-context';
+import { VpnAttachmentStrategy } from '../..//context-strategy/vpn-attachment-context';
 
 export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigStrategy {
     prepare(
@@ -19,6 +20,12 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
     get platform(): AwsPlatformAdapter {
         return this.platform as AwsPlatformAdapter;
     }
+
+    /**
+     * load the configset content for setting up the VPN attachment
+     * @param  {VirtualMachine} targetVm the target vm which the VPN(s) are attached to
+     * @returns {Promise} configset content
+     */
     protected async loadVpnAttachment(targetVm: VirtualMachine): Promise<string> {
         this.settings = this.settings || (await this.platform.getSettings());
         try {
@@ -44,8 +51,8 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
     }
     /**
      *
-     * @override for loading AWS Transit Gateway VPN config
-     * @returns {Promise<string>} config sets in string type.
+     * @override for loading bootstrap config with additional AWS Transit Gateway VPN connections
+     * @returns {Promise<string>} configset content
      */
     async loadConfig(): Promise<string> {
         let baseConfig = await super.loadConfig();
@@ -56,15 +63,32 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
         return baseConfig;
     }
 }
-export class FortiGateAutoscaleAws extends FortiGateAutoscale<
-    APIGatewayProxyEvent,
-    Context,
-    APIGatewayProxyResult
-> {
+/**
+ * FortiGate Autoscale - AWS class, with capabilities:
+ * inherited capabilities and
+ * AWS Transit Gateway VPN attachment
+ *
+ */
+export class FortiGateAutoscaleAws
+    extends FortiGateAutoscale<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
+    implements TransitGatewayContext {
+    vpnAttachmentStrategy: VpnAttachmentStrategy;
     constructor(p: PlatformAdapter, e: AutoscaleEnvironment, x: CloudFunctionProxyAdapter) {
         super(p, e, x);
         // use FortiGate bootstrap configuration strategy
         this.setBootstrapConfigurationStrategy(new FortiGateBootstrapConfigStrategy());
         this.setMasterElectionStrategy(new PreferredGroupMasterElection());
+    }
+    handleVpnAttachment(): Promise<string> {
+        throw new Error('Method not implemented.');
+    }
+    handleVpnDetachment(): Promise<string> {
+        throw new Error('Method not implemented.');
+    }
+    cleanupUnusedVpn(): Promise<string> {
+        throw new Error('Method not implemented.');
+    }
+    setVpnAttachmentStrategy(strategy: VpnAttachmentStrategy): void {
+        this.vpnAttachmentStrategy = strategy;
     }
 }

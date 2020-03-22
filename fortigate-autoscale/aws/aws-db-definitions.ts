@@ -97,7 +97,7 @@ export class AwsVpnAttachment extends VpnAttachment {
 export class LifecycleItem extends Table {
     static __attributes: Attribute[] = [
         {
-            name: 'instanceId',
+            name: 'vmId',
             attrType: TypeRef.StringType,
             isKey: true,
             keyType: TypeRef.PrimaryKey
