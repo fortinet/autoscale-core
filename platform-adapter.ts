@@ -5,7 +5,9 @@ import { NicAttachmentRecord } from './context-strategy/nic-attachment-context';
 
 export enum ReqType {
     LaunchingVm = 'LaunchingVm',
+    LaunchedVm = 'LaunchedVm',
     TerminatingVm = 'TerminatingVm',
+    TerminatedVm = 'TerminatedVm',
     BootstrapConfig = 'BootstrapConfig',
     HeartbeatSync = 'HeartbeatSync',
     StatusMessage = 'StatusMessage'
@@ -21,6 +23,14 @@ export enum ReqMethod {
     TRACE,
     OPTIONS,
     CONNECT
+}
+
+export interface ReqBody {
+    [key: string]: unknown;
+}
+
+export interface ReqHeaders {
+    [key: string]: unknown;
 }
 
 export interface VmDescriptor {
@@ -41,6 +51,7 @@ export interface Returned<T> {
 
 export interface PlatformAdapter {
     adaptee: {};
+    checkRequestIntegrity(): void;
     init(): Promise<void>;
     getRequestType(): ReqType;
     getReqHeartbeatInterval(): number;

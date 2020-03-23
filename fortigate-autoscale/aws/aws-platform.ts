@@ -1,7 +1,7 @@
 import path from 'path';
 import process from 'process';
 import fs from 'fs';
-import { APIGatewayProxyEvent, Context, APIGatewayProxyResult } from 'aws-lambda';
+import { APIGatewayProxyEvent, Context, APIGatewayProxyResult, ScheduledEvent } from 'aws-lambda';
 import EC2 from 'aws-sdk/clients/ec2';
 import { DocumentClient, ExpressionAttributeValueMap } from 'aws-sdk/clients/dynamodb';
 import { S3 } from 'aws-sdk';
@@ -26,14 +26,17 @@ import {
 import {
     CloudFunctionProxy,
     LogLevel,
-    CloudFunctionResponseBody
+    CloudFunctionResponseBody,
+    CloudFunctionProxyAdapter
 } from '../../cloud-function-proxy';
 import {
     ReqMethod,
     ReqType,
     PlatformAdapter,
     VmDescriptor,
-    ResourceTag
+    ResourceTag,
+    ReqBody,
+    ReqHeaders
 } from '../../platform-adapter';
 import { HealthCheckRecord, MasterRecord, MasterRecordVoteState } from '../../master-election';
 import {
@@ -387,8 +390,7 @@ export interface AwsDdbOperations {
     createOrUpdate?: CreateOrUpdate;
 }
 
-export class AwsPlatform
-    implements PlatformAdaptee<APIGatewayProxyEvent, Context, APIGatewayProxyResult> {
+export abstract class AwsPlatformAdaptee implements PlatformAdaptee {
     docClient: DocumentClient;
     s3: S3;
     ec2: EC2;
@@ -397,27 +399,14 @@ export class AwsPlatform
         this.s3 = new S3({ apiVersion: '2006-03-01' });
         this.ec2 = new EC2({ apiVersion: '2016-11-15' });
     }
+    abstract checkReqIntegrity(proxy: CloudFunctionProxyAdapter): void;
+    abstract getReqType(proxy: CloudFunctionProxyAdapter): Promise<ReqType>;
+    abstract getReqMethod(proxy: CloudFunctionProxyAdapter): ReqMethod;
+    abstract getReqBody(proxy: CloudFunctionProxyAdapter): ReqBody;
+    abstract getReqHeaders(proxy: CloudFunctionProxyAdapter): ReqHeaders;
     loadSettings(): Promise<Settings> {
         // TODO: add real implementation
         return Promise.resolve(new Map<string, SettingItem>());
-    }
-    getReqMethod(
-        proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
-    ): ReqMethod {
-        return mapHttpMethod(proxy.request.httpMethod);
-    }
-    getReqType(
-        proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
-    ): ReqType {
-        const httpMethod = proxy.request.httpMethod;
-        if (
-            proxy.request.headers['Fos-instance-id'] !== null &&
-            httpMethod.toUpperCase() === 'GET'
-        ) {
-            return ReqType.BootstrapConfig;
-        } else {
-            throw new Error('Method partially implemented. Reached unimplemented section.');
-        }
     }
 
     /**
@@ -704,24 +693,155 @@ export class AwsLambdaProxy extends CloudFunctionProxy<
     }
 }
 
-export class AwsPlatformAdapter implements PlatformAdapter {
-    adaptee: AwsPlatform;
-    proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>;
+export class AwsApiGatewayEventAdaptee extends AwsPlatformAdaptee {
+    checkReqIntegrity(
+        proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
+    ): void {
+        const reqMethod = this.getReqMethod(proxy);
+        if (reqMethod === ReqMethod.GET && proxy.request.headers['Fos-instance-id'] === null) {
+            throw new Error('Invalid request. Fos-instance-id is missing in [GET] request header.');
+        } else if (reqMethod === ReqMethod.POST) {
+            const body: ReqBody = this.getReqBody(proxy);
+            if (!body.instance) {
+                throw new Error(
+                    'Invalid request. instance is missing in [POST] ' +
+                        `request body: ${proxy.request.body}`
+                );
+            }
+        } else {
+            throw new Error(`Invalid request. Unsupported request method: [${reqMethod}]`);
+        }
+    }
+    getReqMethod(
+        proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
+    ): ReqMethod {
+        return mapHttpMethod(proxy.request.httpMethod);
+    }
+    getReqType(
+        proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
+    ): Promise<ReqType> {
+        const reqMethod = this.getReqMethod(proxy);
+        if (reqMethod === ReqMethod.GET) {
+            return Promise.resolve(ReqType.BootstrapConfig);
+        } else if (reqMethod === ReqMethod.POST) {
+            const body = this.getReqBody(proxy);
+            if (body.status) {
+                return Promise.resolve(ReqType.StatusMessage);
+            } else if (body.instance) {
+                return Promise.resolve(ReqType.HeartbeatSync);
+            } else {
+                throw new Error(
+                    `Invalid request body: [instance: ${body.instance}],` +
+                        ` [status: ${body.status}]`
+                );
+            }
+        } else {
+            throw new Error(`Unsupported request method: ${reqMethod}`);
+        }
+    }
+    getReqHeaders(
+        proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
+    ): ReqHeaders {
+        const headers: ReqHeaders = { ...proxy.request.headers };
+        return headers;
+    }
+    getReqBody(
+        proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
+    ): ReqBody {
+        let body: ReqBody;
+        try {
+            body = (proxy.request.body && JSON.parse(proxy.request.body)) || {};
+        } catch (error) {}
+        return body;
+    }
+}
+
+export class AwsScheduleEventAdaptee extends AwsPlatformAdaptee {
+    checkReqIntegrity(
+        proxy: CloudFunctionProxy<ScheduledEvent, Context, APIGatewayProxyResult>
+    ): void {
+        if (!(proxy.request.source && proxy.request['detail-type'])) {
+            proxy.logAsError(
+                "Request isn't an AWS schedule event." + ` request content: ${proxy.request}`
+            );
+            throw new Error('Invalid request. Not an AWS schedule event type.');
+        }
+    }
+    /**
+     * This method is unsed in this implementation.
+     * @returns {ReqMethod} will always return undefined
+     */
+    getReqMethod(): ReqMethod {
+        return undefined;
+    }
+    getReqType(
+        proxy: CloudFunctionProxy<ScheduledEvent, Context, APIGatewayProxyResult>
+    ): Promise<ReqType> {
+        if (proxy.request.source === 'aws.autoscaling') {
+            if (proxy.request['detail-type'] === 'EC2 Instance-launch Lifecycle Action') {
+                return Promise.resolve(ReqType.LaunchingVm);
+            } else if (proxy.request['detail-type'] === 'EC2 Instance Launch Successful') {
+                return Promise.resolve(ReqType.LaunchedVm);
+            } else if (proxy.request['detail-type'] === 'EC2 Instance-terminate Lifecycle Action') {
+                return Promise.resolve(ReqType.TerminatingVm);
+            } else if (proxy.request['detail-type'] === 'EC2 Instance Terminate Successful') {
+                return Promise.resolve(ReqType.TerminatedVm);
+            } else {
+                throw new Error(
+                    'Invalid request. ' +
+                        `Unsupported request detail-type: [${proxy.request['detail-type']}]`
+                );
+            }
+        }
+        throw new Error(`Unknown supported source: [${proxy.request.source}]`);
+    }
+    /**
+     * This method is unsed in this implementation.
+     * @returns {ReqHeaders} an empty object
+     */
+    getReqHeaders(): ReqHeaders {
+        return {};
+    }
+    /**
+     * This method is unsed in this implementation.
+     * @returns {ReqBody} an empty object
+     */
+    getReqBody(): ReqBody {
+        return {};
+    }
+}
+
+export abstract class AwsPlatformAdapter implements PlatformAdapter {
+    adaptee: AwsPlatformAdaptee;
+    proxy: CloudFunctionProxyAdapter;
     settings: Settings;
     readonly awsOnlyConfigset = ['setuptgwvpn', 'internalelbwebserv'];
-    constructor(
-        p: AwsPlatform,
-        proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
-    ) {
+    constructor(p: AwsPlatformAdaptee, proxy: CloudFunctionProxyAdapter) {
         this.adaptee = p;
         this.proxy = proxy;
     }
+    checkRequestIntegrity(): Promise<void> {
+        const reqMethod = this.adaptee.getReqMethod(this.proxy);
+        const body = this.adaptee.getReqBody(this.proxy);
+        const headers = this.adaptee.getReqHeaders(this.proxy);
+        if (reqMethod === ReqMethod.GET && headers['Fos-instance-id'] === null) {
+            throw new Error('Invalid request. Fos-instance-id is missing in [GET] request header.');
+        } else if (reqMethod === ReqMethod.POST) {
+            if (!body.instance) {
+                throw new Error(
+                    'Invalid request. instance is missing in [POST] ' +
+                        `request body: ${JSON.stringify(body)}`
+                );
+            }
+        } else {
+            throw new Error(`Invalid request. Unsupported request method: [${reqMethod}]`);
+        }
+        return Promise.resolve();
+    }
+    abstract getRequestType(): ReqType;
     async init(): Promise<void> {
         this.settings = await this.adaptee.loadSettings();
         await this.validateSettings();
-    }
-    getRequestType(): ReqType {
-        return this.adaptee.getReqType(this.proxy);
     }
     getReqHeartbeatInterval(): number {
         throw new Error('Method not implemented.');

@@ -8,7 +8,7 @@ import {
     ScalingGroupContext,
     ScalingGroupStrategy
 } from './context-strategy/scaling-group-context';
-import { PlatformAdapter, ReqMethod, ReqType } from './platform-adapter';
+import { PlatformAdapter, ReqMethod, ReqType, ReqBody, ReqHeaders } from './platform-adapter';
 import {
     MasterElection,
     HealthCheckRecord,
@@ -117,10 +117,13 @@ export interface AutoscaleEnvironment {
     [key: string]: {};
 }
 
-export interface PlatformAdaptee<TReq, TContext, TRes> {
+export interface PlatformAdaptee {
     loadSettings(): Promise<Settings>;
-    getReqType(proxy: CloudFunctionProxy<TReq, TContext, TRes>): ReqType;
-    getReqMethod(proxy: CloudFunctionProxy<TReq, TContext, TRes>): ReqMethod;
+    getReqType(proxy: CloudFunctionProxyAdapter): Promise<ReqType>;
+    getReqMethod(proxy: CloudFunctionProxyAdapter): ReqMethod;
+    // checkReqIntegrity(proxy: CloudFunctionProxyAdapter): void;
+    getReqBody(proxy: CloudFunctionProxyAdapter): ReqBody;
+    getReqHeaders(proxy: CloudFunctionProxyAdapter): ReqHeaders;
 }
 
 /**

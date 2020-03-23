@@ -298,7 +298,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
  * bootstrap configuration,
  * secondary nic attachment
  */
-export class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
+export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
     implements CloudFunctionHandler<TReq, TContext, TRes>, BootstrapContext, NicAttachmentContext {
     bootstrapConfigStrategy: BootstrapConfigurationStrategy;
     nicAttachmentStrategy: NicAttachmentStrategy;
@@ -325,8 +325,12 @@ export class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             this.platform = platform;
             this.env = env;
             this.proxy.logAsInfo('calling handleRequest.');
+            this.proxy.logAsInfo('request integrity check.');
+            // check whether all necessary request information are all there or not
+            await this.platform.checkRequestIntegrity();
+            // init the platform. this step is important
             await this.platform.init();
-            const requestType = this.platform.getRequestType();
+            const requestType = await this.platform.getRequestType();
             if (requestType === ReqType.LaunchingVm) {
                 responseBody = await this.handleLaunchedVm();
             } else if (requestType === ReqType.BootstrapConfig) {

@@ -65,6 +65,9 @@ const TEST_MASTER_ELECTION: MasterElection = {
 };
 
 class TestPlatformAdapter implements PlatformAdapter {
+    checkRequestIntegrity(): void {
+        throw new Error('Method not implemented.');
+    }
     listNicAttachmentRecord(): Promise<import('..').NicAttachmentRecord[]> {
         throw new Error('Method not implemented.');
     }
