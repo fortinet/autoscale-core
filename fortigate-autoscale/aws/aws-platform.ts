@@ -563,7 +563,7 @@ export abstract class AwsPlatformAdaptee implements PlatformAdaptee {
 
     /**
      * get a blob from a storage
-     * @param  {string} s3Bucket the s3 bucket neme
+     * @param  {string} s3Bucket the s3 bucket name
      * @param  {string} s3KeyPrefix the s3 key prefix to the blob file
      * @returns {Promise} Blob
      */
