@@ -2,10 +2,13 @@ import { Settings } from './autoscale-setting';
 import { VirtualMachine, NetworkInterface } from './virtual-machine';
 import { HealthCheckRecord, MasterRecord } from './master-election';
 import { NicAttachmentRecord } from './context-strategy/nic-attachment-context';
+import { KeyValue } from 'db-definitions';
 
 export enum ReqType {
     LaunchingVm = 'LaunchingVm',
+    LaunchedVm = 'LaunchedVm',
     TerminatingVm = 'TerminatingVm',
+    TerminatedVm = 'TerminatedVm',
     BootstrapConfig = 'BootstrapConfig',
     HeartbeatSync = 'HeartbeatSync',
     StatusMessage = 'StatusMessage'
@@ -21,6 +24,14 @@ export enum ReqMethod {
     TRACE,
     OPTIONS,
     CONNECT
+}
+
+export interface ReqBody {
+    [key: string]: unknown;
+}
+
+export interface ReqHeaders {
+    [key: string]: unknown;
 }
 
 export interface VmDescriptor {
@@ -41,9 +52,16 @@ export interface Returned<T> {
 
 export interface PlatformAdapter {
     adaptee: {};
+    readonly createTime: number;
+    checkRequestIntegrity(): void;
     init(): Promise<void>;
-    getRequestType(): ReqType;
+    getRequestType(): Promise<ReqType>;
+    /**
+     * heartbeat interval in the request in ms.
+     * @returns number interval in ms
+     */
     getReqHeartbeatInterval(): number;
+    getReqVmId(): string;
     getSettings(): Promise<Settings>;
     /**
      * validate settings by checking the integrity of each required setting item. Ensure that they
@@ -54,10 +72,8 @@ export interface PlatformAdapter {
     getTargetVm(): Promise<VirtualMachine | null>;
     getMasterVm(): Promise<VirtualMachine | null>;
     getHealthCheckRecord(vm: VirtualMachine): Promise<HealthCheckRecord | null>;
-    getMasterRecord(): Promise<MasterRecord | null>;
+    getMasterRecord(filters?: KeyValue[]): Promise<MasterRecord | null>;
     equalToVm(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean;
-    describeVm(desc: VmDescriptor): Promise<VirtualMachine>;
-    deleteVm(vm: VirtualMachine): Promise<void>;
     createHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
     updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
     /**

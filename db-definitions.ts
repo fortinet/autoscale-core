@@ -34,7 +34,16 @@ export enum CreateOrUpdate {
     update
 }
 
-export class Table {
+export interface DbTable {
+    readonly name: string;
+    readonly primaryKey: Attribute;
+    readonly schema: Map<string, SchemaElement>;
+    readonly keys: Map<string, Attribute>;
+    readonly attributes: Map<string, Attribute>;
+    validateInput(input: Record): void;
+}
+
+export abstract class Table<T> implements DbTable {
     static TypeRefMap: Map<TypeRef, string> = new Map<TypeRef, string>([
         [TypeRef.StringType, 'String'],
         [TypeRef.NumberType, 'Number'],
@@ -52,7 +61,7 @@ export class Table {
      * @param {{}} input the input object to be validated
      * @throws an Error object
      */
-    validateInput(input: {}): void {
+    validateInput(input: Record): void {
         const keys = Object.keys(input);
         this.attributes.forEach(attrName => {
             if (!keys.includes) {
@@ -113,6 +122,13 @@ export class Table {
         return this._attributes;
     }
 
+    get primaryKey(): Attribute {
+        const [pk] = Array.from(this._keys.values()).filter(
+            key => key.keyType === TypeRef.PrimaryKey
+        );
+        return pk;
+    }
+
     /**
      * Alter the type of each attribute using a given type reference map.
      * Every attribute in the Autoscale generic Table uses a TypeRef refernce as its type.
@@ -165,9 +181,20 @@ export class Table {
         this.alterAttributes([attr]);
     }
     // NOTE: no deleting attribute method should be provided.
+    abstract convertRecord(record: Record): T;
 }
-
-export class Autoscale extends Table {
+export interface AutoscaleDbItem {
+    vmId: string;
+    scalingGroupName: string;
+    ip: string;
+    masterIp: string;
+    heartBeatInterval: number;
+    heartBeatLossCount: number;
+    nextHeartBeatTime: number;
+    syncState: string;
+    seq: number;
+}
+export class Autoscale extends Table<AutoscaleDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'vmId',
@@ -177,6 +204,16 @@ export class Autoscale extends Table {
         },
         {
             name: 'scalingGroupName',
+            attrType: TypeRef.StringType,
+            isKey: false
+        },
+        {
+            name: 'ip',
+            attrType: TypeRef.StringType,
+            isKey: false
+        },
+        {
+            name: 'masterIp',
             attrType: TypeRef.StringType,
             isKey: false
         },
@@ -196,12 +233,12 @@ export class Autoscale extends Table {
             isKey: false
         },
         {
-            name: 'masterIp',
+            name: 'syncState',
             attrType: TypeRef.StringType,
             isKey: false
         },
         {
-            name: 'syncState',
+            name: 'seq',
             attrType: TypeRef.StringType,
             isKey: false
         }
@@ -211,6 +248,20 @@ export class Autoscale extends Table {
         // CAUTION: don't forget to set a correct name.
         this.setName('Autoscale');
         this.alterAttributes(Autoscale.__attributes);
+    }
+    convertRecord(record: Record): AutoscaleDbItem {
+        const item: AutoscaleDbItem = {
+            vmId: record.vmId as string,
+            scalingGroupName: record.scalingGroupName as string,
+            ip: record.masterIp as string,
+            masterIp: record.masterIp as string,
+            heartBeatLossCount: Number(record.heartBeatLossCount as string),
+            heartBeatInterval: Number(record.heartBeatInterval as string),
+            nextHeartBeatTime: Number(record.nextHeartBeatTime as string),
+            syncState: record.syncState as string,
+            seq: Number(record.seq as string)
+        };
+        return item;
     }
 }
 export interface MasterElectionDbItem {
@@ -223,7 +274,7 @@ export interface MasterElectionDbItem {
     voteEndTime: string;
     voteState: string;
 }
-export class MasterElection extends Table {
+export class MasterElection extends Table<MasterElectionDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'scalingGroupName',
@@ -274,9 +325,28 @@ export class MasterElection extends Table {
         this.setName('MasterElection');
         this.alterAttributes(MasterElection.__attributes);
     }
+    convertRecord(record: Record): MasterElectionDbItem {
+        const item: MasterElectionDbItem = {
+            scalingGroupName: record.scalingGroupName as string,
+            vmId: record.vmId as string,
+            id: record.id as string,
+            ip: record.ip as string,
+            virtualNetworkId: record.virtualNetworkId as string,
+            subnetId: record.subnetId as string,
+            voteEndTime: record.voteEndTime as string,
+            voteState: record.voteState as string
+        };
+        return item;
+    }
+}
+export interface FortiAnalyzerDbItem {
+    vmId: string;
+    ip: string;
+    master: string;
+    vip: string;
 }
 
-export class FortiAnalyzer extends Table {
+export class FortiAnalyzer extends Table<FortiAnalyzerDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'vmId',
@@ -306,9 +376,24 @@ export class FortiAnalyzer extends Table {
         this.setName('FortiAnalyzer');
         this.alterAttributes(FortiAnalyzer.__attributes);
     }
+    convertRecord(record: Record): FortiAnalyzerDbItem {
+        const item: FortiAnalyzerDbItem = {
+            vmId: record.vmId as string,
+            ip: record.ip as string,
+            master: record.master as string,
+            vip: record.vip as string
+        };
+        return item;
+    }
 }
-
-export class Settings extends Table {
+export interface SettingsDbItem {
+    settingKey: string;
+    settingValue: string;
+    description: string;
+    jsonEncoded: string;
+    editable: string;
+}
+export class Settings extends Table<SettingsDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'settingKey',
@@ -343,13 +428,23 @@ export class Settings extends Table {
         this.setName('Settings');
         this.alterAttributes(Settings.__attributes);
     }
+    convertRecord(record: Record): SettingsDbItem {
+        const item: SettingsDbItem = {
+            settingKey: record.settingKey as string,
+            settingValue: record.settingValue as string,
+            description: record.description as string,
+            jsonEncoded: record.jsonEncoded as string,
+            editable: record.editable as string
+        };
+        return item;
+    }
 }
 export interface NicAttachmentDbItem {
     vmId: string;
     nicId: string;
     attachmentState: string;
 }
-export class NicAttachment extends Table {
+export class NicAttachment extends Table<NicAttachmentDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'vmId',
@@ -374,9 +469,26 @@ export class NicAttachment extends Table {
         this.setName('NicAttachment');
         this.alterAttributes(NicAttachment.__attributes);
     }
+    convertRecord(record: Record): NicAttachmentDbItem {
+        const item: NicAttachmentDbItem = {
+            vmId: record.vmId as string,
+            nicId: record.nicId as string,
+            attachmentState: record.attachmentState as string
+        };
+        return item;
+    }
 }
 
-export class VmInfoCache extends Table {
+export interface VmInfoCacheDbItem {
+    id: string;
+    vmId: string;
+    index: number;
+    scalingGroupName: string;
+    info: string;
+    timestamp: number;
+    expireTime: number;
+}
+export class VmInfoCache extends Table<VmInfoCacheDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'id',
@@ -390,8 +502,8 @@ export class VmInfoCache extends Table {
             isKey: false
         },
         {
-            name: 'vmId',
-            attrType: TypeRef.StringType,
+            name: 'index',
+            attrType: TypeRef.NumberType,
             isKey: false
         },
         {
@@ -421,9 +533,26 @@ export class VmInfoCache extends Table {
         this.setName('VmInfoCache');
         this.alterAttributes(VmInfoCache.__attributes);
     }
+    convertRecord(record: Record): VmInfoCacheDbItem {
+        const item: VmInfoCacheDbItem = {
+            id: record.id as string,
+            vmId: record.vmId as string,
+            index: record.index as number,
+            scalingGroupName: record.scalingGroupName as string,
+            info: record.info as string,
+            timestamp: Number(record.timestamp as string),
+            expireTime: Number(record.expireTime as string)
+        };
+        return item;
+    }
 }
 
-export class LicenseStock extends Table {
+export interface LicenseStockDbItem {
+    checksum: string;
+    fileName: string;
+    algorithm: string;
+}
+export class LicenseStock extends Table<LicenseStockDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'checksum',
@@ -448,9 +577,27 @@ export class LicenseStock extends Table {
         this.setName('LicenseStock');
         this.alterAttributes(LicenseStock.__attributes);
     }
+    convertRecord(record: Record): LicenseStockDbItem {
+        const item: LicenseStockDbItem = {
+            checksum: record.checksum as string,
+            fileName: record.fileName as string,
+            algorithm: record.algorithm as string
+        };
+        return item;
+    }
 }
 
-export class LicenseUsage extends Table {
+export interface LicenseUsageDbItem {
+    id: string;
+    checksum: string;
+    fileName: string;
+    algorithm: string;
+    scalingGroupName: string;
+    vmId: string;
+    assignedTime: number;
+    blobKey: string;
+}
+export class LicenseUsage extends Table<LicenseUsageDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'id',
@@ -500,9 +647,27 @@ export class LicenseUsage extends Table {
         this.setName('LicenseUsage');
         this.alterAttributes(LicenseUsage.__attributes);
     }
+    convertRecord(record: Record): LicenseUsageDbItem {
+        const item: LicenseUsageDbItem = {
+            id: record.id as string,
+            checksum: record.checksum as string,
+            fileName: record.fileName as string,
+            algorithm: record.algorithm as string,
+            scalingGroupName: record.scalingGroupName as string,
+            vmId: record.vmId as string,
+            assignedTime: Number(record.assignedTime as string),
+            blobKey: record.blobKey as string
+        };
+        return item;
+    }
 }
 
-export class CustomLog extends Table {
+export interface CustomLogDbItem {
+    id: string;
+    timestamp: string;
+    logContent: string;
+}
+export class CustomLog extends Table<CustomLogDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'id',
@@ -528,9 +693,24 @@ export class CustomLog extends Table {
         this.setName('CustomLog');
         this.alterAttributes(CustomLog.__attributes);
     }
+    convertRecord(record: Record): CustomLogDbItem {
+        const item: CustomLogDbItem = {
+            id: record.id as string,
+            timestamp: record.timestamp as string,
+            logContent: record.logContent as string
+        };
+        return item;
+    }
 }
 
-export class VpnAttachment extends Table {
+export interface VpnAttachmentDbItem {
+    vmId: string;
+    publicIp: string;
+    customerGatewayId: string;
+    vpnConnectionId: string;
+    configuration: string;
+}
+export class VpnAttachment extends Table<VpnAttachmentDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'vmId',
@@ -565,5 +745,15 @@ export class VpnAttachment extends Table {
         // CAUTION: don't forget to set a correct name.
         this.setName('VpnAttachment');
         this.alterAttributes(VpnAttachment.__attributes);
+    }
+    convertRecord(record: Record): VpnAttachmentDbItem {
+        const item: VpnAttachmentDbItem = {
+            vmId: record.vmId as string,
+            publicIp: record.publicIp as string,
+            customerGatewayId: record.customerGatewayId as string,
+            vpnConnectionId: record.vpnConnectionId as string,
+            configuration: record.configuration as string
+        };
+        return item;
     }
 }
