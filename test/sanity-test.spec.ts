@@ -8,7 +8,7 @@ import {
     MasterRecord,
     MasterRecordVoteState,
     MasterElection,
-    HeartbeatSyncTiming
+    HealthCheckResult
 } from '../master-election';
 import { VirtualMachine, NetworkInterface } from '../virtual-machine';
 import { PlatformAdapter, ReqType, VmDescriptor, ResourceTag } from '../platform-adapter';
@@ -19,6 +19,8 @@ import {
 } from '../cloud-function-proxy';
 import {
     MasterElectionStrategy,
+    HeartbeatSyncStrategy,
+    NoopTaggingVmStrategy,
     MasterElectionStrategyResult
 } from '../context-strategy/autoscale-context';
 import { FortiGateAutoscaleSetting } from '../fortigate-autoscale/fortigate-autoscale-settings';
@@ -26,20 +28,22 @@ import { FortiGateAutoscaleSetting } from '../fortigate-autoscale/fortigate-auto
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 const TEST_HCR: HealthCheckRecord = {
-    instanceId: '1',
+    vmId: 'fake-test-vm-id',
+    scalingGroupName: 'fake-test-vm-scaling-group-name',
     ip: '2',
     masterIp: '3',
     heartbeatInterval: 4,
     heartbeatLossCount: 5,
-    nextHeartbeatCheckTime: 6,
+    nextHeartbeatTime: 6,
     syncState: HealthCheckSyncState.InSync,
+    seq: 7,
     healthy: true,
-    inSync: true
+    upToDate: true
 };
 
 const TEST_VM: VirtualMachine = {
-    instanceId: '1',
-    scalingGroupName: '2',
+    id: 'fake-test-vm-id',
+    scalingGroupName: 'fake-test-vm-scaling-group-name',
     primaryPrivateIpAddress: '3',
     primaryPublicIpAddress: '4',
     virtualNetworkId: '5',
@@ -48,7 +52,7 @@ const TEST_VM: VirtualMachine = {
 
 const TEST_MASTER_RECORD: MasterRecord = {
     id: '1',
-    instanceId: '2',
+    vmId: '2',
     ip: '3',
     scalingGroupName: '4',
     virtualNetworkId: '5',
@@ -65,6 +69,10 @@ const TEST_MASTER_ELECTION: MasterElection = {
 };
 
 class TestPlatformAdapter implements PlatformAdapter {
+    createTime: number = Date.now();
+    getReqVmId(): string {
+        return 'fake-req-vm-id';
+    }
     checkRequestIntegrity(): void {
         throw new Error('Method not implemented.');
     }
@@ -110,11 +118,11 @@ class TestPlatformAdapter implements PlatformAdapter {
     init(): Promise<void> {
         throw new Error('Method not implemented.');
     }
-    getRequestType(): ReqType {
+    getRequestType(): Promise<ReqType> {
         throw new Error('Method not implemented.');
     }
     getReqHeartbeatInterval(): number {
-        throw new Error('Method not implemented.');
+        return 30;
     }
     getSettings(): Promise<Settings> {
         throw new Error('Method not implemented.');
@@ -185,6 +193,8 @@ describe('sanity test', () => {
     let s: Settings;
     let si: SettingItem;
     let ms: MasterElectionStrategy;
+    let hs: HeartbeatSyncStrategy;
+    let me: MasterElection;
     let autoscale: Autoscale;
     before(function() {
         p = new TestPlatformAdapter();
@@ -209,8 +219,27 @@ describe('sanity test', () => {
             },
             applied: false
         };
+        hs = {
+            prepare() {
+                return Promise.resolve();
+            },
+            apply() {
+                return Promise.resolve();
+            },
+            targetHealthCheckRecord: TEST_HCR,
+            result: HealthCheckResult.OnTime,
+            targetVmFirstHeartbeat: true
+        };
+        me = {
+            newMaster: TEST_VM,
+            newMasterRecord: TEST_MASTER_RECORD,
+            candidate: TEST_VM,
+            signature: 'test-signature'
+        };
         autoscale = new Autoscale(p, e, x);
         autoscale.setMasterElectionStrategy(ms);
+        autoscale.setHeartbeatSyncStrategy(hs);
+        autoscale.setTaggingVmStrategy(new NoopTaggingVmStrategy());
     });
     it('Conflicted settings count in FortiGateAutoscaleSettings and AutoscaleSettings', () => {
         const entriesA = Object.entries(AutoscaleSetting);
@@ -236,14 +265,20 @@ describe('sanity test', () => {
         const stub5 = Sinon.stub(ms, 'result').callsFake(() => {
             return Promise.resolve(TEST_MASTER_ELECTION);
         });
+        const stub6 = Sinon.stub(p, 'equalToVm').callsFake((a, b) => {
+            Sinon.assert.match(a, TEST_VM);
+            Sinon.assert.match(b, TEST_VM);
+            return true;
+        });
         try {
             const result = await autoscale.handleMasterElection();
             Sinon.assert.match(stub1.called, true);
             Sinon.assert.match(await stub2.returnValues[0], s);
             Sinon.assert.match(stub3.called, true);
             Sinon.assert.match(stub4.notCalled, true);
-            Sinon.assert.match(stub5.called, false);
-            Sinon.assert.match(result, '');
+            Sinon.assert.match(stub5.called, true);
+            Sinon.assert.match(stub6.called, false);
+            Sinon.assert.match(!!result.newMaster, true);
         } catch (error) {
             console.log(error);
             Sinon.assert.fail('should not throw errors.');
@@ -253,6 +288,7 @@ describe('sanity test', () => {
             stub3.restore();
             stub4.restore();
             stub5.restore();
+            stub6.restore();
         }
     });
     it('handleHeartbeatSync', async () => {
@@ -264,9 +300,7 @@ describe('sanity test', () => {
         const stub3 = Sinon.stub(autoscale, 'handleLaunchedVm').callsFake(() => {
             return Promise.resolve('Sinon.stub.callsFake');
         });
-        const stub4 = Sinon.stub(autoscale, 'doTargetHealthCheck').callsFake(() => {
-            return Promise.resolve(HeartbeatSyncTiming.OnTime);
-        });
+
         const stub5 = Sinon.stub(p, 'getMasterVm').callsFake(() => {
             return Promise.resolve(TEST_VM);
         });
@@ -274,7 +308,7 @@ describe('sanity test', () => {
             return Promise.resolve(TEST_MASTER_RECORD);
         });
         const stub7 = Sinon.stub(autoscale, 'handleMasterElection').callsFake(() => {
-            return Promise.resolve('Sinon.stub.callsFake');
+            return Promise.resolve(me);
         });
         const stub8 = Sinon.stub(autoscale, 'handleTaggingVm');
         const stub9 = Sinon.stub(p, 'equalToVm').callsFake((a, b) => {
@@ -283,22 +317,23 @@ describe('sanity test', () => {
             return true;
         });
         const stub10 = Sinon.stub(p, 'updateHealthCheckRecord').callsFake(hcr => {
-            Sinon.assert.match(Object.is(hcr, TEST_HCR), true);
+            Sinon.assert.match(hcr.vmId, TEST_HCR.vmId);
+            Sinon.assert.match(hcr.scalingGroupName, TEST_HCR.scalingGroupName);
             return Promise.resolve();
         });
 
         try {
             const result = await autoscale.handleHeartbeatSync();
             Sinon.assert.match(await stub1.returnValues[0], TEST_HCR);
-            Sinon.assert.match(stub2.notCalled, true);
-            Sinon.assert.match(stub3.notCalled, true);
-            Sinon.assert.match(await stub4.returnValues[0], HeartbeatSyncTiming.OnTime);
-            Sinon.assert.match(stub5.notCalled, true);
-            Sinon.assert.match(await stub6.notCalled, true);
-            Sinon.assert.match(await stub7.returnValues[0], 'Sinon.stub.callsFake');
-            Sinon.assert.match(stub8.called, true);
-            Sinon.assert.match(stub9.called, true);
-            Sinon.assert.match(stub10.called, true);
+            Sinon.assert.match(stub2.called, false);
+            Sinon.assert.match(stub3.called, true);
+
+            Sinon.assert.match(stub5.called, false);
+            Sinon.assert.match(await stub6.called, false);
+            Sinon.assert.match(await stub7.returnValues[0], me);
+            Sinon.assert.match(stub8.called, false);
+            Sinon.assert.match(stub9.called, false);
+            Sinon.assert.match(stub10.called, false);
             Sinon.assert.match(result, '');
         } catch (error) {
             console.log(error);
@@ -307,7 +342,7 @@ describe('sanity test', () => {
             stub1.restore();
             stub2.restore();
             stub3.restore();
-            stub4.restore();
+
             stub5.restore();
             stub6.restore();
             stub7.restore();

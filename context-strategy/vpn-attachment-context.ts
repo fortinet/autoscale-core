@@ -16,7 +16,7 @@ export interface VpnAttachmentStrategy {
     apply(): Promise<string>;
 }
 
-export class NoOpVpnAttachmentStrategy implements VpnAttachmentStrategy {
+export class NoopVpnAttachmentStrategy implements VpnAttachmentStrategy {
     prepare(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter): Promise<void> {
         return Promise.resolve();
     }

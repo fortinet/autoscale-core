@@ -1,6 +1,4 @@
 import * as HttpStatusCodes from 'http-status-codes';
-import { HeartbeatSyncTiming } from '../master-election';
-
 import { FortiGateAutoscaleSetting } from './fortigate-autoscale-settings';
 import { PlatformAdapter, ReqType } from '../platform-adapter';
 import { CloudFunctionProxyAdapter, CloudFunctionProxy } from '../cloud-function-proxy';
@@ -348,7 +346,7 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             this.proxy.logAsInfo('called handleRequest.');
             return proxy.formatResponse(HttpStatusCodes.OK, responseBody, {});
         } catch (error) {
-            // NOTE: assert that error is always an instance of Error
+            // ASSERT: error is always an instance of Error
             let httpError: HttpError;
             this.proxy.logForError('called handleRequest.', error);
             if (!(error instanceof HttpError)) {
@@ -420,12 +418,6 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
         return bootstrapConfig;
     }
     handleHeartbeatSync(): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    doTargetHealthCheck(): Promise<HeartbeatSyncTiming> {
-        throw new Error('Method not implemented.');
-    }
-    doMasterHealthCheck(): Promise<HeartbeatSyncTiming> {
         throw new Error('Method not implemented.');
     }
     setScalingGroupStrategy(strategy: ScalingGroupStrategy): void {

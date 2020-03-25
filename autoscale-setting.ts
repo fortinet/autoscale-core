@@ -17,7 +17,10 @@ export enum AutoscaleSetting {
     EnableFazIntegration = 'enable-fortianalyzer-integration',
     AutoscaleHandlerUrl = 'autoscale-handler-url',
     AssetStorageContainer = 'asset-storage-name',
-    AssetStorageDirectory = 'asset-storage-key-prefix'
+    AssetStorageDirectory = 'asset-storage-key-prefix',
+    PaygScalingGroupName = 'payg-scaling-group-name',
+    ByolScalingGroupName = 'byol-scaling-group-name',
+    HeartbeatDelayAllowance = 'heartbeat-delay-allowance'
 }
 
 export interface SubnetPair {
@@ -134,18 +137,4 @@ export class SettingItem {
     }
 }
 
-export class Settings extends Map<string, SettingItem> {
-    get(key: string): SettingItem {
-        if (this.has(key)) {
-            return super.get(key);
-        } else {
-            return new SettingItem(
-                key,
-                SettingItem.NO_VALUE,
-                `This setting item is created because the key [${key}] doesn't exist in the settings.`,
-                'false',
-                'false'
-            );
-        }
-    }
-}
+export type Settings = Map<string, SettingItem>;

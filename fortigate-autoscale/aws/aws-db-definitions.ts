@@ -12,7 +12,8 @@ import {
     LicenseStock,
     LicenseUsage,
     CustomLog,
-    VpnAttachment
+    VpnAttachment,
+    Record
 } from '../../db-definitions';
 
 export const AwsTypeRefs: TypeRefMap = new Map<TypeRef, string>([
@@ -93,8 +94,13 @@ export class AwsVpnAttachment extends VpnAttachment {
     }
 }
 
+export interface LifecycleItemDbItem {
+    vmId: string;
+    actionName: string;
+}
+
 // additional tables
-export class LifecycleItem extends Table {
+export class LifecycleItem extends Table<LifecycleItemDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'vmId',
@@ -116,5 +122,13 @@ export class LifecycleItem extends Table {
         this.alterAttributes(LifecycleItem.__attributes);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
+    }
+
+    convertRecord(record: Record): LifecycleItemDbItem {
+        const item: LifecycleItemDbItem = {
+            vmId: record.vmId as string,
+            actionName: record.actionName as string
+        };
+        return item;
     }
 }

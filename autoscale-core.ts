@@ -2,7 +2,10 @@ import { Settings, AutoscaleSetting } from './autoscale-setting';
 import {
     MasterElectionStrategy,
     AutoscaleContext,
-    HeartbeatSyncStrategy
+    HeartbeatSyncStrategy,
+    TaggingVmStrategy,
+    VmTagging,
+    VmTaggingType
 } from './context-strategy/autoscale-context';
 import {
     ScalingGroupContext,
@@ -13,8 +16,9 @@ import {
     MasterElection,
     HealthCheckRecord,
     MasterRecord,
-    HeartbeatSyncTiming,
-    MasterRecordVoteState
+    HealthCheckResult,
+    MasterRecordVoteState,
+    HealthCheckSyncState
 } from './master-election';
 import { VirtualMachine } from './virtual-machine';
 import { CloudFunctionProxy, CloudFunctionProxyAdapter } from './cloud-function-proxy';
@@ -169,15 +173,6 @@ export interface HAActivePassiveBoostrapStrategy {
     result(): Promise<MasterElection>;
 }
 
-export interface TaggingVmStrategy {
-    prepare(
-        election: MasterElection,
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter
-    ): Promise<void>;
-    apply(): Promise<void>;
-}
-
 export class Autoscale implements AutoscaleCore {
     platform: PlatformAdapter;
     scalingGroupStrategy: ScalingGroupStrategy;
@@ -193,6 +188,9 @@ export class Autoscale implements AutoscaleCore {
         this.env = e;
         this.proxy = x;
     }
+    setTaggingVmStrategy(strategy: TaggingVmStrategy): void {
+        this.taggingVmStrategy = strategy;
+    }
     async init(): Promise<void> {
         await this.platform.init();
     }
@@ -205,6 +203,7 @@ export class Autoscale implements AutoscaleCore {
     }
     async handleHeartbeatSync(): Promise<string> {
         this.proxy.logAsInfo('calling handleHeartbeatSync.');
+        let response = '';
         let error: Error;
 
         // load target vm
@@ -217,14 +216,25 @@ export class Autoscale implements AutoscaleCore {
             this.proxy.logForError('', error);
             throw error;
         }
-        // load target healthcheck record
-        this.env.targetHealthCheckRecord =
-            this.env.targetHealthCheckRecord ||
-            (await this.platform.getHealthCheckRecord(this.env.targetVm));
+        // prepare to apply the heartbeatSyncStrategy to get vm health check records
+        // ASSERT: this.env.targetVm is available
+        this.heartbeatSyncStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
+        // apply the heartbeat sync strategy to be able to get vm health check records
+        await this.heartbeatSyncStrategy.apply();
+        // ASSERT: the heartbeatSyncStrategy is done
 
-        // if no health check record, this request is considered as the first hb sync request.
-        // if there's a health check record, this request is considered as a regular hb sync request.
-        const isFirstHeartbeat = this.env.targetHealthCheckRecord === null;
+        // load target health check record
+        if (this.heartbeatSyncStrategy.targetHealthCheckRecord.upToDate) {
+            this.env.targetHealthCheckRecord = this.heartbeatSyncStrategy.targetHealthCheckRecord;
+        }
+        // if it's not up to date, load it from db.
+        else {
+            this.env.targetHealthCheckRecord = await this.platform.getHealthCheckRecord(
+                this.env.targetVm
+            );
+        }
+
+        const isFirstHeartbeat = this.heartbeatSyncStrategy.targetVmFirstHeartbeat;
 
         // the 1st hb is also the indication of the the vm becoming in-service. The launching vm
         // phase (in some platforms) should be done at this point. apply the launced vm strategy
@@ -232,63 +242,78 @@ export class Autoscale implements AutoscaleCore {
             await this.handleLaunchedVm();
         }
 
-        // does this hb sync arrive on time?
-        // 1st hb does not need to verify the timing since no past healthcheck can compare with.
-        // for a regular hb, it will need to verify this the timing.
-        // here this function should delegate the health checking to the health check
-        // strategy. then see the result health check record.
-        const heartbeatTiming = await this.doTargetHealthCheck();
+        const heartbeatTiming = await this.heartbeatSyncStrategy.result;
         // If the timing indicates that it should be dropped,
         // don't update. Respond immediately. return.
-        if (heartbeatTiming === HeartbeatSyncTiming.Dropped) {
+        if (heartbeatTiming === HealthCheckResult.Dropped) {
             return '';
         }
 
-        // if master is elected?
+        // if master exists?
         // get master vm
-        if (!this.env.masterVm) {
-            this.env.masterVm = await this.platform.getMasterVm();
+        this.env.masterVm = this.env.masterVm || (await this.platform.getMasterVm());
+
+        // get master healthcheck record
+        if (this.env.masterVm) {
+            this.env.masterHealthCheckRecord = await this.platform.getHealthCheckRecord(
+                this.env.masterVm
+            );
+        } else {
+            this.env.masterHealthCheckRecord = undefined;
         }
         // get master record
         this.env.masterRecord = this.env.masterRecord || (await this.platform.getMasterRecord());
 
-        // handle master election. the expected result should be one of:
-        // master election is triggered
-        // master election is finalized
-        // master election isn't needed
-        await this.handleMasterElection();
+        // about to handle to the master election
 
-        // tag the vm (including target and master)
-        await this.handleTaggingVm();
+        // NOTE: master election relies on health check record of both target and master vm,
+        // ensure the two values are up to date.
 
-        // target is the master?
-        if (this.platform.equalToVm(this.env.targetVm, this.env.masterVm)) {
-            this.env.targetHealthCheckRecord.masterIp = this.env.targetVm.primaryPrivateIpAddress;
-        } else {
-            // master exist? use master ip
-            if (this.env.masterVm) {
-                this.env.targetHealthCheckRecord.masterIp = this.env.masterVm.primaryPrivateIpAddress;
-            } else {
-                this.env.targetHealthCheckRecord.masterIp = null;
-            }
+        // ASSERT: the following values are up-to-date before handling master election.
+        // this.env.targetVm
+        // this.env.masterVm
+        // this.env.masterRecord
+
+        const masterElection = await this.handleMasterElection();
+
+        // if new master is elected, reload the masterVm, master record to this.env.
+        if (masterElection.newMaster) {
+            this.env.masterVm = masterElection.newMaster;
+            this.env.masterRecord = masterElection.newMasterRecord;
+            this.env.masterHealthCheckRecord = await this.platform.getHealthCheckRecord(
+                this.env.masterVm
+            );
         }
 
-        if (isFirstHeartbeat) {
-            await this.platform.createHealthCheckRecord(this.env.targetHealthCheckRecord);
-        } else {
+        // the health check record may need to update again.
+        // if master vote state is done, and if the target vm is holding a different master ip or
+        // holding no master ip, need to update its health check record with the new master,
+        // then notify it the new master ip
+        if (
+            masterElection.newMaster &&
+            masterElection.newMasterRecord.voteState === MasterRecordVoteState.Done &&
+            this.env.targetHealthCheckRecord.masterIp !==
+                masterElection.newMaster.primaryPrivateIpAddress
+        ) {
+            this.env.targetHealthCheckRecord.masterIp =
+                masterElection.newMaster.primaryPrivateIpAddress;
             await this.platform.updateHealthCheckRecord(this.env.targetHealthCheckRecord);
+            response = JSON.stringify({
+                'master-ip': masterElection.newMaster.primaryPrivateIpAddress
+            });
         }
         this.proxy.logAsInfo('called handleHeartbeatSync.');
-        return '';
+        return response;
     }
     handleTerminatedVm(): Promise<string> {
         throw new Error('Method not implemented.');
     }
-    async handleTaggingVm(): Promise<void> {
+    async handleTaggingVm(taggings: VmTagging[]): Promise<void> {
+        this.taggingVmStrategy.prepare(this.platform, this.proxy, taggings);
         await this.taggingVmStrategy.apply();
     }
 
-    async handleMasterElection(): Promise<string> {
+    async handleMasterElection(): Promise<MasterElection> {
         this.proxy.logAsInfo('calling handleMasterElection.');
         const settings = await this.platform.getSettings();
         const electionTimeout = Number(settings.get(AutoscaleSetting.MasterElectionTimeout).value);
@@ -322,7 +347,7 @@ export class Autoscale implements AutoscaleCore {
                 if (
                     this.env.targetHealthCheckRecord &&
                     this.env.targetHealthCheckRecord.healthy &&
-                    this.env.targetHealthCheckRecord.inSync
+                    this.env.targetHealthCheckRecord.syncState === HealthCheckSyncState.InSync
                 ) {
                     this.env.masterRecord.voteState = MasterRecordVoteState.Done;
                     await this.platform.updateMasterRecord(this.env.masterRecord);
@@ -359,15 +384,34 @@ export class Autoscale implements AutoscaleCore {
             }
         }
         // after master election complete (election may not be necessary in some cases)
-        // if election strategy is applied, get the election result
+        // get the election result
         // then update the autoscale environment.
-        if (this.masterElectionStrategy.applied) {
-            const election: MasterElection = await this.masterElectionStrategy.result();
-            this.env.masterRecord = election.newMasterRecord;
-            this.env.masterVm = election.newMaster;
+        const election = await this.masterElectionStrategy.result();
+        // update the env
+        this.env.masterRecord = election.newMasterRecord;
+        this.env.masterVm = election.newMaster;
+
+        // if master role has switched, need to tag the new master
+        // add tags (or called labels in some platforms) to the target and master vm
+        const vmTaggings: VmTagging[] = [];
+        // if there's new master, update its tag
+        if (election.newMaster) {
+            vmTaggings.push({
+                vm: election.newMaster,
+                type: VmTaggingType.newMasterVm
+            });
         }
+        // if old master exists, need to deal with its tag too.
+        if (election.oldMaster) {
+            vmTaggings.push({
+                vm: election.oldMaster,
+                type: VmTaggingType.newMasterVm
+            });
+        }
+        await this.handleTaggingVm(vmTaggings);
+
         this.proxy.logAsInfo('called handleMasterElection.');
-        return '';
+        return election;
     }
     async handleLaunchedVm(): Promise<string> {
         this.proxy.logAsInfo('calling handleLaunchedVm.');
@@ -399,16 +443,6 @@ export class Autoscale implements AutoscaleCore {
     }
     setHeartbeatSyncStrategy(strategy: HeartbeatSyncStrategy): void {
         this.heartbeatSyncStrategy = strategy;
-    }
-    doTargetHealthCheck(): Promise<HeartbeatSyncTiming> {
-        // TODO: implementation required
-        // await this.heartbeatSyncTimingStrategy.apply();
-        throw new Error('Method not implemented.');
-    }
-    doMasterHealthCheck(): Promise<HeartbeatSyncTiming> {
-        // TODO: implementation required
-        // await this.heartbeatSyncTimingStrategy.apply();
-        throw new Error('Method not implemented.');
     }
 }
 

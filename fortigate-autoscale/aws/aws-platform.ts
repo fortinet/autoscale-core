@@ -4,7 +4,7 @@ import fs from 'fs';
 import { APIGatewayProxyEvent, Context, APIGatewayProxyResult, ScheduledEvent } from 'aws-lambda';
 import EC2 from 'aws-sdk/clients/ec2';
 import { DocumentClient, ExpressionAttributeValueMap } from 'aws-sdk/clients/dynamodb';
-import { S3 } from 'aws-sdk';
+import { S3, AutoScaling } from 'aws-sdk';
 
 import * as AwsDBDef from './aws-db-definitions';
 import { VpnAttachmentContext } from '../../context-strategy/vpn-attachment-context';
@@ -15,7 +15,7 @@ import {
     NicAttachmentResult
 } from '../../context-strategy/nic-attachment-context';
 import { VirtualMachine, NetworkInterface } from '../../virtual-machine';
-import { SubnetPair, SettingItem, Settings } from '../../autoscale-setting';
+import { SubnetPair, SettingItem, Settings, AutoscaleSetting } from '../../autoscale-setting';
 import {
     PlatformAdaptee,
     mapHttpMethod,
@@ -33,19 +33,25 @@ import {
     ReqMethod,
     ReqType,
     PlatformAdapter,
-    VmDescriptor,
     ResourceTag,
     ReqBody,
     ReqHeaders
 } from '../../platform-adapter';
-import { HealthCheckRecord, MasterRecord, MasterRecordVoteState } from '../../master-election';
 import {
-    Table,
+    HealthCheckRecord,
+    MasterRecord,
+    MasterRecordVoteState,
+    HealthCheckSyncState
+} from '../../master-election';
+import {
     Record,
     KeyValue,
     CreateOrUpdate,
     MasterElectionDbItem,
-    NicAttachmentDbItem
+    NicAttachmentDbItem,
+    SettingsDbItem,
+    DbTable,
+    AutoscaleDbItem
 } from '../../db-definitions';
 import { Blob } from '../../blob';
 import { FortiGateAutoscaleSetting } from '../fortigate-autoscale-settings';
@@ -73,7 +79,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
     protected async listRecord(vm: VirtualMachine): Promise<NicAttachmentRecord[]> {
         this.proxy.logAsDebug('calling AwsNicAttachmentStrategy.getRecord');
         const records = (await this.platform.listNicAttachmentRecord()).filter(rec => {
-            return rec.vmId === vm.instanceId;
+            return rec.vmId === vm.id;
         });
         this.proxy.logAsDebug('called AwsNicAttachmentStrategy.getRecord');
         return records;
@@ -84,7 +90,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
         nic: NetworkInterface
     ): Promise<NicAttachmentRecord | null> {
         const [record] = (await this.platform.listNicAttachmentRecord()).filter(rec => {
-            return rec.vmId === vm.instanceId && rec.nicId === nic.id;
+            return rec.vmId === vm.id && rec.nicId === nic.id;
         });
         return record;
     }
@@ -95,23 +101,19 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
         if (record) {
             if (record.attachmentState === NicAttachmentStatus.Attaching) {
                 this.proxy.logAsWarning(
-                    `The nic (id: ${nic.id}) is already attaching to vm(id: ${vm.instanceId})`
+                    `The nic (id: ${nic.id}) is already attaching to vm(id: ${vm.id})`
                 );
                 return;
             } else {
                 this.proxy.logAsError(
                     `The nic (id: ${nic.id}) is in` +
-                        ` state: ${record.attachmentState} with vm(id: ${vm.instanceId}).` +
+                        ` state: ${record.attachmentState} with vm(id: ${vm.id}).` +
                         `Changing state from ${record.attachmentState} to attaching is not allowed.`
                 );
                 throw new Error('Incorrect transition of Nic Attachment.');
             }
         }
-        await this.platform.updateNicAttachmentRecord(
-            vm.instanceId,
-            nic.id,
-            NicAttachmentStatus.Attaching
-        );
+        await this.platform.updateNicAttachmentRecord(vm.id, nic.id, NicAttachmentStatus.Attaching);
         this.proxy.logAsDebug('called AwsNicAttachmentStrategy.setAttaching');
     }
 
@@ -121,23 +123,19 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
         if (record) {
             if (record.attachmentState === NicAttachmentStatus.Attached) {
                 this.proxy.logAsWarning(
-                    `The nic (id: ${nic.id}) is already attached to vm(id: ${vm.instanceId})`
+                    `The nic (id: ${nic.id}) is already attached to vm(id: ${vm.id})`
                 );
                 return;
             } else {
                 this.proxy.logAsError(
                     `The nic (id: ${nic.id}) is in` +
-                        ` state: ${record.attachmentState} with vm(id: ${vm.instanceId}).` +
+                        ` state: ${record.attachmentState} with vm(id: ${vm.id}).` +
                         `Changing state from ${record.attachmentState} to attached is not allowed.`
                 );
                 throw new Error('Incorrect transition of Nic Attachment.');
             }
         }
-        await this.platform.updateNicAttachmentRecord(
-            vm.instanceId,
-            nic.id,
-            NicAttachmentStatus.Attached
-        );
+        await this.platform.updateNicAttachmentRecord(vm.id, nic.id, NicAttachmentStatus.Attached);
         this.proxy.logAsDebug('called AwsNicAttachmentStrategy.setAttaching');
     }
 
@@ -147,23 +145,19 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
         if (record) {
             if (record.attachmentState === NicAttachmentStatus.Detaching) {
                 this.proxy.logAsWarning(
-                    `The nic (id: ${nic.id}) is already detaching from vm(id: ${vm.instanceId})`
+                    `The nic (id: ${nic.id}) is already detaching from vm(id: ${vm.id})`
                 );
                 return;
             } else {
                 this.proxy.logAsError(
                     `The nic (id: ${nic.id}) is in` +
-                        ` state: ${record.attachmentState} with vm(id: ${vm.instanceId}).` +
+                        ` state: ${record.attachmentState} with vm(id: ${vm.id}).` +
                         `Changing state from ${record.attachmentState} to detaching is not allowed.`
                 );
                 throw new Error('Incorrect transition of Nic Attachment.');
             }
         }
-        await this.platform.updateNicAttachmentRecord(
-            vm.instanceId,
-            nic.id,
-            NicAttachmentStatus.Detaching
-        );
+        await this.platform.updateNicAttachmentRecord(vm.id, nic.id, NicAttachmentStatus.Detaching);
         this.proxy.logAsDebug('called AwsNicAttachmentStrategy.setDetaching');
     }
 
@@ -173,23 +167,19 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
         if (record) {
             if (record.attachmentState === NicAttachmentStatus.Detached) {
                 this.proxy.logAsWarning(
-                    `The nic (id: ${nic.id}) is already detached from vm(id: ${vm.instanceId})`
+                    `The nic (id: ${nic.id}) is already detached from vm(id: ${vm.id})`
                 );
                 return;
             } else {
                 this.proxy.logAsError(
                     `The nic (id: ${nic.id}) is in` +
-                        ` state: ${record.attachmentState} with vm(id: ${vm.instanceId}).` +
+                        ` state: ${record.attachmentState} with vm(id: ${vm.id}).` +
                         `Changing state from ${record.attachmentState} to detached is not allowed.`
                 );
                 throw new Error('Incorrect transition of Nic Attachment.');
             }
         }
-        await this.platform.updateNicAttachmentRecord(
-            vm.instanceId,
-            nic.id,
-            NicAttachmentStatus.Detached
-        );
+        await this.platform.updateNicAttachmentRecord(vm.id, nic.id, NicAttachmentStatus.Detached);
         this.proxy.logAsDebug('called AwsNicAttachmentStrategy.setDetached');
     }
 
@@ -197,10 +187,10 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
         this.proxy.logAsDebug('calling AwsNicAttachmentStrategy.deleteRecord');
         const record = await this.getRecord(vm, nic);
         if (record) {
-            await this.platform.deleteNicAttachmentRecord(vm.instanceId, nic.id);
+            await this.platform.deleteNicAttachmentRecord(vm.id, nic.id);
         } else {
             this.proxy.logAsWarning(
-                `no nic attachment found for vm(id: ${vm.instanceId}) and nic(id: ${nic.id}).`
+                `no nic attachment found for vm(id: ${vm.id}) and nic(id: ${nic.id}).`
             );
         }
         this.proxy.logAsDebug('calling AwsNicAttachmentStrategy.deleteRecord');
@@ -271,7 +261,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
                 // determine the private subnet paired with the vm subnet
                 const pairedSubnetId: string = await this.getPairedSubnetId(this.vm);
                 const description =
-                    `Addtional nic for instance(id:${this.vm.instanceId}) ` +
+                    `Addtional nic for instance(id:${this.vm.id}) ` +
                     `in auto scaling group: ${this.vm.scalingGroupName}`;
 
                 try {
@@ -291,15 +281,10 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
                 await this.setAttaching(this.vm, nic);
                 const nicDeviceIndex: number = this.vm.networkInterfaces.length;
                 try {
-                    await this.platform.attachNetworkInterface(
-                        this.vm.instanceId,
-                        nic.id,
-                        nicDeviceIndex
-                    );
+                    await this.platform.attachNetworkInterface(this.vm.id, nic.id, nicDeviceIndex);
                 } catch (error) {
                     this.proxy.logAsError(
-                        `failed to attach nic (id: ${nic.id}) to` +
-                            ` vm (id: ${this.vm.instanceId}).`
+                        `failed to attach nic (id: ${nic.id}) to` + ` vm (id: ${this.vm.id}).`
                     );
                     throw error;
                 }
@@ -394,31 +379,65 @@ export abstract class AwsPlatformAdaptee implements PlatformAdaptee {
     docClient: DocumentClient;
     s3: S3;
     ec2: EC2;
+    autoscaling: AutoScaling;
     constructor() {
         this.docClient = new DocumentClient({ apiVersion: '2012-08-10' });
         this.s3 = new S3({ apiVersion: '2006-03-01' });
         this.ec2 = new EC2({ apiVersion: '2016-11-15' });
+        this.autoscaling = new AutoScaling({ apiVersion: '2011-01-01' });
     }
     abstract checkReqIntegrity(proxy: CloudFunctionProxyAdapter): void;
     abstract getReqType(proxy: CloudFunctionProxyAdapter): Promise<ReqType>;
     abstract getReqMethod(proxy: CloudFunctionProxyAdapter): ReqMethod;
     abstract getReqBody(proxy: CloudFunctionProxyAdapter): ReqBody;
     abstract getReqHeaders(proxy: CloudFunctionProxyAdapter): ReqHeaders;
-    loadSettings(): Promise<Settings> {
-        // TODO: add real implementation
-        return Promise.resolve(new Map<string, SettingItem>());
+    async loadSettings(): Promise<Settings> {
+        const table = new AwsDBDef.AwsSettings(process.env.RESOURCE_TAG_PREFIX || '');
+        const records: Map<string, SettingsDbItem> = new Map(
+            (await this.listItemFromDb(table)).map(record => {
+                return [
+                    record.settingKey as string,
+                    {
+                        settingKey: record.settingKey as string,
+                        settingValue: record.settingValue as string,
+                        description: record.description as string,
+                        jsonEncoded: record.jsonEncoded as string,
+                        editable: record.editable as string
+                    }
+                ];
+            })
+        );
+        const settings: Settings = new Map<string, SettingItem>();
+        Object.keys(FortiGateAutoscaleSetting).forEach(key => {
+            if (records.has(key)) {
+                const record = records.get(key);
+                const settingItem = new SettingItem(
+                    record.settingKey,
+                    record.settingValue,
+                    record.description,
+                    record.editable,
+                    record.jsonEncoded
+                );
+                settings.set(key, settingItem);
+            }
+        });
+        return settings;
     }
 
     /**
      * Save a document db item into DynamoDB.
-     * @param  {Table} table the instance of Table to save the item.
+     * @param  {DbTable} table the instance of Table to save the item.
      * @param  {Record} item the item to save into the db table.
      * @param  {AwsDdbOperations} conditionExp (optional) the condition expression for saving the item
      * @returns {Promise} return void
      * @throws whatever docClient.put throws.
      * @see https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB/DocumentClient.html#put-property
      */
-    async saveItemToDb(table: Table, item: Record, conditionExp?: AwsDdbOperations): Promise<void> {
+    async saveItemToDb(
+        table: DbTable,
+        item: Record,
+        conditionExp?: AwsDdbOperations
+    ): Promise<void> {
         // CAUTION: validate the db input
         table.validateInput(item);
         if (
@@ -464,11 +483,11 @@ export abstract class AwsPlatformAdaptee implements PlatformAdaptee {
     }
     /**
      * get an db table record from a given table
-     * @param  {Table} table the instance of Table to get the item.
+     * @param  {DbTable} table the instance of Table to get the item.
      * @param  {KeyValue[]} keyValue an array of table key and a value to get the item
      * @returns {Promise} return Record or null
      */
-    async getItemFromDb(table: Table, keyValue: KeyValue[]): Promise<Record | null> {
+    async getItemFromDb(table: DbTable, keyValue: KeyValue[]): Promise<Record | null> {
         const keys = {};
         keyValue.forEach(kv => {
             keys[kv.key] = kv.value;
@@ -482,13 +501,13 @@ export abstract class AwsPlatformAdaptee implements PlatformAdaptee {
     }
     /**
      * Delte a given item from the db
-     * @param  {Table} table the instance of Table to delete the item.
+     * @param  {DbTable} table the instance of Table to delete the item.
      * @param  {Record} item the item to be deleted from the db table.
      * @param  {AwsDdbOperations} condition (optional) the condition expression for deleting the item
      * @returns {Promise} void
      */
     async deleteItemFromDb(
-        table: Table,
+        table: DbTable,
         item: Record,
         condition?: AwsDdbOperations
     ): Promise<void> {
@@ -509,13 +528,13 @@ export abstract class AwsPlatformAdaptee implements PlatformAdaptee {
     }
     /**
      * Scan and list all or some record from a given db table
-     * @param  {Table} table the instance of Table to delete the item.
+     * @param  {DbTable} table the instance of Table to delete the item.
      * @param  {AwsDdbOperations} filterExp (optional) a filter for listing the records
      * @param  {number} limit (optional) number or records to return
      * @returns {Promise} array of db record
      */
     async listItemFromDb(
-        table: Table,
+        table: DbTable,
         filterExp?: AwsDdbOperations,
         limit?: number
     ): Promise<Record[]> {
@@ -569,6 +588,37 @@ export abstract class AwsPlatformAdaptee implements PlatformAdaptee {
             };
         }
     }
+
+    async describeInstance(instanceId: string): Promise<EC2.Instance> {
+        const request: EC2.DescribeInstancesRequest = {
+            Filters: [
+                {
+                    Name: 'instance-id',
+                    Values: [instanceId]
+                }
+            ]
+        };
+        let instance: EC2.Instance;
+        const result = await this.ec2.describeInstances(request).promise();
+        result.Reservations.forEach(reserv => {
+            const [ins] = reserv.Instances.filter(i => i.InstanceId === instanceId);
+            instance = ins || instance;
+        });
+        return instance;
+    }
+
+    async describeAutoScalingGroups(
+        scalingGroupNames: string[]
+    ): Promise<AutoScaling.AutoScalingGroup[]> {
+        const request: AutoScaling.AutoScalingGroupNamesType = {
+            AutoScalingGroupNames: scalingGroupNames
+        };
+        const result = await this.autoscaling.describeAutoScalingGroups(request).promise();
+        const scalingGroups = result.AutoScalingGroups.filter(group =>
+            scalingGroupNames.includes(group.AutoScalingGroupName)
+        );
+        return scalingGroups;
+    }
     async createNetworkInterface(
         subnetId: string,
         description?: string,
@@ -605,12 +655,16 @@ export abstract class AwsPlatformAdaptee implements PlatformAdaptee {
         return result.NetworkInterfaces;
     }
 
-    async describeNetworkInterface(nicId: string): Promise<EC2.NetworkInterface> {
+    async listNetworkInterfacesById(nicIds: string[]): Promise<EC2.NetworkInterface[]> {
         const request: EC2.DescribeNetworkInterfacesRequest = {
-            NetworkInterfaceIds: [nicId]
+            NetworkInterfaceIds: nicIds
         };
         const result = await this.ec2.describeNetworkInterfaces(request).promise();
-        const [nic] = result.NetworkInterfaces.filter(eni => eni.NetworkInterfaceId === nicId);
+        return result.NetworkInterfaces;
+    }
+
+    async describeNetworkInterface(nicId: string): Promise<EC2.NetworkInterface> {
+        const [nic] = await this.listNetworkInterfacesById([nicId]);
         if (!nic) {
             throw new Error(`Nic (id: ${nicId}) does not exist.`);
         }
@@ -698,7 +752,8 @@ export class AwsApiGatewayEventAdaptee extends AwsPlatformAdaptee {
         proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
     ): void {
         const reqMethod = this.getReqMethod(proxy);
-        if (reqMethod === ReqMethod.GET && proxy.request.headers['Fos-instance-id'] === null) {
+        const headers = this.getReqHeaders(proxy);
+        if (reqMethod === ReqMethod.GET && headers['Fos-instance-id'] === null) {
             throw new Error('Invalid request. Fos-instance-id is missing in [GET] request header.');
         } else if (reqMethod === ReqMethod.POST) {
             const body: ReqBody = this.getReqBody(proxy);
@@ -811,14 +866,16 @@ export class AwsScheduleEventAdaptee extends AwsPlatformAdaptee {
     }
 }
 
-export abstract class AwsPlatformAdapter implements PlatformAdapter {
+export class AwsPlatformAdapter implements PlatformAdapter {
     adaptee: AwsPlatformAdaptee;
     proxy: CloudFunctionProxyAdapter;
     settings: Settings;
+    readonly createTime: number;
     readonly awsOnlyConfigset = ['setuptgwvpn', 'internalelbwebserv'];
-    constructor(p: AwsPlatformAdaptee, proxy: CloudFunctionProxyAdapter) {
+    constructor(p: AwsPlatformAdaptee, proxy: CloudFunctionProxyAdapter, createTime?: number) {
         this.adaptee = p;
         this.proxy = proxy;
+        this.createTime = createTime ? createTime : Date.now();
     }
     checkRequestIntegrity(): Promise<void> {
         const reqMethod = this.adaptee.getReqMethod(this.proxy);
@@ -838,13 +895,28 @@ export abstract class AwsPlatformAdapter implements PlatformAdapter {
         }
         return Promise.resolve();
     }
-    abstract getRequestType(): ReqType;
+    getRequestType(): Promise<ReqType> {
+        return this.adaptee.getReqType(this.proxy);
+    }
     async init(): Promise<void> {
         this.settings = await this.adaptee.loadSettings();
         await this.validateSettings();
     }
+    getReqVmId(): string {
+        const reqMethod = this.adaptee.getReqMethod(this.proxy);
+        if (reqMethod === ReqMethod.GET) {
+            const headers = this.adaptee.getReqHeaders(this.proxy);
+            return headers['Fos-instance-id'] as string;
+        } else if (reqMethod === ReqMethod.POST) {
+            const body = this.adaptee.getReqBody(this.proxy);
+            return body.instance as string;
+        } else {
+            throw new Error(`Cannot get vm id in unknown request method: ${reqMethod}`);
+        }
+    }
     getReqHeartbeatInterval(): number {
-        throw new Error('Method not implemented.');
+        const body = this.adaptee.getReqBody(this.proxy);
+        return (body.interval && Number(body.interval)) || NaN;
     }
     getSettings(): Promise<Settings> {
         return Promise.resolve(this.settings);
@@ -858,7 +930,9 @@ export abstract class AwsPlatformAdapter implements PlatformAdapter {
             FortiGateAutoscaleSetting.FortiGateTrafficPort,
             FortiGateAutoscaleSetting.FortiGateAdminPort,
             FortiGateAutoscaleSetting.FortiGateInternalElbDns,
-            FortiGateAutoscaleSetting.HeartbeatInterval
+            FortiGateAutoscaleSetting.HeartbeatInterval,
+            FortiGateAutoscaleSetting.ByolScalingGroupName,
+            FortiGateAutoscaleSetting.PaygScalingGroupName
         ];
         const missingKeys = required.filter(key => !this.settings.has(key)).join(', ');
         if (missingKeys) {
@@ -866,17 +940,142 @@ export abstract class AwsPlatformAdapter implements PlatformAdapter {
         }
         return Promise.resolve(true);
     }
-    getTargetVm(): Promise<VirtualMachine> {
-        throw new Error('Method not implemented.');
+
+    protected instanceToVm(
+        instance: EC2.Instance,
+        scalingGroupName: string,
+        enis?: EC2.NetworkInterface[]
+    ): VirtualMachine {
+        const vm: VirtualMachine = {
+            id: instance.InstanceId,
+            scalingGroupName: scalingGroupName,
+            primaryPrivateIpAddress: instance.PrivateIpAddress,
+            primaryPublicIpAddress: instance.PublicIpAddress || undefined,
+            virtualNetworkId: instance.VpcId,
+            subnetId: instance.SubnetId,
+            securityGroups: instance.SecurityGroups.map(group => {
+                return {
+                    id: group.GroupId,
+                    name: group.GroupName
+                };
+            }),
+            networkInterfaces: (enis && enis.map(this.eniToNic)) || undefined,
+            networkInterfaceIds: instance.NetworkInterfaces.map(eni => eni.NetworkInterfaceId)
+        };
+        Object.assign(vm.sourceData, instance);
+        return vm;
     }
-    getMasterVm(): Promise<VirtualMachine> {
-        throw new Error('Method not implemented.');
+
+    protected eniToNic(eni: EC2.NetworkInterface): NetworkInterface {
+        const nic: NetworkInterface = {
+            id: eni.NetworkInterfaceId,
+            privateIpAddress: eni.PrivateIpAddress,
+            subnetId: eni.SubnetId,
+            virtualNetworkId: eni.VpcId,
+            attachmentId: (eni.Attachment && eni.Attachment.AttachmentId) || undefined,
+            description: eni.Description
+        };
+        return nic;
     }
-    getHealthCheckRecord(vm: VirtualMachine): Promise<HealthCheckRecord> {
-        throw new Error('Method not implemented.');
+
+    async getTargetVm(): Promise<VirtualMachine> {
+        this.proxy.logAsInfo('calling getTargetVm');
+        const instance = await this.adaptee.describeInstance(this.getReqVmId());
+        const byolGroupName = this.settings.get(AutoscaleSetting.ByolScalingGroupName).value;
+        const paygGroupName = this.settings.get(AutoscaleSetting.PaygScalingGroupName).value;
+        const scalingGroups = await this.adaptee.describeAutoScalingGroups([
+            byolGroupName,
+            paygGroupName
+        ]);
+        // get scaling group name
+        // ASSERT: the instance can only locate in 1 scaling group
+        const [scalingGroupName] = scalingGroups
+            .filter(group => {
+                return (
+                    group.Instances.filter(ins => ins.InstanceId === instance.InstanceId).length > 0
+                );
+            })
+            .map(group => group.AutoScalingGroupName);
+        const vm = this.instanceToVm(instance, scalingGroupName);
+        this.proxy.logAsInfo('called getTargetVm');
+        return vm;
     }
-    getMasterRecord(): Promise<MasterRecord> {
-        throw new Error('Method not implemented.');
+    async getMasterVm(): Promise<VirtualMachine> {
+        this.proxy.logAsInfo('calling getMasterVm');
+        const masterRecord = await this.getMasterRecord();
+        if (!masterRecord) {
+            return null;
+        }
+        const instance = await this.adaptee.describeInstance(masterRecord.vmId);
+        const vm = this.instanceToVm(instance, masterRecord.scalingGroupName);
+        this.proxy.logAsInfo('called getMasterVm');
+        return vm;
+    }
+    async getHealthCheckRecord(vm: VirtualMachine): Promise<HealthCheckRecord> {
+        this.proxy.logAsInfo('calling getHealthCheckRecord');
+        const table = new AwsDBDef.AwsAutoscale(process.env.RESOURCE_TAG_PREFIX || '');
+        const dbItem = table.convertRecord(
+            await this.adaptee.getItemFromDb(table, [
+                {
+                    key: table.primaryKey.name,
+                    value: vm.id
+                }
+            ])
+        );
+
+        // if heartbeatDelay is <= 0, it means hb arrives early or ontime
+        const heartbeatDelay =
+            this.createTime -
+            dbItem.nextHeartBeatTime -
+            Number(this.settings.get(FortiGateAutoscaleSetting.HeartbeatDelayAllowance).value);
+
+        const [syncState] = Object.entries(HealthCheckSyncState)
+            .filter(([, value]) => {
+                return dbItem.syncState === value;
+            })
+            .map(([, v]) => v);
+        const record: HealthCheckRecord = {
+            vmId: vm.id,
+            scalingGroupName: vm.scalingGroupName,
+            ip: vm.primaryPrivateIpAddress,
+            masterIp: dbItem.masterIp,
+            heartbeatInterval: dbItem.heartBeatInterval,
+            heartbeatLossCount: dbItem.heartBeatLossCount,
+            nextHeartbeatTime: dbItem.nextHeartBeatTime,
+            syncState: syncState,
+            seq: dbItem.seq,
+            healthy: heartbeatDelay <= 0,
+            upToDate: true
+        };
+        this.proxy.logAsInfo('called getHealthCheckRecord');
+        return record;
+    }
+    async getMasterRecord(filters?: KeyValue[]): Promise<MasterRecord> {
+        this.proxy.logAsInfo('calling getMasterRecord');
+        const table = new AwsDBDef.AwsMasterElection(process.env.RESOURCE_TAG_PREFIX || '');
+        const filterExp: AwsDdbOperations = {
+            Expression: ''
+        };
+        filterExp.Expression = filters.map(kv => `${kv.key} = :${kv.value}`).join(' AND ');
+        const dbItems = await this.adaptee.listItemFromDb(table, filterExp);
+        // ASSERT: there's only 1 matching master record
+        const [masterRecord] = dbItems.map(table.convertRecord);
+        const [voteState] = Object.entries(MasterRecordVoteState)
+            .filter(([, value]) => {
+                return masterRecord.voteState === value;
+            })
+            .map(([, v]) => v);
+        this.proxy.logAsInfo('called getMasterRecord');
+        return {
+            id: masterRecord.id,
+            vmId: masterRecord.vmId,
+            ip: masterRecord.ip,
+            scalingGroupName: masterRecord.scalingGroupName,
+            virtualNetworkId: masterRecord.virtualNetworkId,
+            subnetId: masterRecord.subnetId,
+            voteEndTime: Number(masterRecord.voteEndTime),
+            voteState: voteState
+        };
     }
     equalToVm(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean {
         if (!(vmA && vmB) || JSON.stringify(vmA) !== JSON.stringify(vmB)) {
@@ -885,30 +1084,67 @@ export abstract class AwsPlatformAdapter implements PlatformAdapter {
             return true;
         }
     }
-    describeVm(desc: VmDescriptor): Promise<VirtualMachine> {
-        throw new Error('Method not implemented.');
+    async createHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
+        this.proxy.logAsInfo('calling createHealthCheckRecord');
+        const table = new AwsDBDef.AwsAutoscale(process.env.RESOURCE_TAG_PREFIX || '');
+        const [syncStateString] = Object.entries(HealthCheckSyncState)
+            .filter(([, value]) => {
+                return rec.syncState === value;
+            })
+            .map(([, v]) => v);
+        const item: AutoscaleDbItem = {
+            vmId: rec.vmId,
+            scalingGroupName: rec.scalingGroupName,
+            ip: rec.ip,
+            masterIp: rec.masterIp,
+            heartBeatInterval: rec.heartbeatInterval,
+            heartBeatLossCount: rec.heartbeatLossCount,
+            nextHeartBeatTime: rec.nextHeartbeatTime,
+            syncState: syncStateString,
+            seq: rec.seq
+        };
+        const conditionExp: AwsDdbOperations = {
+            Expression: '',
+            createOrUpdate: CreateOrUpdate.create
+        };
+        await this.adaptee.saveItemToDb(table, { ...item }, conditionExp);
+        this.proxy.logAsInfo('called createHealthCheckRecord');
     }
-    deleteVm(vm: VirtualMachine): Promise<void> {
-        throw new Error('Method not implemented.');
-    }
-    createHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
-        throw new Error('Method not implemented.');
-    }
-    updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
-        throw new Error('Method not implemented.');
+    async updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
+        this.proxy.logAsInfo('calling updateHealthCheckRecord');
+        const table = new AwsDBDef.AwsAutoscale(process.env.RESOURCE_TAG_PREFIX || '');
+        const [syncStateString] = Object.entries(HealthCheckSyncState)
+            .filter(([, value]) => {
+                return rec.syncState === value;
+            })
+            .map(([, v]) => v);
+        const item: AutoscaleDbItem = {
+            vmId: rec.vmId,
+            scalingGroupName: rec.scalingGroupName,
+            ip: rec.ip,
+            masterIp: rec.masterIp,
+            heartBeatInterval: rec.heartbeatInterval,
+            heartBeatLossCount: rec.heartbeatLossCount,
+            nextHeartBeatTime: rec.nextHeartbeatTime,
+            syncState: syncStateString,
+            seq: rec.seq
+        };
+        const conditionExp: AwsDdbOperations = {
+            Expression: '',
+            createOrUpdate: CreateOrUpdate.update
+        };
+        await this.adaptee.saveItemToDb(table, { ...item }, conditionExp);
+        this.proxy.logAsInfo('called updateHealthCheckRecord');
     }
     async createMasterRecord(rec: MasterRecord, oldRec: MasterRecord | null): Promise<void> {
         this.proxy.log('calling createMasterRecord.', LogLevel.Log);
         try {
-            const settings = await this.getSettings();
-            const table = new AwsDBDef.AwsMasterElection(
-                settings.get(FortiGateAutoscaleSetting.ResourceTagPrefix).value
-            );
+            const table = new AwsDBDef.AwsMasterElection(process.env.RESOURCE_TAG_PREFIX || '');
             const item: MasterElectionDbItem = {
                 id: rec.id,
                 scalingGroupName: rec.scalingGroupName,
                 ip: rec.ip,
-                vmId: rec.instanceId,
+                vmId: rec.vmId,
                 virtualNetworkId: rec.virtualNetworkId,
                 subnetId: rec.subnetId,
                 voteEndTime: String(rec.voteEndTime),
@@ -943,7 +1179,7 @@ export abstract class AwsPlatformAdapter implements PlatformAdapter {
                 id: rec.id,
                 scalingGroupName: rec.scalingGroupName,
                 ip: rec.ip,
-                vmId: rec.instanceId,
+                vmId: rec.vmId,
                 virtualNetworkId: rec.virtualNetworkId,
                 subnetId: rec.subnetId,
                 voteEndTime: String(rec.voteEndTime),

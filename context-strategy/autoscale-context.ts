@@ -3,7 +3,9 @@ import {
     MasterElection,
     MasterRecordVoteState,
     MasterRecord,
-    HeartbeatSyncTiming
+    HealthCheckResult,
+    HealthCheckRecord,
+    HealthCheckSyncState as HeartbeatSyncState
 } from '../master-election';
 import { PlatformAdapter } from '../platform-adapter';
 import { CloudFunctionProxyAdapter, LogLevel } from '../cloud-function-proxy';
@@ -14,11 +16,11 @@ import { VirtualMachine } from '../virtual-machine';
  */
 export interface AutoscaleContext {
     setMasterElectionStrategy(strategy: MasterElectionStrategy): void;
-    handleMasterElection(): Promise<string>;
+    handleMasterElection(): Promise<MasterElection | null>;
     setHeartbeatSyncStrategy(strategy: HeartbeatSyncStrategy): void;
     handleHeartbeatSync(): Promise<string>;
-    doTargetHealthCheck(): Promise<HeartbeatSyncTiming>;
-    doMasterHealthCheck(): Promise<HeartbeatSyncTiming>;
+    setTaggingVmStrategy(strategy: TaggingVmStrategy): void;
+    handleTaggingVm(taggings: VmTagging[]): Promise<void>;
 }
 
 export interface MasterElectionStrategy {
@@ -35,16 +37,6 @@ export interface MasterElectionStrategy {
 export enum MasterElectionStrategyResult {
     ShouldStop = 'ShouldStop',
     ShouldContinue = 'ShouldContinue'
-}
-
-export interface HeartbeatSyncStrategy {
-    prepare(
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        vm: VirtualMachine
-    ): Promise<void>;
-    result(): Promise<MasterElection>;
-    run(): Promise<MasterElectionStrategyResult>;
 }
 
 export class PreferredGroupMasterElection implements MasterElectionStrategy {
@@ -99,14 +91,12 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
         const settingGroupName = settings.get(AutoscaleSetting.MasterScalingGroupName).value;
         const electionDuration = Number(settings.get(AutoscaleSetting.MasterElectionTimeout).value);
         const signature = this.env.candidate
-            ? `${this.env.candidate.scalingGroupName}:${
-                  this.env.candidate.instanceId
-              }:${Date.now()}`
+            ? `${this.env.candidate.scalingGroupName}:${this.env.candidate.id}:${Date.now()}`
             : '';
         const masterRecord: MasterRecord = {
             id: `${signature}`,
             ip: this.env.candidate.primaryPrivateIpAddress,
-            instanceId: this.env.candidate.instanceId,
+            vmId: this.env.candidate.id,
             scalingGroupName: this.env.candidate.scalingGroupName,
             virtualNetworkId: this.env.candidate.virtualNetworkId,
             subnetId: this.env.candidate.subnetId,
@@ -117,7 +107,7 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
         // candidate not in the preferred scaling group? no election will be run
         if (this.env.candidate.scalingGroupName !== settingGroupName) {
             this.proxy.log(
-                `The candidate (id: ${this.env.candidate.instanceId}) ` +
+                `The candidate (id: ${this.env.candidate.id}) ` +
                     "isn't in the preferred scaling group. It cannot run a master election. " +
                     'Master election not started.',
                 LogLevel.Warn
@@ -128,6 +118,10 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
             // but is in a non-master role. If it qualifies for election and wins the election, the
             // master election can be deemed done immediately as master record created.
             if (this.env.candidateHealthCheck && this.env.candidateHealthCheck.healthy) {
+                // KNOWN ISSUE: if a brand new device is the master candidate and it wins
+                // the election to become the new master, ALL CONFIGURATION WILL BE LOST
+                // TODO: need to find a more qualified candidate, or develop a technique to sync
+                // the configuration.
                 masterRecord.voteEndTime = Date.now(); // election ends immediately
                 masterRecord.voteState = MasterRecordVoteState.Done;
             }
@@ -146,11 +140,11 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
                     this.env.oldMasterRecord || null
                 );
                 this.proxy.log(
-                    `Master election completed. New master is (id: ${this.env.candidate.instanceId})`,
+                    `Master election completed. New master is (id: ${this.env.candidate.id})`,
                     LogLevel.Info
                 );
                 // the candidate becomes the new master because it wins the election
-                this.env.newMaster = this.env.candidate;
+                this.res.newMaster = this.env.candidate;
                 // update the new master record
                 this.res.newMasterRecord = masterRecord;
                 return MasterElectionStrategyResult.ShouldContinue;
@@ -162,5 +156,196 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
                 return MasterElectionStrategyResult.ShouldStop;
             }
         }
+    }
+}
+
+export interface HeartbeatSyncStrategy {
+    prepare(
+        platform: PlatformAdapter,
+        proxy: CloudFunctionProxyAdapter,
+        vm: VirtualMachine
+    ): Promise<void>;
+    apply(): Promise<void>;
+    readonly targetHealthCheckRecord: HealthCheckRecord | null;
+    readonly result: HealthCheckResult;
+    readonly targetVmFirstHeartbeat: boolean;
+}
+
+/**
+ * The constant interval heartbeat sync strategy will handle heartbeats being fired with a
+ * constant interval and not being interrupted by other events.
+ * In this strategy, those heartbeats the Autoscale taking too long (over one heartbeat interval)
+ * to process will be dropped.
+ */
+export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrategy {
+    protected platform: PlatformAdapter;
+    protected proxy: CloudFunctionProxyAdapter;
+    protected targetVm: VirtualMachine;
+    protected healthCheckResult: HealthCheckResult;
+    protected firstHeartbeat = false;
+    protected _targetHealthCheckRecord: HealthCheckRecord;
+    prepare(
+        platform: PlatformAdapter,
+        proxy: CloudFunctionProxyAdapter,
+        targetVm: VirtualMachine
+    ): Promise<void> {
+        this.platform = platform;
+        this.proxy = proxy;
+        this.targetVm = targetVm;
+        return Promise.resolve();
+    }
+
+    async apply(): Promise<void> {
+        this.proxy.logAsInfo('applying ConstantIntervalHeartbeatSyncStrategy strategy.');
+        let oldLossCount = 0;
+        let newLossCount = 0;
+        let oldInterval = 0;
+        const newInterval = this.platform.getReqHeartbeatInterval();
+        const heartbeatArriveTime: number = this.platform.createTime;
+        let delay = 0;
+        let oldSeq = 0;
+        const settings = await this.platform.getSettings();
+        // number in second the max amount of delay allowed to offset the network latency
+        const delayAllowance = Number(settings.get(AutoscaleSetting.HeartbeatDelayAllowance).value);
+        // max amount of heartbeat loss count allowed before deeming a device unhealthy
+        const maxLossCount = Number(settings.get(AutoscaleSetting.HeartbeatLossCount).value);
+        const nextHeartbeatTime: number = heartbeatArriveTime + newInterval;
+        // get health check record for target vm
+        // ASSERT: this.targetVm is valid
+        let targetHealthCheckRecord = await this.platform.getHealthCheckRecord(this.targetVm);
+        // if there's no health check record for this vm,
+        // can deem it the first time for health check
+        if (targetHealthCheckRecord === null) {
+            this.firstHeartbeat = true;
+            this.healthCheckResult = HealthCheckResult.OnTime;
+            targetHealthCheckRecord = {
+                vmId: this.targetVm.id,
+                scalingGroupName: this.targetVm.scalingGroupName,
+                ip: this.targetVm.primaryPrivateIpAddress,
+                masterIp: '', // master ip is unknown to this strategy
+                heartbeatInterval: newInterval,
+                heartbeatLossCount: 0, // set to 0 because it is the first heartbeat
+                nextHeartbeatTime: nextHeartbeatTime,
+                syncState: HeartbeatSyncState.InSync,
+                seq: 1, // set to 1 because it is the first heartbeat
+                healthy: true,
+                upToDate: true
+            };
+            // create health check record
+            try {
+                await this.platform.createHealthCheckRecord(targetHealthCheckRecord);
+            } catch (error) {
+                this.proxy.logForError('createHealthCheckRecord() error.', error);
+                // cannot create hb record, drop this health check
+                targetHealthCheckRecord.upToDate = false;
+                this.healthCheckResult = HealthCheckResult.Dropped;
+            }
+        }
+        // processing regular heartbeat
+        else {
+            oldLossCount = targetHealthCheckRecord.heartbeatLossCount;
+            oldInterval = targetHealthCheckRecord.heartbeatInterval;
+            oldSeq = targetHealthCheckRecord.seq;
+            delay =
+                heartbeatArriveTime - targetHealthCheckRecord.nextHeartbeatTime - delayAllowance;
+            // if vm health check shows that it's already out of sync, drop this
+            if (targetHealthCheckRecord.syncState === HeartbeatSyncState.OutOfSync) {
+                oldLossCount = targetHealthCheckRecord.heartbeatLossCount;
+                oldInterval = targetHealthCheckRecord.heartbeatInterval;
+                this.healthCheckResult = HealthCheckResult.Dropped;
+            } else {
+                // heartbeat is late
+                if (delay >= 0) {
+                    // increase the heartbeat loss count by 1 inf delay.
+                    targetHealthCheckRecord.heartbeatLossCount += 1;
+                    newLossCount = targetHealthCheckRecord.heartbeatLossCount;
+                    // reaching the max amount of loss count?
+                    if (targetHealthCheckRecord.heartbeatLossCount >= maxLossCount) {
+                        targetHealthCheckRecord.syncState = HeartbeatSyncState.OutOfSync;
+                        targetHealthCheckRecord.healthy = false;
+                    } else {
+                        targetHealthCheckRecord.syncState = HeartbeatSyncState.InSync;
+                        targetHealthCheckRecord.healthy = true;
+                    }
+                    this.healthCheckResult = HealthCheckResult.Late;
+                }
+                // else, no delay; heartbeat is on time; clear the loss count.
+                else {
+                    targetHealthCheckRecord.heartbeatLossCount = 0;
+                    newLossCount = targetHealthCheckRecord.heartbeatLossCount;
+                    targetHealthCheckRecord.healthy = true;
+                    this.healthCheckResult = HealthCheckResult.OnTime;
+                }
+            }
+            // update health check record
+            try {
+                targetHealthCheckRecord.seq += 1;
+                await this.platform.updateHealthCheckRecord(targetHealthCheckRecord);
+            } catch (error) {
+                this.proxy.logForError('updateHealthCheckRecord() error.', error);
+                // cannot create hb record, drop this health check
+                targetHealthCheckRecord.upToDate = false;
+                this.healthCheckResult = HealthCheckResult.Dropped;
+            }
+        }
+        this._targetHealthCheckRecord = targetHealthCheckRecord;
+        this.proxy.logAsInfo(
+            `Heartbeat sync result: ${this.healthCheckResult},` +
+                ` heartbeat sequence: ${oldSeq}->${targetHealthCheckRecord.seq},` +
+                ` heartbeat arrive time: ${heartbeatArriveTime} ms,` +
+                ` heartbeat delay allowance: ${delayAllowance} ms,` +
+                ` heartbeat calculated delay: ${delay} ms,` +
+                ` heartbeat interval: ${oldInterval}->${newInterval} ms,` +
+                ` heartbeat loss count: ${oldLossCount}->${newLossCount}.`
+        );
+        this.proxy.logAsInfo('appled ConstantIntervalHeartbeatSyncStrategy strategy.');
+    }
+    get targetHealthCheckRecord(): HealthCheckRecord {
+        return this._targetHealthCheckRecord;
+    }
+    masterHealthCheckRecord: HealthCheckRecord;
+    result: HealthCheckResult;
+    get targetVmFirstHeartbeat(): boolean {
+        return this.firstHeartbeat;
+    }
+}
+
+export enum VmTaggingType {
+    newVm = 'new',
+    newMasterVm = 'new-master',
+    oldMasterVm = 'old-master'
+}
+export interface VmTagging {
+    vm: VirtualMachine;
+    type: VmTaggingType;
+}
+
+export interface TaggingVmStrategy {
+    prepare(
+        platform: PlatformAdapter,
+        proxy: CloudFunctionProxyAdapter,
+        taggings: VmTagging[]
+    ): Promise<void>;
+    apply(): Promise<void>;
+}
+
+export class NoopTaggingVmStrategy implements TaggingVmStrategy {
+    private platform: PlatformAdapter;
+    private proxy: CloudFunctionProxyAdapter;
+    private taggings: VmTagging[];
+    prepare(
+        platform: PlatformAdapter,
+        proxy: CloudFunctionProxyAdapter,
+        taggings: VmTagging[]
+    ): Promise<void> {
+        this.platform = platform;
+        this.proxy = proxy;
+        this.taggings = taggings;
+        return Promise.resolve();
+    }
+    apply(): Promise<void> {
+        this.proxy.logAsInfo('calling NoopTaggingVmStrategy.apply.');
+        this.proxy.logAsInfo('called NoopTaggingVmStrategy.apply.');
+        return Promise.resolve(this.platform && this.taggings && undefined);
     }
 }
