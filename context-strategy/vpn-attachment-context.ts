@@ -13,10 +13,21 @@ export interface VpnAttachmentContext {
 
 export interface VpnAttachmentStrategy {
     prepare(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter): Promise<void>;
-    apply(): Promise<string>;
+    attach(): Promise<string>;
+    detach(): Promise<string>;
+    cleanUp(): Promise<void>;
 }
 
 export class NoopVpnAttachmentStrategy implements VpnAttachmentStrategy {
+    attach(): Promise<string> {
+        throw new Error('Method not implemented.');
+    }
+    detach(): Promise<string> {
+        throw new Error('Method not implemented.');
+    }
+    cleanUp(): Promise<void> {
+        throw new Error('Method not implemented.');
+    }
     prepare(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter): Promise<void> {
         return Promise.resolve();
     }

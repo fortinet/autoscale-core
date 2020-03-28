@@ -21,9 +21,29 @@ import {
     MasterElectionStrategy,
     HeartbeatSyncStrategy,
     NoopTaggingVmStrategy,
-    MasterElectionStrategyResult
+    MasterElectionStrategyResult,
+    PreferredGroupMasterElection,
+    ConstantIntervalHeartbeatSyncStrategy
 } from '../context-strategy/autoscale-context';
 import { FortiGateAutoscaleSetting } from '../fortigate-autoscale/fortigate-autoscale-settings';
+import {
+    ScalingGroupStrategy,
+    NoopScalingGroupStrategy
+} from '../context-strategy/scaling-group-context';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const objectEqual = (expected: any): { to: (actual: any) => boolean } => {
+    return {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        to: (actual: { [key: string]: any }): boolean => {
+            return (
+                Object.entries(actual).filter(([k, v]) => {
+                    return !(expected[k] !== undefined && expected[k] === v);
+                }).length === 0
+            );
+        }
+    };
+};
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
@@ -69,6 +89,9 @@ const TEST_MASTER_ELECTION: MasterElection = {
 };
 
 class TestPlatformAdapter implements PlatformAdapter {
+    getReqAsString(): string {
+        return 'fake-req-as-string';
+    }
     createTime: number = Date.now();
     getReqVmId(): string {
         return 'fake-req-vm-id';
@@ -163,6 +186,9 @@ class TestPlatformAdapter implements PlatformAdapter {
 }
 
 class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
+    getRequestAsString(): string {
+        return 'fake-req-as-string';
+    }
     formatResponse(httpStatusCode: number, body: CloudFunctionResponseBody, headers: {}): {} {
         throw new Error('Method not implemented.');
     }
@@ -191,10 +217,10 @@ describe('sanity test', () => {
     let e: AutoscaleEnvironment;
     let x: TestCloudFunctionProxyAdapter;
     let s: Settings;
-    let si: SettingItem;
     let ms: MasterElectionStrategy;
     let hs: HeartbeatSyncStrategy;
     let me: MasterElection;
+    let ss: ScalingGroupStrategy;
     let autoscale: Autoscale;
     before(function() {
         p = new TestPlatformAdapter();
@@ -204,9 +230,16 @@ describe('sanity test', () => {
             masterRecord: TEST_MASTER_RECORD
         };
         x = new TestCloudFunctionProxyAdapter();
-        si = new SettingItem('1', '2', '3', 'true', 'true');
         s = new Map<string, SettingItem>();
-        s.set(AutoscaleSetting.MasterElectionTimeout, si);
+        s.set(
+            AutoscaleSetting.MasterElectionTimeout,
+            new SettingItem('1', '2', '3', 'true', 'true')
+        );
+        s.set(
+            AutoscaleSetting.HeartbeatDelayAllowance,
+            new SettingItem('1', '2', '3', 'true', 'true')
+        );
+        s.set(AutoscaleSetting.HeartbeatLossCount, new SettingItem('1', '0', '3', 'true', 'true'));
         ms = {
             prepare() {
                 return Promise.resolve();
@@ -224,11 +257,14 @@ describe('sanity test', () => {
                 return Promise.resolve();
             },
             apply() {
-                return Promise.resolve();
+                return Promise.resolve(HealthCheckResult.OnTime);
             },
             targetHealthCheckRecord: TEST_HCR,
             result: HealthCheckResult.OnTime,
-            targetVmFirstHeartbeat: true
+            targetVmFirstHeartbeat: true,
+            forceOutOfSync() {
+                return Promise.resolve(true);
+            }
         };
         me = {
             newMaster: TEST_VM,
@@ -236,9 +272,13 @@ describe('sanity test', () => {
             candidate: TEST_VM,
             signature: 'test-signature'
         };
+        ms = new PreferredGroupMasterElection();
+        hs = new ConstantIntervalHeartbeatSyncStrategy();
+        ss = new NoopScalingGroupStrategy();
         autoscale = new Autoscale(p, e, x);
         autoscale.setMasterElectionStrategy(ms);
         autoscale.setHeartbeatSyncStrategy(hs);
+        autoscale.setScalingGroupStrategy(ss);
         autoscale.setTaggingVmStrategy(new NoopTaggingVmStrategy());
     });
     it('Conflicted settings count in FortiGateAutoscaleSettings and AutoscaleSettings', () => {
@@ -297,7 +337,11 @@ describe('sanity test', () => {
             return Promise.resolve(TEST_HCR);
         });
         const stub2 = Sinon.stub(p, 'getTargetVm');
-        const stub3 = Sinon.stub(autoscale, 'handleLaunchedVm').callsFake(() => {
+        const stub3 = Sinon.stub(autoscale, 'handleLaunchingVm').callsFake(() => {
+            return Promise.resolve('Sinon.stub.callsFake');
+        });
+
+        const stub4 = Sinon.stub(autoscale, 'handleLaunchedVm').callsFake(() => {
             return Promise.resolve('Sinon.stub.callsFake');
         });
 
@@ -317,23 +361,29 @@ describe('sanity test', () => {
             return true;
         });
         const stub10 = Sinon.stub(p, 'updateHealthCheckRecord').callsFake(hcr => {
+            Sinon.assert.match(objectEqual(hcr).to(TEST_HCR), true);
             Sinon.assert.match(hcr.vmId, TEST_HCR.vmId);
             Sinon.assert.match(hcr.scalingGroupName, TEST_HCR.scalingGroupName);
             return Promise.resolve();
         });
+        const stub11 = Sinon.stub(p, 'getSettings').callsFake(() => {
+            return Promise.resolve(s);
+        });
 
         try {
             const result = await autoscale.handleHeartbeatSync();
-            Sinon.assert.match(await stub1.returnValues[0], TEST_HCR);
+            Sinon.assert.match(objectEqual(await stub1.returnValues[0]).to(TEST_HCR), true);
             Sinon.assert.match(stub2.called, false);
-            Sinon.assert.match(stub3.called, true);
+            Sinon.assert.match(stub3.called, false);
+            Sinon.assert.match(stub4.called, false);
 
             Sinon.assert.match(stub5.called, false);
             Sinon.assert.match(await stub6.called, false);
-            Sinon.assert.match(await stub7.returnValues[0], me);
+            Sinon.assert.match(objectEqual(await stub7.returnValues[0]).to(me), true);
             Sinon.assert.match(stub8.called, false);
             Sinon.assert.match(stub9.called, false);
-            Sinon.assert.match(stub10.called, false);
+            Sinon.assert.match(stub10.called, true);
+            Sinon.assert.match(stub11.called, true);
             Sinon.assert.match(result, '');
         } catch (error) {
             console.log(error);
@@ -349,6 +399,7 @@ describe('sanity test', () => {
             stub8.restore();
             stub9.restore();
             stub10.restore();
+            stub11.restore();
         }
     });
 });

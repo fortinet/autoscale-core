@@ -11,7 +11,7 @@ import {
     ScalingGroupContext,
     ScalingGroupStrategy
 } from './context-strategy/scaling-group-context';
-import { PlatformAdapter, ReqMethod, ReqType, ReqBody, ReqHeaders } from './platform-adapter';
+import { PlatformAdapter, ReqMethod } from './platform-adapter';
 import {
     MasterElection,
     HealthCheckRecord,
@@ -123,11 +123,11 @@ export interface AutoscaleEnvironment {
 
 export interface PlatformAdaptee {
     loadSettings(): Promise<Settings>;
-    getReqType(proxy: CloudFunctionProxyAdapter): Promise<ReqType>;
-    getReqMethod(proxy: CloudFunctionProxyAdapter): ReqMethod;
+    // getReqType(proxy: CloudFunctionProxyAdapter): Promise<ReqType>;
+    // getReqMethod(proxy: CloudFunctionProxyAdapter): ReqMethod;
     // checkReqIntegrity(proxy: CloudFunctionProxyAdapter): void;
-    getReqBody(proxy: CloudFunctionProxyAdapter): ReqBody;
-    getReqHeaders(proxy: CloudFunctionProxyAdapter): ReqHeaders;
+    // getReqBody(proxy: CloudFunctionProxyAdapter): ReqBody;
+    // getReqHeaders(proxy: CloudFunctionProxyAdapter): ReqHeaders;
 }
 
 /**
@@ -145,6 +145,7 @@ export interface CloudFunctionHandler<TReq, TContext, TRes> {
  * To provide Licensing model related logics such as license assignment.
  */
 export interface LicensingModelContext {
+    setLicensingStrategy(strategy: LicensingStrategy): void;
     handleLicenseAssignment(): Promise<string>;
 }
 
@@ -175,12 +176,12 @@ export interface HAActivePassiveBoostrapStrategy {
 
 export class Autoscale implements AutoscaleCore {
     platform: PlatformAdapter;
+    proxy: CloudFunctionProxyAdapter;
+    env: AutoscaleEnvironment;
+    settings: Settings;
+    taggingVmStrategy: TaggingVmStrategy;
     scalingGroupStrategy: ScalingGroupStrategy;
     heartbeatSyncStrategy: HeartbeatSyncStrategy;
-    taggingVmStrategy: TaggingVmStrategy;
-    env: AutoscaleEnvironment;
-    proxy: CloudFunctionProxyAdapter;
-    settings: Settings;
     masterElectionStrategy: MasterElectionStrategy;
     licensingStrategy: LicensingStrategy;
     constructor(p: PlatformAdapter, e: AutoscaleEnvironment, x: CloudFunctionProxyAdapter) {
@@ -188,18 +189,74 @@ export class Autoscale implements AutoscaleCore {
         this.env = e;
         this.proxy = x;
     }
+    setScalingGroupStrategy(strategy: ScalingGroupStrategy): void {
+        this.scalingGroupStrategy = strategy;
+    }
+    setMasterElectionStrategy(strategy: MasterElectionStrategy): void {
+        this.masterElectionStrategy = strategy;
+    }
+    setHeartbeatSyncStrategy(strategy: HeartbeatSyncStrategy): void {
+        this.heartbeatSyncStrategy = strategy;
+    }
     setTaggingVmStrategy(strategy: TaggingVmStrategy): void {
         this.taggingVmStrategy = strategy;
+    }
+    setLicensingStrategy(strategy: LicensingStrategy): void {
+        this.licensingStrategy = strategy;
     }
     async init(): Promise<void> {
         await this.platform.init();
     }
 
     async handleLaunchingVm(): Promise<string> {
-        return await this.scalingGroupStrategy.onLaunchingVm();
+        this.proxy.logAsInfo('calling handleLaunchingVm.');
+        this.scalingGroupStrategy.prepare(this.platform, this.proxy);
+        const result = await this.scalingGroupStrategy.onLaunchingVm();
+        this.proxy.logAsInfo('called handleLaunchingVm.');
+        return result;
+    }
+    async handleLaunchedVm(): Promise<string> {
+        this.proxy.logAsInfo('calling handleLaunchedVm.');
+        this.scalingGroupStrategy.prepare(this.platform, this.proxy);
+        const result = await this.scalingGroupStrategy.onLaunchedVm();
+        this.proxy.logAsInfo('called handleLaunchedVm.');
+        return result;
     }
     async handleTerminatingVm(): Promise<string> {
-        return await this.scalingGroupStrategy.onTerminatingVm();
+        this.proxy.logAsInfo('calling handleTerminatingVm.');
+        this.scalingGroupStrategy.prepare(this.platform, this.proxy);
+        await this.scalingGroupStrategy.onTerminatingVm();
+        // ASSERT: this.scalingGroupStrategy.onTerminatingVm() creates a terminating lifecycle item
+        // in terminating vm, should do:
+        // 1. mark it as heartbeat out-of-sync to prevent it from syncing again.
+        // load target vm
+        const targetVm = this.env.targetVm || (await this.platform.getTargetVm());
+        this.heartbeatSyncStrategy.prepare(this.platform, this.proxy, targetVm);
+        const success = await this.heartbeatSyncStrategy.forceOutOfSync();
+        if (success) {
+            this.env.targetHealthCheckRecord = await this.platform.getHealthCheckRecord(
+                this.env.targetVm
+            );
+        }
+        // 2. if it is a master vm, remove its master tag
+        if (this.platform.equalToVm(targetVm, this.env.masterVm)) {
+            const vmTaggings: VmTagging[] = [
+                {
+                    vm: targetVm,
+                    type: VmTaggingType.oldMasterVm
+                }
+            ];
+            await this.handleTaggingVm(vmTaggings);
+        }
+        this.proxy.logAsInfo('called handleTerminatingVm.');
+        return '';
+    }
+    async handleTerminatedVm(): Promise<string> {
+        this.proxy.logAsInfo('calling handleTerminatedVm.');
+        this.scalingGroupStrategy.prepare(this.platform, this.proxy);
+        const result = await this.scalingGroupStrategy.onTerminatedVm();
+        this.proxy.logAsInfo('called handleTerminatedVm.');
+        return result;
     }
     async handleHeartbeatSync(): Promise<string> {
         this.proxy.logAsInfo('calling handleHeartbeatSync.');
@@ -239,7 +296,8 @@ export class Autoscale implements AutoscaleCore {
         // the 1st hb is also the indication of the the vm becoming in-service. The launching vm
         // phase (in some platforms) should be done at this point. apply the launced vm strategy
         if (isFirstHeartbeat) {
-            await this.handleLaunchedVm();
+            this.scalingGroupStrategy.prepare(this.platform, this.proxy);
+            await this.scalingGroupStrategy.onLaunchedVm();
         }
 
         const heartbeatTiming = await this.heartbeatSyncStrategy.result;
@@ -304,9 +362,6 @@ export class Autoscale implements AutoscaleCore {
         }
         this.proxy.logAsInfo('called handleHeartbeatSync.');
         return response;
-    }
-    handleTerminatedVm(): Promise<string> {
-        throw new Error('Method not implemented.');
     }
     async handleTaggingVm(taggings: VmTagging[]): Promise<void> {
         this.taggingVmStrategy.prepare(this.platform, this.proxy, taggings);
@@ -413,12 +468,6 @@ export class Autoscale implements AutoscaleCore {
         this.proxy.logAsInfo('called handleMasterElection.');
         return election;
     }
-    async handleLaunchedVm(): Promise<string> {
-        this.proxy.logAsInfo('calling handleLaunchedVm.');
-        await this.scalingGroupStrategy.onLaunchedVm();
-        this.proxy.logAsInfo('called handleLaunchedVm.');
-        return '';
-    }
     removeTargetVmFromAutoscale(): Promise<void> {
         throw new Error('Method not implemented.');
         // TODO:
@@ -429,20 +478,8 @@ export class Autoscale implements AutoscaleCore {
         // TODO:
         // await this.terminatingVmStrategy.apply();
     }
-    setScalingGroupStrategy(strategy: ScalingGroupStrategy): void {
-        this.scalingGroupStrategy = strategy;
-    }
-    setMasterElectionStrategy(strategy: MasterElectionStrategy): void {
-        this.masterElectionStrategy = strategy;
-    }
     handleLicenseAssignment(): Promise<string> {
         throw new Error('Method not implemented.');
-    }
-    setLicenseAssignmentStrategy(strategy: LicensingStrategy): void {
-        this.licensingStrategy = strategy;
-    }
-    setHeartbeatSyncStrategy(strategy: HeartbeatSyncStrategy): void {
-        this.heartbeatSyncStrategy = strategy;
     }
 }
 
