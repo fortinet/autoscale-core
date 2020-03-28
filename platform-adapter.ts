@@ -43,17 +43,10 @@ export interface ResourceTag {
     value: string;
 }
 
-/**
- * Contain a returned value of T type or null
- */
-export interface Returned<T> {
-    value: T | null;
-}
-
 export interface PlatformAdapter {
     adaptee: {};
     readonly createTime: number;
-    checkRequestIntegrity(): void;
+    // checkRequestIntegrity(): void;
     init(): Promise<void>;
     getRequestType(): Promise<ReqType>;
     /**
@@ -62,6 +55,7 @@ export interface PlatformAdapter {
      */
     getReqHeartbeatInterval(): number;
     getReqVmId(): string;
+    getReqAsString(): string;
     getSettings(): Promise<Settings>;
     /**
      * validate settings by checking the integrity of each required setting item. Ensure that they

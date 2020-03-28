@@ -24,6 +24,7 @@ export interface CloudFunctionProxyAdapter {
      * @memberof CloudFunctionProxyAdapter
      */
     logForError(messagePrefix: string, error: Error): void;
+    getRequestAsString(): string;
 }
 
 export abstract class CloudFunctionProxy<TReq, TContext, TRes>
@@ -58,4 +59,5 @@ export abstract class CloudFunctionProxy<TReq, TContext, TRes>
         body: CloudFunctionResponseBody,
         headers: {}
     ): TRes;
+    abstract getRequestAsString(): string;
 }

@@ -12,16 +12,11 @@ import {
     configSetResourceFinder,
     Autoscale,
     CloudFunctionHandler,
-    LicensingStrategy,
-    HttpError
+    HttpError,
+    LicensingModelContext
 } from '../autoscale-core';
 import { Settings } from '../autoscale-setting';
 import { VirtualMachine } from '../virtual-machine';
-import {
-    NicAttachmentContext,
-    NicAttachmentStrategy
-} from '../context-strategy/nic-attachment-context';
-import { ScalingGroupStrategy } from '../context-strategy/scaling-group-context';
 
 export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationStrategy {
     static SUCCESS = 'SUCCESS';
@@ -297,21 +292,8 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
  * secondary nic attachment
  */
 export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
-    implements CloudFunctionHandler<TReq, TContext, TRes>, BootstrapContext, NicAttachmentContext {
+    implements CloudFunctionHandler<TReq, TContext, TRes>, BootstrapContext, LicensingModelContext {
     bootstrapConfigStrategy: BootstrapConfigurationStrategy;
-    nicAttachmentStrategy: NicAttachmentStrategy;
-    handleNicAttachment(): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    handleNicDetachment(): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    cleanupUnusedNic(): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    setNicAttachmentStrategy(strategy: NicAttachmentStrategy): void {
-        this.nicAttachmentStrategy = strategy;
-    }
     async handleCloudFunctionRequest(
         proxy: CloudFunctionProxy<TReq, TContext, TRes>,
         platform: PlatformAdapter,
@@ -325,12 +307,12 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             this.proxy.logAsInfo('calling handleRequest.');
             this.proxy.logAsInfo('request integrity check.');
             // check whether all necessary request information are all there or not
-            await this.platform.checkRequestIntegrity();
+            // await this.platform.checkRequestIntegrity();
             // init the platform. this step is important
             await this.platform.init();
             const requestType = await this.platform.getRequestType();
             if (requestType === ReqType.LaunchingVm) {
-                responseBody = await this.handleLaunchedVm();
+                responseBody = await this.handleLaunchingVm();
             } else if (requestType === ReqType.BootstrapConfig) {
                 responseBody = await this.handleBootstrap();
             } else if (requestType === ReqType.HeartbeatSync) {
@@ -416,29 +398,5 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
         this.proxy.logAsDebug(`configuration: ${bootstrapConfig}`);
         this.proxy.logAsInfo('called handleBootstrap.');
         return bootstrapConfig;
-    }
-    handleHeartbeatSync(): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    setScalingGroupStrategy(strategy: ScalingGroupStrategy): void {
-        this.scalingGroupStrategy = strategy;
-    }
-    handleLaunchingVm(): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    handleLaunchedVm(): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    handleTerminatingVm(): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    handleTerminatedVm(): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    setLicensingStrategy(strategy: LicensingStrategy): void {
-        this.licensingStrategy = strategy;
-    }
-    handleLicenseAssignment(): Promise<string> {
-        throw new Error('Method not implemented.');
     }
 }
