@@ -5,22 +5,23 @@
  * @enum {number}
  */
 export enum AutoscaleSetting {
-    HeartbeatInterval = 'heartbeat-interval',
-    HeartbeatLossCount = 'heartbeat-loss-count',
-    MasterScalingGroupName = 'master-scaling-group-name',
-    MasterElectionTimeout = 'master-election-timeout',
-    ResourceTagPrefix = 'resource-tag-prefix',
-    SubnetPairs = 'subnet-pairs',
-    RequiredConfigSet = 'required-configset',
-    EnableNic2 = 'enable-second-nic',
-    EnableInternalElb = 'enable-internal-elb',
-    EnableFazIntegration = 'enable-fortianalyzer-integration',
     AutoscaleHandlerUrl = 'autoscale-handler-url',
     AssetStorageContainer = 'asset-storage-name',
     AssetStorageDirectory = 'asset-storage-key-prefix',
-    PaygScalingGroupName = 'payg-scaling-group-name',
     ByolScalingGroupName = 'byol-scaling-group-name',
-    HeartbeatDelayAllowance = 'heartbeat-delay-allowance'
+    EnableNic2 = 'enable-second-nic',
+    EnableInternalElb = 'enable-internal-elb',
+    EnableFazIntegration = 'enable-fortianalyzer-integration',
+    HeartbeatDelayAllowance = 'heartbeat-delay-allowance',
+    HeartbeatInterval = 'heartbeat-interval',
+    HeartbeatLossCount = 'heartbeat-loss-count',
+    HeartbeatSyncActionUnhealthyVm = 'heartbeat-sync-action-unhealthy-vm',
+    MasterElectionTimeout = 'master-election-timeout',
+    MasterScalingGroupName = 'master-scaling-group-name',
+    PaygScalingGroupName = 'payg-scaling-group-name',
+    RequiredConfigSet = 'required-configset',
+    ResourceTagPrefix = 'resource-tag-prefix',
+    SubnetPairs = 'subnet-pairs'
 }
 
 export interface SubnetPair {

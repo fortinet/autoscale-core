@@ -1,4 +1,5 @@
 import path from 'path';
+import crypto from 'crypto';
 import process from 'process';
 import fs from 'fs';
 import { APIGatewayProxyEvent, Context, APIGatewayProxyResult, ScheduledEvent } from 'aws-lambda';
@@ -35,7 +36,9 @@ import {
     PlatformAdapter,
     ResourceTag,
     ReqBody,
-    ReqHeaders
+    ReqHeaders,
+    LicenseFile,
+    LicenseFileMap
 } from '../../platform-adapter';
 import {
     HealthCheckRecord,
@@ -56,6 +59,13 @@ import {
 import { LifecycleItemDbItem } from '../aws/aws-db-definitions';
 import { Blob } from '../../blob';
 import { FortiGateAutoscaleSetting } from '../fortigate-autoscale-settings';
+
+const genChecksum = (str: string, algorithm: string): string => {
+    return crypto
+        .createHash(algorithm)
+        .update(str, 'utf8')
+        .digest('hex');
+};
 
 /**
  * To provide AWS Transit Gateway integration related logics
@@ -565,12 +575,59 @@ export class AwsPlatform implements PlatformAdaptee {
     }
 
     /**
+     * list objects in an S3 bucket within a certain prefix
+     *
+     * @param {string} s3Bucket S3 bucket name
+     * @param {string} s3KeyPrefix S3 bucket prefix to the directory to list file
+     * @returns {Promise<Blob[]>} an array of Blob
+     * @see see reference: https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#listObjectsV2-property
+     */
+    async listS3Object(s3Bucket: string, s3KeyPrefix: string): Promise<Blob[]> {
+        let prefix = s3KeyPrefix || '';
+        if (prefix && !prefix.endsWith('/')) {
+            prefix = `${s3KeyPrefix}/`;
+        }
+        prefix = s3KeyPrefix.endsWith('/') ? s3KeyPrefix : `${s3KeyPrefix}/`;
+
+        // DEBUG:
+        // for local debugging use, the next lines get files from local file system instead
+        if (process.env.LOCAL_DEV_MODE === 'true') {
+            return fs
+                .readdirSync(path.resolve(s3Bucket, prefix))
+                .filter(fileName => {
+                    const stat = fs.statSync(path.resolve(s3Bucket, prefix, fileName));
+                    return !stat.isDirectory();
+                })
+                .map(fileName => {
+                    return {
+                        fileName: fileName,
+                        content: ''
+                    } as Blob;
+                });
+        } else {
+            const data = await this.s3
+                .listObjectsV2({
+                    Bucket: s3Bucket,
+                    Prefix: prefix,
+                    StartAfter: prefix
+                })
+                .promise();
+            return data.Contents.map(content => {
+                return {
+                    fileName: content.Key.substr(prefix.length),
+                    content: ''
+                } as Blob;
+            });
+        }
+    }
+
+    /**
      * get a blob from a storage
      * @param  {string} s3Bucket the s3 bucket name
      * @param  {string} s3KeyPrefix the s3 key prefix to the blob file
-     * @returns {Promise} Blob
+     * @returns {Promise} string
      */
-    async getBlobFromStorage(s3Bucket: string, s3KeyPrefix: string): Promise<Blob> {
+    async getS3ObjectContent(s3Bucket: string, s3KeyPrefix: string): Promise<string> {
         // DEBUG:
         // for local debugging use, the next lines get files from local file system instead
         if (process.env.LOCAL_DEV_MODE === 'true') {
@@ -581,14 +638,10 @@ export class AwsPlatform implements PlatformAdaptee {
             const fileName = keyPrefix.splice(keyPrefix.lastIndexOf('configset')).join('/');
             const filePath = path.resolve(process.cwd(), assetsDir, fileName);
             const buffer = fs.readFileSync(filePath);
-            return {
-                content: buffer.toString()
-            };
+            return buffer.toString();
         } else {
             const data = await this.s3.getObject({ Bucket: s3Bucket, Key: s3KeyPrefix }).promise();
-            return {
-                content: (data && data.Body && data.Body.toString()) || ''
-            };
+            return (data && data.Body && data.Body.toString()) || '';
         }
     }
 
@@ -1474,10 +1527,38 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             keyPrefix.push('aws');
         }
         keyPrefix.push(name);
-        const blob = await this.adaptee.getBlobFromStorage(bucket, path.join(...keyPrefix));
+        const content = await this.adaptee.getS3ObjectContent(bucket, path.join(...keyPrefix));
         this.proxy.logAsInfo('configset loaded.');
-        return blob.content;
+        return content;
     }
+    async listLicenseFiles(
+        storageContainerName: string,
+        licenseDirectoryName: string
+    ): Promise<LicenseFileMap> {
+        const blobs: Blob[] = await this.adaptee.listS3Object(
+            storageContainerName,
+            licenseDirectoryName
+        );
+        const licenseFiles = await Promise.all(
+            blobs.map(async blob => {
+                const filePath = path.join(licenseDirectoryName, blob.fileName);
+                const content = await this.adaptee.getS3ObjectContent(
+                    storageContainerName,
+                    filePath
+                );
+                const algorithm = 'sha256';
+                const licenseFile: LicenseFile = {
+                    fileName: blob.fileName,
+                    checksum: genChecksum(blob.content, algorithm),
+                    algorithm: algorithm,
+                    content: content
+                };
+                return licenseFile;
+            })
+        );
+        return new Map<string, LicenseFile>(licenseFiles.map(l => [l.fileName, l]));
+    }
+
     async listNicAttachmentRecord(): Promise<NicAttachmentRecord[]> {
         this.proxy.logAsInfo('calling listNicAttachmentRecord');
         const table = new AwsDBDef.AwsNicAttachment(
