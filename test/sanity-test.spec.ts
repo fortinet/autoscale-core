@@ -152,7 +152,7 @@ class TestPlatformAdapter implements PlatformAdapter {
     detachNetworkInterface(vmId: string, nicId: string): Promise<void> {
         throw new Error('Method not implemented.');
     }
-    listUnusedNetworkInterface(tags: ResourceTag[]): Promise<NetworkInterface[]> {
+    listNetworkInterface(tags: ResourceTag[], status?: string): Promise<NetworkInterface[]> {
         throw new Error('Method not implemented.');
     }
     tagNetworkInterface(nicId: string, tags: ResourceTag[]): Promise<void> {

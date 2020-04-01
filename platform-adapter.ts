@@ -143,6 +143,6 @@ export interface PlatformAdapter {
     deleteNetworkInterface(nicId: string): Promise<void>;
     attachNetworkInterface(vmId: string, nicId: string, index?: number): Promise<void>;
     detachNetworkInterface(vmId: string, nicId: string): Promise<void>;
-    listUnusedNetworkInterface(tags: ResourceTag[]): Promise<NetworkInterface[]>;
+    listNetworkInterface(tags: ResourceTag[], status?: string): Promise<NetworkInterface[]>;
     tagNetworkInterface(nicId: string, tags: ResourceTag[]): Promise<void>;
 }

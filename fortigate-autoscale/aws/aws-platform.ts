@@ -13,7 +13,7 @@ import {
     NicAttachmentStrategy,
     NicAttachmentRecord,
     NicAttachmentStatus,
-    NicAttachmentResult
+    NicAttachmentStrategyResult
 } from '../../context-strategy/nic-attachment-context';
 import { VirtualMachine, NetworkInterface } from '../../virtual-machine';
 import { SubnetPair, SettingItem, Settings, AutoscaleSetting } from '../../autoscale-setting';
@@ -248,7 +248,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
         }
     }
 
-    async attach(): Promise<NicAttachmentResult> {
+    async attach(): Promise<NicAttachmentStrategyResult> {
         this.proxy.logAsInfo('calling AwsNicAttachmentStrategy.attach');
         // this implementation is to attach a single nic
         // list all attachment records and get the first
@@ -262,7 +262,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
                     `in state (${record.attachmentState})`
             );
             this.proxy.logAsInfo('called AwsNicAttachmentStrategy.attach');
-            return NicAttachmentResult.Success;
+            return NicAttachmentStrategyResult.Success;
         } else {
             let nic: NetworkInterface;
             try {
@@ -304,7 +304,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
 
                 // update nic attachment record again
                 await this.setAttached(this.vm, nic);
-                return NicAttachmentResult.Success;
+                return NicAttachmentStrategyResult.Success;
             } catch (error) {
                 // if there's a nic created, deleted and delete the record
                 if (nic) {
@@ -317,11 +317,11 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
                 }
                 this.proxy.logForError('platform create network interface failed.', error);
                 this.proxy.logAsInfo('called AwsNicAttachmentStrategy.attach');
-                return NicAttachmentResult.Failed;
+                return NicAttachmentStrategyResult.Failed;
             }
         }
     }
-    async detach(): Promise<NicAttachmentResult> {
+    async detach(): Promise<NicAttachmentStrategyResult> {
         this.proxy.logAsInfo('calling AwsNicAttachmentStrategy.detach');
         // list all record attached to a vm
         const records = await this.listRecord(this.vm);
@@ -351,12 +351,15 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
             this.proxy.logAsWarning(`${failures} nics failed to detach. Cleanup may be required`);
         }
         this.proxy.logAsInfo('called AwsNicAttachmentStrategy.detach');
-        return (failures > 0 && NicAttachmentResult.Failed) || NicAttachmentResult.Success;
+        return (
+            (failures > 0 && NicAttachmentStrategyResult.Failed) ||
+            NicAttachmentStrategyResult.Success
+        );
     }
-    async cleanUp(): Promise<void> {
+    async cleanUp(): Promise<number> {
         this.proxy.logAsInfo('calling AwsNicAttachmentStrategy.cleanUp');
         const tags = await this.tags();
-        const nics = await this.platform.listUnusedNetworkInterface(tags);
+        const nics = await this.platform.listNetworkInterface(tags, 'available');
         const failures: string[] = [];
         this.proxy.logAsInfo(`Unused nics: ${nics.length} found.`);
         await Promise.all(
@@ -379,6 +382,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
             );
         }
         this.proxy.logAsInfo('called AwsNicAttachmentStrategy.cleanUp');
+        return failures.length;
     }
 }
 
@@ -1772,11 +1776,11 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         }
         this.proxy.logAsInfo('called detachNetworkInterface');
     }
-    async listUnusedNetworkInterface(tags: ResourceTag[]): Promise<NetworkInterface[]> {
-        this.proxy.logAsInfo('calling listUnusedNetworkInterface');
+    async listNetworkInterface(tags: ResourceTag[], status?: string): Promise<NetworkInterface[]> {
+        this.proxy.logAsInfo('calling listNetworkInterface');
         const enis = await this.adaptee.listNetworkInterfacesByTags(tags);
         const nics: NetworkInterface[] = enis
-            .filter(e => e.Status === 'available')
+            .filter(e => status === undefined || e.Status === status)
             .map(eni => {
                 const nic: NetworkInterface = {
                     id: eni.NetworkInterfaceId,
@@ -1788,7 +1792,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 };
                 return nic;
             });
-        this.proxy.logAsInfo('called listUnusedNetworkInterface');
+        this.proxy.logAsInfo('called listNetworkInterface');
         return nics;
     }
 
