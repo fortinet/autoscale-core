@@ -1,6 +1,7 @@
 export interface VirtualMachine {
     id: string;
     scalingGroupName: string;
+    productName?: string;
     primaryPrivateIpAddress: string;
     primaryPublicIpAddress?: string;
     virtualNetworkId: string;

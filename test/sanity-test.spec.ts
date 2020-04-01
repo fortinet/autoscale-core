@@ -11,7 +11,15 @@ import {
     HealthCheckResult
 } from '../master-election';
 import { VirtualMachine, NetworkInterface } from '../virtual-machine';
-import { PlatformAdapter, ReqType, VmDescriptor, ResourceTag } from '../platform-adapter';
+import {
+    PlatformAdapter,
+    ReqType,
+    VmDescriptor,
+    ResourceTag,
+    LicenseStockRecord,
+    LicenseUsageRecord,
+    LicenseFile
+} from '../platform-adapter';
 import {
     CloudFunctionProxyAdapter,
     CloudFunctionResponseBody,
@@ -89,6 +97,33 @@ const TEST_MASTER_ELECTION: MasterElection = {
 };
 
 class TestPlatformAdapter implements PlatformAdapter {
+    vmEqualTo(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean {
+        throw new Error('Method not implemented.');
+    }
+    deleteVmFromScalingGroup(vmId: string): Promise<void> {
+        throw new Error('Method not implemented.');
+    }
+    listLicenseFiles(
+        storageContainerName: string,
+        licenseDirectoryName: string
+    ): Promise<LicenseFile[]> {
+        throw new Error('Method not implemented.');
+    }
+    listLicenseStock(productName: string): Promise<LicenseStockRecord[]> {
+        throw new Error('Method not implemented.');
+    }
+    listLicenseUsage(productName: string): Promise<LicenseUsageRecord[]> {
+        throw new Error('Method not implemented.');
+    }
+    updateLicenseStock(records: LicenseStockRecord[]): Promise<void> {
+        throw new Error('Method not implemented.');
+    }
+    updateLicenseUsage(records: LicenseUsageRecord[]): Promise<void> {
+        throw new Error('Method not implemented.');
+    }
+    loadLicenseFileContent(storageContainerName: string, filePath: string): Promise<string> {
+        throw new Error('Method not implemented.');
+    }
     getReqAsString(): string {
         return 'fake-req-as-string';
     }
@@ -156,7 +191,7 @@ class TestPlatformAdapter implements PlatformAdapter {
     getMasterVm(): Promise<VirtualMachine> {
         throw new Error('Method not implemented.');
     }
-    getHealthCheckRecord(vm: VirtualMachine): Promise<HealthCheckRecord> {
+    getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord> {
         return Promise.resolve(TEST_HCR);
     }
     getMasterRecord(): Promise<MasterRecord> {
@@ -231,15 +266,9 @@ describe('sanity test', () => {
         };
         x = new TestCloudFunctionProxyAdapter();
         s = new Map<string, SettingItem>();
-        s.set(
-            AutoscaleSetting.MasterElectionTimeout,
-            new SettingItem('1', '2', '3', 'true', 'true')
-        );
-        s.set(
-            AutoscaleSetting.HeartbeatDelayAllowance,
-            new SettingItem('1', '2', '3', 'true', 'true')
-        );
-        s.set(AutoscaleSetting.HeartbeatLossCount, new SettingItem('1', '0', '3', 'true', 'true'));
+        s.set(AutoscaleSetting.MasterElectionTimeout, new SettingItem('1', '2', '3', true, true));
+        s.set(AutoscaleSetting.HeartbeatDelayAllowance, new SettingItem('1', '2', '3', true, true));
+        s.set(AutoscaleSetting.HeartbeatLossCount, new SettingItem('1', '0', '3', true, true));
         ms = {
             prepare() {
                 return Promise.resolve();
@@ -260,7 +289,7 @@ describe('sanity test', () => {
                 return Promise.resolve(HealthCheckResult.OnTime);
             },
             targetHealthCheckRecord: TEST_HCR,
-            result: HealthCheckResult.OnTime,
+            healthCheckResult: HealthCheckResult.OnTime,
             targetVmFirstHeartbeat: true,
             forceOutOfSync() {
                 return Promise.resolve(true);
@@ -333,7 +362,7 @@ describe('sanity test', () => {
     });
     it('handleHeartbeatSync', async () => {
         const stub1 = Sinon.stub(p, 'getHealthCheckRecord').callsFake(input => {
-            Sinon.assert.match(Object.is(input, TEST_VM), true);
+            Sinon.assert.match(Object.is(input, TEST_VM.id), true);
             return Promise.resolve(TEST_HCR);
         });
         const stub2 = Sinon.stub(p, 'getTargetVm');
@@ -369,6 +398,9 @@ describe('sanity test', () => {
         const stub11 = Sinon.stub(p, 'getSettings').callsFake(() => {
             return Promise.resolve(s);
         });
+        const stub12 = Sinon.stub(p, 'deleteVmFromScalingGroup').callsFake(() => {
+            return Promise.resolve();
+        });
 
         try {
             const result = await autoscale.handleHeartbeatSync();
@@ -384,6 +416,7 @@ describe('sanity test', () => {
             Sinon.assert.match(stub9.called, false);
             Sinon.assert.match(stub10.called, true);
             Sinon.assert.match(stub11.called, true);
+            Sinon.assert.match(stub12.called, true);
             Sinon.assert.match(result, '');
         } catch (error) {
             console.log(error);
@@ -400,6 +433,7 @@ describe('sanity test', () => {
             stub9.restore();
             stub10.restore();
             stub11.restore();
+            stub12.restore();
         }
     });
 });

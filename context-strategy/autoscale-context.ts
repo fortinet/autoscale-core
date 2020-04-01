@@ -174,7 +174,7 @@ export interface HeartbeatSyncStrategy {
      */
     forceOutOfSync(): Promise<boolean>;
     readonly targetHealthCheckRecord: HealthCheckRecord | null;
-    readonly result: HealthCheckResult;
+    readonly healthCheckResult: HealthCheckResult;
     readonly targetVmFirstHeartbeat: boolean;
 }
 
@@ -188,8 +188,8 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
     protected platform: PlatformAdapter;
     protected proxy: CloudFunctionProxyAdapter;
     protected targetVm: VirtualMachine;
-    protected healthCheckResult: HealthCheckResult;
     protected firstHeartbeat = false;
+    protected result: HealthCheckResult;
     protected _targetHealthCheckRecord: HealthCheckRecord;
     prepare(
         platform: PlatformAdapter,
@@ -219,12 +219,12 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         const nextHeartbeatTime: number = heartbeatArriveTime + newInterval;
         // get health check record for target vm
         // ASSERT: this.targetVm is valid
-        let targetHealthCheckRecord = await this.platform.getHealthCheckRecord(this.targetVm);
+        let targetHealthCheckRecord = await this.platform.getHealthCheckRecord(this.targetVm.id);
         // if there's no health check record for this vm,
         // can deem it the first time for health check
         if (targetHealthCheckRecord === null) {
             this.firstHeartbeat = true;
-            this.healthCheckResult = HealthCheckResult.OnTime;
+            this.result = HealthCheckResult.OnTime;
             targetHealthCheckRecord = {
                 vmId: this.targetVm.id,
                 scalingGroupName: this.targetVm.scalingGroupName,
@@ -245,7 +245,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 this.proxy.logForError('createHealthCheckRecord() error.', error);
                 // cannot create hb record, drop this health check
                 targetHealthCheckRecord.upToDate = false;
-                this.healthCheckResult = HealthCheckResult.Dropped;
+                this.result = HealthCheckResult.Dropped;
             }
         }
         // processing regular heartbeat
@@ -259,7 +259,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             if (targetHealthCheckRecord.syncState === HeartbeatSyncState.OutOfSync) {
                 oldLossCount = targetHealthCheckRecord.heartbeatLossCount;
                 oldInterval = targetHealthCheckRecord.heartbeatInterval;
-                this.healthCheckResult = HealthCheckResult.Dropped;
+                this.result = HealthCheckResult.Dropped;
             } else {
                 // heartbeat is late
                 if (delay >= 0) {
@@ -274,14 +274,14 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                         targetHealthCheckRecord.syncState = HeartbeatSyncState.InSync;
                         targetHealthCheckRecord.healthy = true;
                     }
-                    this.healthCheckResult = HealthCheckResult.Late;
+                    this.result = HealthCheckResult.Late;
                 }
                 // else, no delay; heartbeat is on time; clear the loss count.
                 else {
                     targetHealthCheckRecord.heartbeatLossCount = 0;
                     newLossCount = targetHealthCheckRecord.heartbeatLossCount;
                     targetHealthCheckRecord.healthy = true;
-                    this.healthCheckResult = HealthCheckResult.OnTime;
+                    this.result = HealthCheckResult.OnTime;
                 }
             }
             // update health check record
@@ -292,12 +292,12 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 this.proxy.logForError('updateHealthCheckRecord() error.', error);
                 // cannot create hb record, drop this health check
                 targetHealthCheckRecord.upToDate = false;
-                this.healthCheckResult = HealthCheckResult.Dropped;
+                this.result = HealthCheckResult.Dropped;
             }
         }
         this._targetHealthCheckRecord = targetHealthCheckRecord;
         this.proxy.logAsInfo(
-            `Heartbeat sync result: ${this.healthCheckResult},` +
+            `Heartbeat sync result: ${this.result},` +
                 ` heartbeat sequence: ${oldSeq}->${targetHealthCheckRecord.seq},` +
                 ` heartbeat arrive time: ${heartbeatArriveTime} ms,` +
                 ` heartbeat delay allowance: ${delayAllowance} ms,` +
@@ -306,13 +306,15 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 ` heartbeat loss count: ${oldLossCount}->${newLossCount}.`
         );
         this.proxy.logAsInfo('appled ConstantIntervalHeartbeatSyncStrategy strategy.');
-        return this.healthCheckResult;
+        return this.result;
     }
     get targetHealthCheckRecord(): HealthCheckRecord {
         return this._targetHealthCheckRecord;
     }
     masterHealthCheckRecord: HealthCheckRecord;
-    result: HealthCheckResult;
+    get healthCheckResult(): HealthCheckResult {
+        return this.result;
+    }
     get targetVmFirstHeartbeat(): boolean {
         return this.firstHeartbeat;
     }
@@ -321,7 +323,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         try {
             // ASSERT: this.targetVm is valid
             const healthcheckRecord: HealthCheckRecord = await this.platform.getHealthCheckRecord(
-                this.targetVm
+                this.targetVm.id
             );
             // if its status is 'out-of-sync' already, don't need to update
             if (healthcheckRecord.syncState === HeartbeatSyncState.OutOfSync) {
@@ -329,7 +331,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             }
             // update its state to be 'out-of-sync'
             const emitter: WaitForPromiseEmitter<HealthCheckRecord> = () => {
-                return this.platform.getHealthCheckRecord(this.targetVm);
+                return this.platform.getHealthCheckRecord(this.targetVm.id);
             };
             const checker: WaitForConditionChecker<HealthCheckRecord> = (record, callCount) => {
                 if (callCount > 3) {

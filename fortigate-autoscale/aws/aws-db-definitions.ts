@@ -13,7 +13,8 @@ import {
     LicenseUsage,
     CustomLog,
     VpnAttachment,
-    Record
+    Record,
+    TypeConverter
 } from '../../db-definitions';
 
 export const AwsTypeRefs: TypeRefMap = new Map<TypeRef, string>([
@@ -23,72 +24,85 @@ export const AwsTypeRefs: TypeRefMap = new Map<TypeRef, string>([
     [TypeRef.PrimaryKey, 'HASH'],
     [TypeRef.SecondaryKey, 'RANG']
 ]);
+
+export class DynamoDBTypeConverter extends TypeConverter {
+    valueToString(value: unknown): string {
+        return value as string;
+    }
+    valueToNumber(value: unknown): number {
+        return Number(value as string);
+    }
+    valueToBoolean(value: unknown): boolean {
+        // see: https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBMapper.DataTypes.html
+        return (value as number) === 1;
+    }
+}
 export class AwsAutoscale extends Autoscale {
     constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+        super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
 export class AwsMasterElection extends MasterElection {
     constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+        super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
 export class AwsFortiAnalyzer extends FortiAnalyzer {
     constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+        super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
 export class AwsSettings extends Settings {
     constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+        super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
 export class AwsNicAttachment extends NicAttachment {
     constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+        super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
 export class AwsVmInfoCache extends VmInfoCache {
     constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+        super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
 export class AwsLicenseStock extends LicenseStock {
     constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+        super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
 export class AwsLicenseUsage extends LicenseUsage {
     constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+        super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
 export class AwsCustomLog extends CustomLog {
     constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+        super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
 export class AwsVpnAttachment extends VpnAttachment {
     constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+        super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
@@ -145,7 +159,7 @@ export class AwsLifecycleItem extends Table<LifecycleItemDbItem> {
         }
     ];
     constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+        super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // Caution: don't forget to set a correct name.
         this.setName('LifecycleItem');
         this.alterAttributes(AwsLifecycleItem.__attributes);
