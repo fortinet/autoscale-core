@@ -16,6 +16,7 @@ export enum AutoscaleSetting {
     HeartbeatInterval = 'heartbeat-interval',
     HeartbeatLossCount = 'heartbeat-loss-count',
     HeartbeatSyncActionUnhealthyVm = 'heartbeat-sync-action-unhealthy-vm',
+    LicenseFIleDirectory = 'licens-file-directory',
     MasterElectionTimeout = 'master-election-timeout',
     MasterScalingGroupName = 'master-scaling-group-name',
     PaygScalingGroupName = 'payg-scaling-group-name',
@@ -37,12 +38,23 @@ export interface SubnetPair {
  */
 export class SettingItem {
     static NO_VALUE = 'n/a';
+    /**
+     *Creates an instance of SettingItem.
+     * @param {string} key setting key
+     * @param {string} rawValue the value stored as string type,
+     * for actual type of : string, number, boolean, etc.
+     * @param {string} description description of this setting item
+     * @param {boolean} editable a flag for whether the value should be editable after deployment or not
+     * @param {string} jsonEncoded a flag for whether the value is a JSON object or not.
+     * If yes, can get the JSON object from
+     * calling the jsonValue of this setting item.
+     */
     constructor(
         readonly key: string,
         private readonly rawValue: string,
         readonly description: string,
-        private readonly rawEditable: string,
-        private readonly rawJsonEncoded: string
+        readonly editable: boolean,
+        readonly jsonEncoded: boolean
     ) {}
     /**
      * the string type value of the setting.
@@ -54,19 +66,6 @@ export class SettingItem {
         return (
             (this.rawValue.trim().toLowerCase() === SettingItem.NO_VALUE && null) || this.rawValue
         );
-    }
-    get editable(): boolean {
-        return this.rawEditable && this.rawEditable.trim().toLowerCase() === 'true';
-    }
-    /**
-     * a flag for whether the value is a JSON object or not. If yes, can get the JSON object from
-     * calling the jsonValue of this setting item.
-     *
-     * @readonly
-     * @type {boolean}
-     */
-    get jsonEncoded(): boolean {
-        return this.rawJsonEncoded && this.rawJsonEncoded.trim().toLowerCase() === 'true';
     }
     /**
      * Returns the object type of this setting if it is a JSON object,
@@ -106,8 +105,8 @@ export class SettingItem {
             key: this.key,
             value: this.rawValue,
             description: this.description,
-            editable: this.rawEditable,
-            jsonEncoded: this.rawJsonEncoded
+            editable: this.editable,
+            jsonEncoded: this.jsonEncoded
         });
     }
 

@@ -22,7 +22,12 @@ import {
 } from './master-election';
 import { VirtualMachine } from './virtual-machine';
 import { CloudFunctionProxy, CloudFunctionProxyAdapter } from './cloud-function-proxy';
-import { LicensingModelContext, LicensingStrategy } from './context-strategy/licensing-context';
+import {
+    LicensingModelContext,
+    LicensingStrategy,
+    LicensingStrategyResult
+} from './context-strategy/licensing-context';
+import path from 'path';
 
 export class HttpError extends Error {
     public readonly name: string;
@@ -219,7 +224,7 @@ export class Autoscale implements AutoscaleCore {
         const success = await this.heartbeatSyncStrategy.forceOutOfSync();
         if (success) {
             this.env.targetHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                this.env.targetVm
+                this.env.targetVm.id
             );
         }
         // 2. if it is a master vm, remove its master tag
@@ -272,7 +277,7 @@ export class Autoscale implements AutoscaleCore {
         // if it's not up to date, load it from db.
         else {
             this.env.targetHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                this.env.targetVm
+                this.env.targetVm.id
             );
         }
 
@@ -285,7 +290,7 @@ export class Autoscale implements AutoscaleCore {
             await this.scalingGroupStrategy.onLaunchedVm();
         }
 
-        const heartbeatTiming = await this.heartbeatSyncStrategy.result;
+        const heartbeatTiming = await this.heartbeatSyncStrategy.healthCheckResult;
         // If the timing indicates that it should be dropped,
         // don't update. Respond immediately. return.
         if (heartbeatTiming === HealthCheckResult.Dropped) {
@@ -299,7 +304,7 @@ export class Autoscale implements AutoscaleCore {
         // get master healthcheck record
         if (this.env.masterVm) {
             this.env.masterHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                this.env.masterVm
+                this.env.masterVm.id
             );
         } else {
             this.env.masterHealthCheckRecord = undefined;
@@ -328,7 +333,7 @@ export class Autoscale implements AutoscaleCore {
             this.env.masterVm = masterElection.newMaster;
             this.env.masterRecord = masterElection.newMasterRecord;
             this.env.masterHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                this.env.masterVm
+                this.env.masterVm.id
             );
 
             // what to do with the old master?
@@ -336,7 +341,7 @@ export class Autoscale implements AutoscaleCore {
             // old master unhealthy?
             const oldMasterHealthCheck =
                 masterElection.oldMaster &&
-                (await this.platform.getHealthCheckRecord(masterElection.oldMaster));
+                (await this.platform.getHealthCheckRecord(masterElection.oldMaster.id));
             if (oldMasterHealthCheck && !oldMasterHealthCheck.healthy) {
                 if (
                     unhealthyVms.filter(vm => {
@@ -445,7 +450,7 @@ export class Autoscale implements AutoscaleCore {
             // get master vm healthcheck record
             if (!this.env.masterHealthCheckRecord) {
                 this.env.masterHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                    this.env.masterVm
+                    this.env.masterVm.id
                 );
             }
             // master is unhealthy, master election required.
@@ -493,7 +498,7 @@ export class Autoscale implements AutoscaleCore {
             vms.map(vm => {
                 this.proxy.logAsInfo(`handling unhealthy vm(id: ${vm.id})...`);
                 return this.platform
-                    .deleteVmFromScalingGroup(vm)
+                    .deleteVmFromScalingGroup(vm.id)
                     .then(() => {
                         this.proxy.logAsInfo(`handling vm (id: ${vm.id}) completed.`);
                     })
@@ -504,13 +509,42 @@ export class Autoscale implements AutoscaleCore {
         );
         this.proxy.logAsInfo('called handleUnhealthyVm.');
     }
-    async handleLicenseAssignment(): Promise<string> {
+    async handleLicenseAssignment(productName: string): Promise<string> {
         this.proxy.logAsInfo('calling handleLicenseAssignment.');
-        this.licensingStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
-        const result = await this.licensingStrategy.apply();
-        // print the license information
-        const licenseContent = await this.licensingStrategy.apply();
+        const licenseDir: string = path.join(
+            this.settings.get(AutoscaleSetting.AssetStorageDirectory).value,
+            this.settings.get(AutoscaleSetting.LicenseFIleDirectory).value,
+            productName
+        );
+        this.licensingStrategy.prepare(
+            this.platform,
+            this.proxy,
+            this.env.targetVm,
+            productName,
+            this.settings.get(AutoscaleSetting.AssetStorageContainer).value,
+            licenseDir
+        );
+        let result: LicensingStrategyResult;
+        let licenseContent = '';
+        try {
+            result = await this.licensingStrategy.apply();
+        } catch (error) {
+            this.proxy.logForError('Error in running licensing strategy.', error);
+        }
+        if (result === LicensingStrategyResult.LicenseAssigned) {
+            licenseContent = await this.licensingStrategy.getLicenseContent();
+        } else if (result === LicensingStrategyResult.LicenseNotRequired) {
+            this.proxy.logAsInfo(
+                `license isn't required for this vm (id: ${this.env.targetVm.id})`
+            );
+        } else if (result === LicensingStrategyResult.LicenseOutOfStock) {
+            this.proxy.logAsError(
+                'License out of stock. ' +
+                    `No license is assigned to this vm (id: ${this.env.masterVm.id})`
+            );
+        }
         this.proxy.logAsInfo('called handleLicenseAssignment.');
+        return licenseContent;
     }
 }
 

@@ -3,7 +3,6 @@ import { VirtualMachine, NetworkInterface } from './virtual-machine';
 import { HealthCheckRecord, MasterRecord } from './master-election';
 import { NicAttachmentRecord } from './context-strategy/nic-attachment-context';
 import { KeyValue } from './db-definitions';
-import { Blob } from './blob';
 
 export enum ReqType {
     LaunchingVm = 'LaunchingVm',
@@ -55,21 +54,19 @@ export interface LicenseStockRecord {
     fileName: string;
     checksum: string;
     algorithm: string;
+    productName: string;
 }
 
 export interface LicenseUsageRecord {
     fileName: string;
     checksum: string;
     algorithm: string;
+    productName: string;
     vmId: string;
     scalingGroupName: string;
     assignedTime: number;
     vmInSync: boolean;
 }
-
-export type LicenseFileMap = Map<string, LicenseFile>;
-export type LicenseStockMap = Map<string, LicenseStockRecord>;
-export type LicenseUsageMap = Map<string, LicenseUsageRecord>;
 
 export interface PlatformAdapter {
     adaptee: {};
@@ -93,7 +90,7 @@ export interface PlatformAdapter {
     validateSettings(): Promise<boolean>;
     getTargetVm(): Promise<VirtualMachine | null>;
     getMasterVm(): Promise<VirtualMachine | null>;
-    getHealthCheckRecord(vm: VirtualMachine): Promise<HealthCheckRecord | null>;
+    getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord | null>;
     getMasterRecord(filters?: KeyValue[]): Promise<MasterRecord | null>;
     vmEqualTo(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean;
     createHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
@@ -112,13 +109,15 @@ export interface PlatformAdapter {
      */
     updateMasterRecord(rec: MasterRecord): Promise<void>;
     loadConfigSet(name: string, custom?: boolean): Promise<string>;
-    deleteVmFromScalingGroup(vm): Promise<void>;
+    deleteVmFromScalingGroup(vmId: string): Promise<void>;
     listLicenseFiles(
         storageContainerName: string,
         licenseDirectoryName: string
-    ): Promise<LicenseFileMap>;
-    listLicenseStock(productName: string): Promise<LicenseStockMap>;
-    listLicenseUsage(productName: string): Promise<LicenseUsageMap>;
+    ): Promise<LicenseFile[]>;
+    listLicenseStock(productName: string): Promise<LicenseStockRecord[]>;
+    listLicenseUsage(productName: string): Promise<LicenseUsageRecord[]>;
+    updateLicenseStock(records: LicenseStockRecord[]): Promise<void>;
+    updateLicenseUsage(records: LicenseUsageRecord[]): Promise<void>;
     loadLicenseFileContent(storageContainerName: string, filePath: string): Promise<string>;
 
     // NOTE: are the following methods relevant to this interface or should move to

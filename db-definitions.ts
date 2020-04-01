@@ -30,17 +30,8 @@ export interface Record {
 
 export enum CreateOrUpdate {
     unknown,
-    create,
-    update
-}
-
-export interface DbTable {
-    readonly name: string;
-    readonly primaryKey: Attribute;
-    readonly schema: Map<string, SchemaElement>;
-    readonly keys: Map<string, Attribute>;
-    readonly attributes: Map<string, Attribute>;
-    // validateInput(input: Record): void;
+    CreateOrReplace,
+    UpdateExisting
 }
 
 /**
@@ -77,7 +68,7 @@ export abstract class TypeConverter {
     abstract valueToBoolean(value: unknown): boolean;
 }
 
-export abstract class Table<T> implements DbTable {
+export abstract class Table<T> {
     static TypeRefMap: Map<TypeRef, string> = new Map<TypeRef, string>([
         [TypeRef.StringType, 'String'],
         [TypeRef.NumberType, 'Number'],
@@ -96,10 +87,10 @@ export abstract class Table<T> implements DbTable {
     ) {}
     /**
      * validate the input before putting into the database
-     * @param {{}} input the input object to be validated
+     * @param {T} input the input object to be validated
      * @throws an Error object
      */
-    validateInput(input: Record): void {
+    validateInput<T>(input: T): void {
         const keys = Object.keys(input);
         this.attributes.forEach(attrName => {
             if (!keys.includes) {
@@ -599,8 +590,9 @@ export abstract class VmInfoCache extends Table<VmInfoCacheDbItem> {
 
 export interface LicenseStockDbItem {
     checksum: string;
-    fileName: string;
     algorithm: string;
+    fileName: string;
+    productName: string;
 }
 export abstract class LicenseStock extends Table<LicenseStockDbItem> {
     static __attributes: Attribute[] = [
@@ -611,12 +603,17 @@ export abstract class LicenseStock extends Table<LicenseStockDbItem> {
             keyType: TypeRef.PrimaryKey
         },
         {
+            name: 'algorithm',
+            attrType: TypeRef.StringType,
+            isKey: false
+        },
+        {
             name: 'fileName',
             attrType: TypeRef.StringType,
             isKey: false
         },
         {
-            name: 'algorithm',
+            name: 'productName',
             attrType: TypeRef.StringType,
             isKey: false
         }
@@ -630,8 +627,9 @@ export abstract class LicenseStock extends Table<LicenseStockDbItem> {
     convertRecord(record: Record): LicenseStockDbItem {
         const item: LicenseStockDbItem = {
             checksum: this.typeConvert.valueToString(record.checksum),
+            algorithm: this.typeConvert.valueToString(record.algorithm),
             fileName: this.typeConvert.valueToString(record.fileName),
-            algorithm: this.typeConvert.valueToString(record.algorithm)
+            productName: this.typeConvert.valueToString(record.productName)
         };
         return item;
     }
@@ -639,9 +637,9 @@ export abstract class LicenseStock extends Table<LicenseStockDbItem> {
 
 export interface LicenseUsageDbItem {
     checksum: string;
-    fileName: string;
     algorithm: string;
-    product: string;
+    fileName: string;
+    productName: string;
     vmId: string;
     scalingGroupName: string;
     assignedTime: number;
@@ -702,7 +700,7 @@ export abstract class LicenseUsage extends Table<LicenseUsageDbItem> {
             checksum: this.typeConvert.valueToString(record.checksum),
             fileName: this.typeConvert.valueToString(record.fileName),
             algorithm: this.typeConvert.valueToString(record.algorithm),
-            product: this.typeConvert.valueToString(record.product),
+            productName: this.typeConvert.valueToString(record.product),
             vmId: this.typeConvert.valueToString(record.vmId),
             scalingGroupName: this.typeConvert.valueToString(record.scalingGroupName),
             assignedTime: this.typeConvert.valueToNumber(record.assignedTime),

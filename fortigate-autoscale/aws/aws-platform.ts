@@ -38,7 +38,8 @@ import {
     ReqBody,
     ReqHeaders,
     LicenseFile,
-    LicenseFileMap
+    LicenseStockRecord,
+    LicenseUsageRecord
 } from '../../platform-adapter';
 import {
     HealthCheckRecord,
@@ -47,14 +48,15 @@ import {
     HealthCheckSyncState
 } from '../../master-election';
 import {
-    Record,
     KeyValue,
     CreateOrUpdate,
     MasterElectionDbItem,
     NicAttachmentDbItem,
     SettingsDbItem,
-    DbTable,
-    AutoscaleDbItem
+    AutoscaleDbItem,
+    Table,
+    LicenseStockDbItem,
+    LicenseUsageDbItem
 } from '../../db-definitions';
 import { LifecycleItemDbItem } from '../aws/aws-db-definitions';
 import { Blob } from '../../blob';
@@ -383,7 +385,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
 export interface AwsDdbOperations {
     Expression: string;
     ExpressionAttributeValues?: ExpressionAttributeValueMap;
-    createOrUpdate?: CreateOrUpdate;
+    type?: CreateOrUpdate;
 }
 
 export class AwsPlatform implements PlatformAdaptee {
@@ -407,18 +409,10 @@ export class AwsPlatform implements PlatformAdaptee {
     async loadSettings(): Promise<Settings> {
         const table = new AwsDBDef.AwsSettings(process.env.RESOURCE_TAG_PREFIX || '');
         const records: Map<string, SettingsDbItem> = new Map(
-            (await this.listItemFromDb(table)).map(record => {
-                return [
-                    record.settingKey as string,
-                    {
-                        settingKey: record.settingKey as string,
-                        settingValue: record.settingValue as string,
-                        description: record.description as string,
-                        jsonEncoded: record.jsonEncoded as string,
-                        editable: record.editable as string
-                    }
-                ];
-            })
+            await (await this.listItemFromDb<SettingsDbItem>(table)).map(rec => [
+                rec.settingKey,
+                rec
+            ])
         );
         const settings: Settings = new Map<string, SettingItem>();
         Object.keys(FortiGateAutoscaleSetting).forEach(key => {
@@ -439,24 +433,24 @@ export class AwsPlatform implements PlatformAdaptee {
 
     /**
      * Save a document db item into DynamoDB.
-     * @param  {DbTable} table the instance of Table to save the item.
+     * @param  {Table<T>} table the instance of Table to save the item.
      * @param  {Record} item the item to save into the db table.
      * @param  {AwsDdbOperations} conditionExp (optional) the condition expression for saving the item
      * @returns {Promise} return void
      * @throws whatever docClient.put throws.
      * @see https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB/DocumentClient.html#put-property
      */
-    async saveItemToDb(
-        table: DbTable,
-        item: Record,
+    async saveItemToDb<T>(
+        table: Table<T>,
+        item: T,
         conditionExp?: AwsDdbOperations
     ): Promise<void> {
         // CAUTION: validate the db input
-        table.validateInput(item);
+        table.validateInput<T>(item);
         if (
             conditionExp &&
-            conditionExp.createOrUpdate &&
-            conditionExp.createOrUpdate === CreateOrUpdate.update
+            conditionExp.type &&
+            conditionExp.type === CreateOrUpdate.UpdateExisting
         ) {
             const keys: DocumentClient.Key = {};
             // get the key names from table,
@@ -496,11 +490,11 @@ export class AwsPlatform implements PlatformAdaptee {
     }
     /**
      * get an db table record from a given table
-     * @param  {DbTable} table the instance of Table to get the item.
+     * @param  {Table<T>} table the instance of Table to get the item.
      * @param  {KeyValue[]} keyValue an array of table key and a value to get the item
      * @returns {Promise} return Record or null
      */
-    async getItemFromDb(table: DbTable, keyValue: KeyValue[]): Promise<Record | null> {
+    async getItemFromDb<T>(table: Table<T>, keyValue: KeyValue[]): Promise<T | null> {
         const keys = {};
         keyValue.forEach(kv => {
             keys[kv.key] = kv.value;
@@ -510,18 +504,18 @@ export class AwsPlatform implements PlatformAdaptee {
             Key: keys
         };
         const result = await this.docClient.get(getItemInput).promise();
-        return result.Item;
+        return table.convertRecord(result.Item);
     }
     /**
      * Delte a given item from the db
-     * @param  {DbTable} table the instance of Table to delete the item.
-     * @param  {Record} item the item to be deleted from the db table.
+     * @param  {Table<T>} table the instance of Table to delete the item.
+     * @param  {T} item the item to be deleted from the db table.
      * @param  {AwsDdbOperations} condition (optional) the condition expression for deleting the item
      * @returns {Promise} void
      */
-    async deleteItemFromDb(
-        table: DbTable,
-        item: Record,
+    async deleteItemFromDb<T>(
+        table: Table<T>,
+        item: T,
         condition?: AwsDdbOperations
     ): Promise<void> {
         const keys = {};
@@ -541,16 +535,16 @@ export class AwsPlatform implements PlatformAdaptee {
     }
     /**
      * Scan and list all or some record from a given db table
-     * @param  {DbTable} table the instance of Table to delete the item.
+     * @param  {Table<T>} table the instance of Table to delete the item.
      * @param  {AwsDdbOperations} filterExp (optional) a filter for listing the records
      * @param  {number} limit (optional) number or records to return
      * @returns {Promise} array of db record
      */
-    async listItemFromDb(
-        table: DbTable,
+    async listItemFromDb<T>(
+        table: Table<T>,
         filterExp?: AwsDdbOperations,
         limit?: number
-    ): Promise<Record[]> {
+    ): Promise<T[]> {
         if (typeof filterExp === 'number') {
             [limit, filterExp] = [filterExp, undefined];
         }
@@ -563,13 +557,9 @@ export class AwsPlatform implements PlatformAdaptee {
         };
 
         const response = await this.docClient.scan(scanInput).promise();
-        let records: Record[] = [];
+        let records: T[] = [];
         if (response && response.Items) {
-            records = response.Items.map(item => {
-                const rec: Record = {};
-                Object.assign(rec, item);
-                return rec;
-            });
+            records = response.Items.map(item => table.convertRecord(item));
         }
         return records;
     }
@@ -799,6 +789,17 @@ export class AwsPlatform implements PlatformAdaptee {
         };
         await this.elbv2.deregisterTargets(input).promise();
     }
+
+    async terminateInstanceInAutoscalingGroup(
+        instanceId: string,
+        descCapacity?: boolean
+    ): Promise<void> {
+        const params: AutoScaling.TerminateInstanceInAutoScalingGroupType = {
+            InstanceId: instanceId,
+            ShouldDecrementDesiredCapacity: descCapacity
+        };
+        await this.autoscaling.terminateInstanceInAutoScalingGroup(params).promise();
+    }
 }
 
 export enum LifecycleActionResult {
@@ -986,125 +987,6 @@ export class AwsScheduledEventProxy extends CloudFunctionProxy<
     }
 }
 
-// export class AwsApiGatewayEventAdaptee extends AwsPlatform {
-//     checkReqIntegrity(
-//         proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
-//     ): void {
-//         const reqMethod = this.getReqMethod(proxy);
-//         const headers = this.getReqHeaders(proxy);
-//         if (reqMethod === ReqMethod.GET && headers['Fos-instance-id'] === null) {
-//             throw new Error('Invalid request. Fos-instance-id is missing in [GET] request header.');
-//         } else if (reqMethod === ReqMethod.POST) {
-//             const body: ReqBody = this.getReqBody(proxy);
-//             if (!body.instance) {
-//                 throw new Error(
-//                     'Invalid request. instance is missing in [POST] ' +
-//                         `request body: ${proxy.request.body}`
-//                 );
-//             }
-//         } else {
-//             throw new Error(`Invalid request. Unsupported request method: [${reqMethod}]`);
-//         }
-//     }
-//     getReqMethod(
-//         proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
-//     ): ReqMethod {
-//         return mapHttpMethod(proxy.request.httpMethod);
-//     }
-//     getReqType(
-//         proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
-//     ): Promise<ReqType> {
-//         const reqMethod = this.getReqMethod(proxy);
-//         if (reqMethod === ReqMethod.GET) {
-//             return Promise.resolve(ReqType.BootstrapConfig);
-//         } else if (reqMethod === ReqMethod.POST) {
-//             const body = this.getReqBody(proxy);
-//             if (body.status) {
-//                 return Promise.resolve(ReqType.StatusMessage);
-//             } else if (body.instance) {
-//                 return Promise.resolve(ReqType.HeartbeatSync);
-//             } else {
-//                 throw new Error(
-//                     `Invalid request body: [instance: ${body.instance}],` +
-//                         ` [status: ${body.status}]`
-//                 );
-//             }
-//         } else {
-//             throw new Error(`Unsupported request method: ${reqMethod}`);
-//         }
-//     }
-//     getReqHeaders(
-//         proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
-//     ): ReqHeaders {
-//         const headers: ReqHeaders = { ...proxy.request.headers };
-//         return headers;
-//     }
-//     getReqBody(
-//         proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
-//     ): ReqBody {
-//         let body: ReqBody;
-//         try {
-//             body = (proxy.request.body && JSON.parse(proxy.request.body)) || {};
-//         } catch (error) {}
-//         return body;
-//     }
-// }
-
-// export class AwsScheduleEventAdaptee extends AwsPlatform {
-//     checkReqIntegrity(
-//         proxy: CloudFunctionProxy<ScheduledEvent, Context, APIGatewayProxyResult>
-//     ): void {
-//         if (!(proxy.request.source && proxy.request['detail-type'])) {
-//             proxy.logAsError(
-//                 "Request isn't an AWS schedule event." + ` request content: ${proxy.request}`
-//             );
-//             throw new Error('Invalid request. Not an AWS schedule event type.');
-//         }
-//     }
-//     /**
-//      * This method is unsed in this implementation.
-//      * @returns {ReqMethod} will always return undefined
-//      */
-//     getReqMethod(): ReqMethod {
-//         return undefined;
-//     }
-//     getReqType(
-//         proxy: CloudFunctionProxy<ScheduledEvent, Context, APIGatewayProxyResult>
-//     ): Promise<ReqType> {
-//         if (proxy.request.source === 'aws.autoscaling') {
-//             if (proxy.request['detail-type'] === 'EC2 Instance-launch Lifecycle Action') {
-//                 return Promise.resolve(ReqType.LaunchingVm);
-//             } else if (proxy.request['detail-type'] === 'EC2 Instance Launch Successful') {
-//                 return Promise.resolve(ReqType.LaunchedVm);
-//             } else if (proxy.request['detail-type'] === 'EC2 Instance-terminate Lifecycle Action') {
-//                 return Promise.resolve(ReqType.TerminatingVm);
-//             } else if (proxy.request['detail-type'] === 'EC2 Instance Terminate Successful') {
-//                 return Promise.resolve(ReqType.TerminatedVm);
-//             } else {
-//                 throw new Error(
-//                     'Invalid request. ' +
-//                         `Unsupported request detail-type: [${proxy.request['detail-type']}]`
-//                 );
-//             }
-//         }
-//         throw new Error(`Unknown supported source: [${proxy.request.source}]`);
-//     }
-//     /**
-//      * This method is unsed in this implementation.
-//      * @returns {ReqHeaders} an empty object
-//      */
-//     getReqHeaders(): ReqHeaders {
-//         return {};
-//     }
-//     /**
-//      * This method is unsed in this implementation.
-//      * @returns {ReqBody} an empty object
-//      */
-//     getReqBody(): ReqBody {
-//         return {};
-//     }
-// }
-
 export class AwsPlatformAdapter implements PlatformAdapter {
     adaptee: AwsPlatform;
     proxy: CloudFunctionProxyAdapter;
@@ -1116,25 +998,27 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy = proxy;
         this.createTime = createTime ? createTime : Date.now();
     }
-    // NOTE:
-    // checkRequestIntegrity(): Promise<void> {
-    //     const reqMethod = this.adaptee.getReqMethod(this.proxy);
-    //     const body = this.adaptee.getReqBody(this.proxy);
-    //     const headers = this.adaptee.getReqHeaders(this.proxy);
-    //     if (reqMethod === ReqMethod.GET && headers['Fos-instance-id'] === null) {
-    //         throw new Error('Invalid request. Fos-instance-id is missing in [GET] request header.');
-    //     } else if (reqMethod === ReqMethod.POST) {
-    //         if (!body.instance) {
-    //             throw new Error(
-    //                 'Invalid request. instance is missing in [POST] ' +
-    //                     `request body: ${JSON.stringify(body)}`
-    //             );
-    //         }
-    //     } else {
-    //         throw new Error(`Invalid request. Unsupported request method: [${reqMethod}]`);
-    //     }
-    //     return Promise.resolve();
-    // }
+    vmEqualTo(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean {
+        if (!vmA || !vmB) {
+            return false;
+        } else {
+            return (
+                Object.keys(vmA).filter(prop => {
+                    return vmA[prop] !== vmB[prop];
+                }).length === 0
+            );
+        }
+    }
+    async deleteVmFromScalingGroup(vmId: string): Promise<void> {
+        this.proxy.logAsInfo('calling deleteVmFromScalingGroup');
+        try {
+            await this.adaptee.terminateInstanceInAutoscalingGroup(vmId);
+        } catch (error) {
+            this.proxy.logForError('Failed to delele vm from scaling group.', error);
+        }
+        this.proxy.logAsInfo('called deleteVmFromScalingGroup');
+    }
+
     getRequestType(): Promise<ReqType> {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {
             const reqMethod = this.proxy.getReqMethod();
@@ -1322,17 +1206,16 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called getMasterVm');
         return vm;
     }
-    async getHealthCheckRecord(vm: VirtualMachine): Promise<HealthCheckRecord> {
+
+    async getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord> {
         this.proxy.logAsInfo('calling getHealthCheckRecord');
         const table = new AwsDBDef.AwsAutoscale(process.env.RESOURCE_TAG_PREFIX || '');
-        const dbItem = table.convertRecord(
-            await this.adaptee.getItemFromDb(table, [
-                {
-                    key: table.primaryKey.name,
-                    value: vm.id
-                }
-            ])
-        );
+        const dbItem = await this.adaptee.getItemFromDb<AutoscaleDbItem>(table, [
+            {
+                key: table.primaryKey.name,
+                value: vmId
+            }
+        ]);
 
         // if heartbeatDelay is <= 0, it means hb arrives early or ontime
         const heartbeatDelay =
@@ -1346,9 +1229,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             })
             .map(([, v]) => v);
         const record: HealthCheckRecord = {
-            vmId: vm.id,
-            scalingGroupName: vm.scalingGroupName,
-            ip: vm.primaryPrivateIpAddress,
+            vmId: vmId,
+            scalingGroupName: dbItem.scalingGroupName,
+            ip: dbItem.ip,
             masterIp: dbItem.masterIp,
             heartbeatInterval: dbItem.heartBeatInterval,
             heartbeatLossCount: dbItem.heartBeatLossCount,
@@ -1368,9 +1251,11 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             Expression: ''
         };
         filterExp.Expression = filters.map(kv => `${kv.key} = :${kv.value}`).join(' AND ');
-        const dbItems = await this.adaptee.listItemFromDb(table, filterExp);
         // ASSERT: there's only 1 matching master record
-        const [masterRecord] = dbItems.map(table.convertRecord);
+        const [masterRecord] = await this.adaptee.listItemFromDb<MasterElectionDbItem>(
+            table,
+            filterExp
+        );
         const [voteState] = Object.entries(MasterRecordVoteState)
             .filter(([, value]) => {
                 return masterRecord.voteState === value;
@@ -1416,9 +1301,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            createOrUpdate: CreateOrUpdate.create
+            type: CreateOrUpdate.CreateOrReplace
         };
-        await this.adaptee.saveItemToDb(table, { ...item }, conditionExp);
+        await this.adaptee.saveItemToDb<AutoscaleDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called createHealthCheckRecord');
     }
     async updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
@@ -1442,9 +1327,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            createOrUpdate: CreateOrUpdate.update
+            type: CreateOrUpdate.UpdateExisting
         };
-        await this.adaptee.saveItemToDb(table, { ...item }, conditionExp);
+        await this.adaptee.saveItemToDb<AutoscaleDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called updateHealthCheckRecord');
     }
     async createMasterRecord(rec: MasterRecord, oldRec: MasterRecord | null): Promise<void> {
@@ -1458,7 +1343,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 vmId: rec.vmId,
                 virtualNetworkId: rec.virtualNetworkId,
                 subnetId: rec.subnetId,
-                voteEndTime: String(rec.voteEndTime),
+                voteEndTime: rec.voteEndTime,
                 voteState: rec.voteState
             };
             // save record only if record for a certain scaling group name not exists, or
@@ -1472,7 +1357,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     `attribute_exists(scalingGroupName) AND id = '${oldRec.id}'`;
             }
 
-            await this.adaptee.saveItemToDb(table, { ...item }, conditionExp);
+            await this.adaptee.saveItemToDb<MasterElectionDbItem>(table, item, conditionExp);
             this.proxy.log('called createMasterRecord.', LogLevel.Log);
         } catch (error) {
             this.proxy.logForError('called createMasterRecord.', error);
@@ -1493,7 +1378,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 vmId: rec.vmId,
                 virtualNetworkId: rec.virtualNetworkId,
                 subnetId: rec.subnetId,
-                voteEndTime: String(rec.voteEndTime),
+                voteEndTime: rec.voteEndTime,
                 voteState: rec.voteState
             };
             // save record only if the keys in rec match the keys in db
@@ -1504,7 +1389,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     `voteState = '${MasterRecordVoteState.Pending}' AND ` +
                     `voteEndTime < ${item.voteEndTime}`
             };
-            await this.adaptee.saveItemToDb(table, { ...item }, conditionExp);
+            await this.adaptee.saveItemToDb<MasterElectionDbItem>(table, item, conditionExp);
             this.proxy.log('called updateMasterRecord.', LogLevel.Log);
         } catch (error) {
             this.proxy.logForError('called updateMasterRecord.', error);
@@ -1534,12 +1419,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async listLicenseFiles(
         storageContainerName: string,
         licenseDirectoryName: string
-    ): Promise<LicenseFileMap> {
+    ): Promise<LicenseFile[]> {
         const blobs: Blob[] = await this.adaptee.listS3Object(
             storageContainerName,
             licenseDirectoryName
         );
-        const licenseFiles = await Promise.all(
+        return await Promise.all(
             blobs.map(async blob => {
                 const filePath = path.join(licenseDirectoryName, blob.fileName);
                 const content = await this.adaptee.getS3ObjectContent(
@@ -1556,7 +1441,157 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 return licenseFile;
             })
         );
-        return new Map<string, LicenseFile>(licenseFiles.map(l => [l.fileName, l]));
+    }
+
+    async listLicenseStock(productName: string): Promise<LicenseStockRecord[]> {
+        this.proxy.logAsInfo('calling listLicenseStock');
+        const table = new AwsDBDef.AwsLicenseStock(
+            this.settings.get(FortiGateAutoscaleSetting.ResourceTagPrefix).value
+        );
+        const dbItems = await this.adaptee.listItemFromDb<LicenseStockDbItem>(table);
+        const mapItems = dbItems
+            .filter(item => item.productName === productName)
+            .map(item => {
+                return {
+                    fileName: item.fileName,
+                    checksum: item.checksum,
+                    algorithm: item.algorithm
+                } as LicenseStockRecord;
+            });
+        this.proxy.logAsInfo('called listLicenseStock');
+        return mapItems;
+    }
+    async listLicenseUsage(productName: string): Promise<LicenseUsageRecord[]> {
+        this.proxy.logAsInfo('calling listLicenseUsage');
+        const table = new AwsDBDef.AwsLicenseUsage(
+            this.settings.get(FortiGateAutoscaleSetting.ResourceTagPrefix).value
+        );
+        const dbItems = await this.adaptee.listItemFromDb<LicenseUsageDbItem>(table);
+        const mapItems = dbItems
+            .filter(item => item.productName === productName)
+            .map(item => {
+                return {
+                    fileName: item.fileName,
+                    checksum: item.checksum,
+                    algorithm: item.algorithm,
+                    vmId: item.vmId,
+                    scalingGroupName: item.scalingGroupName,
+                    assignedTime: item.assignedTime,
+                    vmInSync: item.vmInSync
+                } as LicenseUsageRecord;
+            });
+        this.proxy.logAsInfo('called listLicenseUsage');
+        return mapItems;
+    }
+    async updateLicenseStock(records: LicenseStockRecord[]): Promise<void> {
+        this.proxy.logAsInfo('calling updateLicenseStock');
+        const table = new AwsDBDef.AwsLicenseStock(
+            this.settings.get(FortiGateAutoscaleSetting.ResourceTagPrefix).value
+        );
+        const items = new Map<string, LicenseStockDbItem>(
+            (await this.adaptee.listItemFromDb<LicenseStockDbItem>(table)).map(item => {
+                return [item.checksum, item];
+            })
+        );
+        let errorCount = 0;
+        await Promise.all(
+            records.map(record => {
+                const item: LicenseStockDbItem = {
+                    checksum: record.checksum,
+                    algorithm: record.algorithm,
+                    fileName: record.fileName,
+                    productName: record.productName
+                };
+                const conditionExp: AwsDdbOperations = {
+                    Expression: ''
+                };
+                let typeText: string;
+                // recrod exisit, update it
+                if (items.has(record.checksum)) {
+                    conditionExp.type = CreateOrUpdate.UpdateExisting;
+                    typeText =
+                        `update existing item (filename: ${record.fileName},` +
+                        ` checksum: ${record.checksum})`;
+                } else {
+                    conditionExp.type = CreateOrUpdate.CreateOrReplace;
+                    typeText =
+                        `create new item (filename: ${record.fileName},` +
+                        ` checksum: ${record.checksum})`;
+                }
+                return this.adaptee
+                    .saveItemToDb<LicenseStockDbItem>(table, item, conditionExp)
+                    .catch(err => {
+                        this.proxy.logForError(`Failed to ${typeText}.`, err);
+                        errorCount++;
+                    });
+            })
+        );
+        if (errorCount > 0) {
+            this.proxy.logAsInfo('called updateLicenseStock');
+
+            throw new Error('updateLicenseStock unsuccessfully.');
+        }
+        this.proxy.logAsInfo('called updateLicenseStock');
+    }
+    async updateLicenseUsage(records: LicenseUsageRecord[]): Promise<void> {
+        this.proxy.logAsInfo('calling updateLicenseUsage');
+        const table = new AwsDBDef.AwsLicenseUsage(
+            this.settings.get(FortiGateAutoscaleSetting.ResourceTagPrefix).value
+        );
+        const items = new Map<string, LicenseUsageDbItem>(
+            (await this.adaptee.listItemFromDb<LicenseUsageDbItem>(table)).map(item => {
+                return [item.checksum, item];
+            })
+        );
+        let errorCount = 0;
+        await Promise.all(
+            records.map(record => {
+                const item: LicenseUsageDbItem = {
+                    checksum: record.checksum,
+                    algorithm: record.algorithm,
+                    fileName: record.fileName,
+                    productName: record.productName,
+                    vmId: record.vmId,
+                    scalingGroupName: record.scalingGroupName,
+                    assignedTime: record.assignedTime,
+                    vmInSync: record.vmInSync
+                };
+                const conditionExp: AwsDdbOperations = {
+                    Expression: ''
+                };
+                let typeText: string;
+                // recrod exisit, update it
+                if (items.has(record.checksum)) {
+                    conditionExp.type = CreateOrUpdate.UpdateExisting;
+                    typeText =
+                        `update existing item (filename: ${record.fileName},` +
+                        ` checksum: ${record.checksum})`;
+                } else {
+                    conditionExp.type = CreateOrUpdate.CreateOrReplace;
+                    typeText =
+                        `create new item (filename: ${record.fileName},` +
+                        ` checksum: ${record.checksum})`;
+                }
+                return this.adaptee
+                    .saveItemToDb<LicenseUsageDbItem>(table, item, conditionExp)
+                    .catch(err => {
+                        this.proxy.logForError(`Failed to ${typeText}.`, err);
+                        errorCount++;
+                    });
+            })
+        );
+        if (errorCount > 0) {
+            this.proxy.logAsInfo('called updateLicenseUsage');
+
+            throw new Error('updateLicenseUsage unsuccessfully.');
+        }
+        this.proxy.logAsInfo('called updateLicenseUsage');
+    }
+    async loadLicenseFileContent(storageContainerName: string, filePath: string): Promise<string> {
+        this.proxy.logAsInfo('calling loadLicenseFileContent');
+        const content = await this.adaptee.getS3ObjectContent(storageContainerName, filePath);
+        this.proxy.logAsInfo('called loadLicenseFileContent');
+        return content;
     }
 
     async listNicAttachmentRecord(): Promise<NicAttachmentRecord[]> {
@@ -1564,10 +1599,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const table = new AwsDBDef.AwsNicAttachment(
             this.settings.get(FortiGateAutoscaleSetting.ResourceTagPrefix).value
         );
-        const records = await this.adaptee.listItemFromDb(table);
+        const records = await this.adaptee.listItemFromDb<NicAttachmentDbItem>(table);
         const nicRecords: NicAttachmentRecord[] = records.map(record => {
             return {
-                vmId: record.instanceId,
+                vmId: record.vmId,
                 nicId: record.nicId,
                 attachmentState: record.attachmentState
             } as NicAttachmentRecord;
@@ -1589,9 +1624,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             };
             const conditionExp: AwsDdbOperations = {
                 Expression: '',
-                createOrUpdate: CreateOrUpdate.update
+                type: CreateOrUpdate.UpdateExisting
             };
-            await this.adaptee.saveItemToDb(table, { ...item }, conditionExp);
+            await this.adaptee.saveItemToDb<NicAttachmentDbItem>(table, item, conditionExp);
         } catch (error) {
             this.proxy.logAsError('cannot update nic attachment record');
             throw error;
@@ -1610,7 +1645,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 nicId: nicId,
                 attachmentState: '' // this isn't a key so the value can be arbitrary
             };
-            await this.adaptee.deleteItemFromDb(table, { ...item });
+            await this.adaptee.deleteItemFromDb<NicAttachmentDbItem>(table, item);
         } catch (error) {
             this.proxy.logAsError('cannot delete nic attachment record');
             throw error;
@@ -1812,14 +1847,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async getLifecycleItem(vmId: string): Promise<LifecycleItem | null> {
         this.proxy.logAsInfo('calling getLifecycleItem');
         const table = new AwsDBDef.AwsLifecycleItem(process.env.RESOURCE_TAG_PREFIX || '');
-        const dbItem = table.convertRecord(
-            await this.adaptee.getItemFromDb(table, [
-                {
-                    key: table.primaryKey.name,
-                    value: vmId
-                }
-            ])
-        );
+        const dbItem = await this.adaptee.getItemFromDb<LifecycleItemDbItem>(table, [
+            {
+                key: table.primaryKey.name,
+                value: vmId
+            }
+        ]);
         const [actionResult] = Object.entries(LifecycleActionResult)
             .filter(([, value]) => {
                 return dbItem.actionResult === value;
@@ -1857,9 +1890,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            createOrUpdate: CreateOrUpdate.create
+            type: CreateOrUpdate.CreateOrReplace
         };
-        await this.adaptee.saveItemToDb(table, { ...dbItem }, conditionExp);
+        await this.adaptee.saveItemToDb<LifecycleItemDbItem>(table, dbItem, conditionExp);
         this.proxy.logAsInfo('called createLifecycleItem');
     }
     async updateLifecycleItem(item: LifecycleItem): Promise<void> {
@@ -1877,9 +1910,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            createOrUpdate: CreateOrUpdate.update
+            type: CreateOrUpdate.UpdateExisting
         };
-        await this.adaptee.saveItemToDb(table, { ...dbItem }, conditionExp);
+        await this.adaptee.saveItemToDb<LifecycleItemDbItem>(table, dbItem, conditionExp);
         this.proxy.logAsInfo('called updateLifecycleItem');
     }
     async deleteLifecycleItem(vmId: string): Promise<void> {
@@ -1895,7 +1928,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             state: '',
             timestamp: 0
         };
-        await this.adaptee.deleteItemFromDb(table, { ...item });
+        await this.adaptee.deleteItemFromDb(table, item);
         this.proxy.logAsInfo('called deleteLifecycleItem');
     }
     async completeLifecycleAction(item: LifecycleItem, success?: boolean): Promise<void> {

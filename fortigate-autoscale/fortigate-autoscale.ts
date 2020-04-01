@@ -16,6 +16,7 @@ import {
 } from '../autoscale-core';
 import { Settings } from '../autoscale-setting';
 import { VirtualMachine } from '../virtual-machine';
+import { LicensingModelContext } from '../context-strategy/licensing-context';
 
 export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationStrategy {
     static SUCCESS = 'SUCCESS';
@@ -360,7 +361,7 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
         // load target healthcheck record
         this.env.targetHealthCheckRecord =
             this.env.targetHealthCheckRecord ||
-            (await this.platform.getHealthCheckRecord(this.env.targetVm));
+            (await this.platform.getHealthCheckRecord(this.env.targetVm.id));
 
         // if there exists a health check record for this vm, this request may probably be
         // a redundant request. ignore it.

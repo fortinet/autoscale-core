@@ -1,15 +1,13 @@
 import {
     PlatformAdapter,
     LicenseStockRecord,
-    LicenseUsageMap,
-    LicenseFileMap,
-    LicenseStockMap,
     LicenseUsageRecord,
     LicenseFile
 } from '../platform-adapter';
 import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
 import { VirtualMachine } from '../virtual-machine';
-import { Blob } from '../blob';
+import path from 'path';
+import { HealthCheckSyncState } from '../master-election';
 
 export enum LicensingStrategyResult {
     LicenseAssigned = 'license-assigned',
@@ -22,7 +20,7 @@ export enum LicensingStrategyResult {
  */
 export interface LicensingModelContext {
     setLicensingStrategy(strategy: LicensingStrategy): void;
-    handleLicenseAssignment(): Promise<string>;
+    handleLicenseAssignment(productName: string): Promise<string>;
 }
 
 export interface LicensingStrategy {
@@ -75,11 +73,12 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
     vm: VirtualMachine;
     storageContainerName: string;
     licenseDirectoryName: string;
-    licenseFiles: LicenseFileMap;
-    stockRecords: LicenseStockMap;
-    usageRecords: LicenseUsageMap;
-    licenseRecord: LicenseStockRecord;
-    private licenseFile:Blob;
+    licenseFiles: LicenseFile[];
+    stockRecords: LicenseStockRecord[];
+    usageRecords: LicenseUsageRecord[];
+    licenseRecord: LicenseStockRecord | null;
+    private licenseFile: LicenseFile;
+    productName: string;
     prepare(
         platform: PlatformAdapter,
         proxy: CloudFunctionProxyAdapter,
@@ -91,11 +90,12 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
         this.platform = platform;
         this.proxy = proxy;
         this.vm = vm;
+        this.productName = productName;
         this.storageContainerName = storageContainerName;
         this.licenseDirectoryName = licenseDirectoryName;
-        this.licenseFiles = new Map<string, LicenseFile>();
-        this.stockRecords = new Map<string, LicenseStockRecord>();
-        this.usageRecords = new Map<string, LicenseUsageRecord>();
+        this.licenseFiles = [];
+        this.stockRecords = [];
+        this.usageRecords = [];
         return Promise.resolve();
     }
     async apply(): Promise<LicensingStrategyResult> {
@@ -105,44 +105,96 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
                 .listLicenseFiles(this.storageContainerName, this.licenseDirectoryName)
                 .catch(err => {
                     this.proxy.logForError('failed to list license blob files.', err);
+                    return null;
                 }),
-            this.platform.listLicenseStock().catch(err => {
+            this.platform.listLicenseStock(this.productName).catch(err => {
                 this.proxy.logForError('failed to list license stock', err);
+                return null;
             }),
-            this.platform.listLicenseUsage().catch(err => {
+            this.platform.listLicenseUsage(this.productName).catch(err => {
                 this.proxy.logForError('failed to list license stock', err);
+                return null;
             })
         ]);
         // update the license stock records on db if any change in file storage
         // this returns the newest stockRecords on the db
-        this.stockRecords = await this.updateLicenseStockRecord(
-            this.licenseFiles,
-            this.stockRecords
-        );
+        await this.updateLicenseStockRecord(this.licenseFiles);
+        this.stockRecords = await this.platform.listLicenseStock(this.productName);
 
-        // get an available license
-        let stockRecord:LicenseStockRecord;
-        try {
-            this.licenseRecord = await this.getAvailableLicense();
-            // load license content
-            this.licenseFile = await this.platform.getBlobFromStorage(this.)
-        } catch (error) {
-            this.proxy.logForError('Failed to get a license.', error);
+        // is the license in use by the same vm?
+        [this.licenseRecord] = Array.from(this.usageRecords.values()).filter(record => {
+            return record.vmId === this.vm.id;
+        }) || [null];
+
+        if (!this.licenseRecord) {
+            // get an available license
+            try {
+                this.licenseRecord = await this.getAvailableLicense();
+                // load license content
+                const filePath = path.join(this.licenseDirectoryName, this.licenseRecord.fileName);
+                const content = await this.platform.loadLicenseFileContent(
+                    this.storageContainerName,
+                    filePath
+                );
+                this.licenseFile = {
+                    fileName: this.licenseRecord.fileName,
+                    checksum: this.licenseRecord.checksum,
+                    algorithm: this.licenseRecord.algorithm,
+                    content: content
+                };
+                this.proxy.logAsInfo(
+                    `license file (name: ${this.licenseFile.fileName},` +
+                        ` checksum: ${this.licenseFile.checksum}) is loaded.`
+                );
+            } catch (error) {
+                this.proxy.logForError('Failed to get a license.', error);
+                throw new error();
+            }
         }
 
         this.proxy.logAsInfo('called ReusableLicensingStrategy.apply');
+        return LicensingStrategyResult.LicenseAssigned;
     }
-    updateLicenseStockRecord(licenseFiles: any, stockRecords: any): any {
-        throw new Error('Method not implemented.');
+    async updateLicenseStockRecord(licenseFiles: LicenseFile[]): Promise<void> {
+        const stockArray = licenseFiles.map(f => {
+            return {
+                fileName: f.fileName,
+                checksum: f.checksum,
+                algorithm: f.algorithm
+            } as LicenseStockRecord;
+        });
+        await this.platform.updateLicenseStock(stockArray);
     }
 
-    protected async syncUsageRecords(): Promise<void> {}
+    /**
+     * sync the vm in-sync status from the scaling group to the usage record
+     *
+     * @protected
+     * @param {LicenseUsageRecord[]} usageRecords array of license usage record
+     * @returns {Promise<void>} void
+     */
+    protected async syncVmStatusToUsageRecords(usageRecords: LicenseUsageRecord[]): Promise<void> {
+        const updatedRecordArray = await Promise.all(
+            usageRecords.map(async u => {
+                const healthCheckRecord = await this.platform.getHealthCheckRecord(u.vmId);
+                u.vmInSync = healthCheckRecord.syncState === HealthCheckSyncState.InSync;
+                return u;
+            })
+        );
+        await this.platform.updateLicenseUsage(updatedRecordArray);
+    }
 
-    protected async listOutOfSyncRecord(sync?: boolean): Promise<LicenseUsageRecord[]> {
+    protected async listOutOfSyncRecord(
+        usageRecords: LicenseUsageRecord[],
+        sync?: boolean
+    ): Promise<LicenseUsageRecord[]> {
         if (sync) {
-            await this.syncUsageRecords();
+            await this.syncVmStatusToUsageRecords(usageRecords);
+            usageRecords = Array.from(
+                (await this.platform.listLicenseUsage(this.productName)).values()
+            );
         }
-        return Array.from(this.usageRecords.values()).filter(usageRecrod => {
+        return Array.from(usageRecords.values()).filter(usageRecrod => {
             return !usageRecrod.vmInSync;
         });
     }
@@ -150,19 +202,20 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
         let outOfSyncArray: LicenseUsageRecord[];
         // try to look for an unused one first
         // checksum is the unique key of a license
-        const unusedArray = Array.from(this.stockRecords.keys())
-            .filter(checksum => {
-                return !this.usageRecords.has(checksum);
-            })
-            .map(this.stockRecords.get);
+        const usageMap: Map<string, LicenseStockRecord> = new Map(
+            this.usageRecords.map(u => [u.checksum, u])
+        );
+        const unusedArray = this.stockRecords.filter(
+            stockRecord => !usageMap.has(stockRecord.checksum)
+        );
         // if no availalbe, check if any in-use license is associated with a vm which isn't in-sync
         if (unusedArray.length === 0) {
-            outOfSyncArray = await this.listOutOfSyncRecord();
+            outOfSyncArray = await this.listOutOfSyncRecord(this.usageRecords);
             // if every license is in use and seems to be in-sync,
             // sync the record with vm running state and heartbeat records,
             // then check it once again
             if (outOfSyncArray.length === 0) {
-                outOfSyncArray = await this.listOutOfSyncRecord(true);
+                outOfSyncArray = await this.listOutOfSyncRecord(this.usageRecords, true);
             }
             // run out of license
             if (outOfSyncArray.length === 0) {
@@ -174,7 +227,7 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
                         ` previous assigned vmId: ${outOfSyncArray[0].vmId},` +
                         ` file name: ${outOfSyncArray[0].fileName}) is found.`
                 );
-                return this.stockRecords.get(outOfSyncArray[0].checksum);
+                return outOfSyncArray[0];
             }
         } else {
             // pick the first one and return as unused license
@@ -186,6 +239,6 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
         }
     }
     getLicenseContent(): Promise<string> {
-        throw new Error('Method not implemented.');
+        return Promise.resolve(this.licenseFile.content);
     }
 }
