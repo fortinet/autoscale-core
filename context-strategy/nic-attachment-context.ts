@@ -6,15 +6,17 @@ import { VirtualMachine } from '../virtual-machine';
  * To provide secondary network interface attachment related logics
  */
 export interface NicAttachmentContext {
-    handleNicAttachment(): Promise<string>;
-    handleNicDetachment(): Promise<string>;
-    cleanupUnusedNic(): Promise<string>;
+    handleNicAttachment(): Promise<NicAttachmentStrategyResult>;
+    handleNicDetachment(): Promise<NicAttachmentStrategyResult>;
+    cleanupUnusedNic(): Promise<NicAttachmentStrategyResult>;
     setNicAttachmentStrategy(strategy: NicAttachmentStrategy): void;
 }
 
-export enum NicAttachmentResult {
+export enum NicAttachmentStrategyResult {
     Success = 'success',
-    Failed = 'failed'
+    Failed = 'failed',
+    ShouldTerminateVm = 'should-terminate-vm',
+    ShouldContinue = 'should-continue'
 }
 
 export enum NicAttachmentStatus {
@@ -36,9 +38,9 @@ export interface NicAttachmentStrategy {
         proxy: CloudFunctionProxyAdapter,
         vm: VirtualMachine
     ): Promise<void>;
-    attach(): Promise<NicAttachmentResult>;
-    detach(): Promise<NicAttachmentResult>;
-    cleanUp(): Promise<void>;
+    attach(): Promise<NicAttachmentStrategyResult>;
+    detach(): Promise<NicAttachmentStrategyResult>;
+    cleanUp(): Promise<number>;
 }
 
 export class NoopNicAttachmentStrategy implements NicAttachmentStrategy {
@@ -52,13 +54,13 @@ export class NoopNicAttachmentStrategy implements NicAttachmentStrategy {
     ): Promise<void> {
         return Promise.resolve();
     }
-    attach(): Promise<NicAttachmentResult> {
-        return Promise.resolve(NicAttachmentResult.Success);
+    attach(): Promise<NicAttachmentStrategyResult> {
+        return Promise.resolve(NicAttachmentStrategyResult.Success);
     }
-    detach(): Promise<NicAttachmentResult> {
-        return Promise.resolve(NicAttachmentResult.Success);
+    detach(): Promise<NicAttachmentStrategyResult> {
+        return Promise.resolve(NicAttachmentStrategyResult.Success);
     }
-    cleanUp(): Promise<void> {
-        return Promise.resolve();
+    cleanUp(): Promise<number> {
+        return Promise.resolve(0);
     }
 }
