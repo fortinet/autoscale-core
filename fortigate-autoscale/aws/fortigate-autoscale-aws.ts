@@ -44,16 +44,22 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
                 await this.platform.loadConfigSet('setuptgwvpn').catch(() => {
                     throw new Error("configset doesn't exist in the assets storage.");
                 }),
-                await this.platform.getTgwVpnAttachmentRecord(targetVm.id).catch(() => {
-                    throw new Error(
-                        `Vpn Attachment for instance (id: ${targetVm.id})` + ' not found.'
-                    );
-                })
+                await this.platform
+                    .getTgwVpnAttachmentRecord(targetVm.id, targetVm.primaryPublicIpAddress)
+                    .catch(() => {
+                        throw new Error(
+                            `Vpn Attachment for instance (id: ${targetVm.id})` + ' not found.'
+                        );
+                    })
             ]);
             this.alreadyLoaded.push('setuptgwvpn');
+            const vpnConfiguration =
+                (vpnAttachmentRecord.configuration &&
+                    vpnAttachmentRecord.configuration.customerGatewayConfiguration) ||
+                {};
             return await this.processConfig(config, {
                 '@device': targetVm,
-                '@vpn_connection': vpnAttachmentRecord.customerGatewayConfiguration.vpn_connection
+                '@vpn_connection': vpnConfiguration
             });
         } catch (error) {
             this.proxy.logForError('Configset Not loaded.', error);
@@ -68,7 +74,7 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
     async loadConfig(): Promise<string> {
         let baseConfig = await super.loadConfig();
         // if transit gateway vpn attachment is enabled.
-        if (this.settings.get(AutoscaleSetting.EnableTransitGatewayVpn).truthValue) {
+        if (this.settings.get(AutoscaleSetting.AwsEnableTransitGatewayVpn).truthValue) {
             baseConfig += await this.loadVpnAttachment(this.env.targetVm);
         }
         return baseConfig;
@@ -85,6 +91,9 @@ export class FortiGateAutoscaleAws<TReq, Tcontext, TRes>
     implements NicAttachmentContext, TransitGatewayContext {
     nicAttachmentStrategy: NicAttachmentStrategy;
     vpnAttachmentStrategy: VpnAttachmentStrategy;
+    get platform(): AwsPlatformAdapter {
+        return super.platform as AwsPlatformAdapter;
+    }
     constructor(p: AwsPlatformAdapter, e: AutoscaleEnvironment, x: CloudFunctionProxyAdapter) {
         super(p, e, x);
         // use FortiGate bootstrap configuration strategy
@@ -165,8 +174,11 @@ export class FortiGateAutoscaleAws<TReq, Tcontext, TRes>
             return NicAttachmentStrategyResult.Failed;
         }
     }
-    handleVpnAttachment(): Promise<string> {
-        throw new Error('Method not implemented.');
+    async handleVpnAttachment(): Promise<string> {
+        this.proxy.logAsInfo('calling handleVpnAttachment');
+        await this.vpnAttachmentStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
+        const result = await this.vpnAttachmentStrategy.attach();
+        this.proxy.logAsInfo('called handleVpnAttachment');
     }
     handleVpnDetachment(): Promise<string> {
         throw new Error('Method not implemented.');
@@ -188,7 +200,7 @@ export class FortiGateAutoscaleAws<TReq, Tcontext, TRes>
             await this.nicAttachmentStrategy.attach();
         }
         // handle transit gateway vpn attachment
-        if (settings.get(FortiGateAutoscaleSetting.EnableTransitGatewayVpn).truthValue) {
+        if (settings.get(FortiGateAutoscaleSetting.AwsEnableTransitGatewayVpn).truthValue) {
             this.vpnAttachmentStrategy.prepare(this.platform, this.proxy);
             await this.vpnAttachmentStrategy.attach();
         }
@@ -208,7 +220,7 @@ export class FortiGateAutoscaleAws<TReq, Tcontext, TRes>
             await this.nicAttachmentStrategy.detach();
         }
         // handle transit gateway vpn attachment
-        if (settings.get(FortiGateAutoscaleSetting.EnableTransitGatewayVpn).truthValue) {
+        if (settings.get(FortiGateAutoscaleSetting.AwsEnableTransitGatewayVpn).truthValue) {
             this.vpnAttachmentStrategy.prepare(this.platform, this.proxy);
             await this.vpnAttachmentStrategy.detach();
         }

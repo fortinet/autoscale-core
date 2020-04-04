@@ -21,6 +21,7 @@
         "@types/mocha": "^7.0.2",
         "@types/shelljs": "^0.8.6",
         "@types/sinon": "^7.5.2",
+        "@types/xml2js": "^0.4.5",
         "@typescript-eslint/eslint-plugin": "^2.24.0",
         "@typescript-eslint/parser": "^2.24.0",
         "chalk": "^3.0.0",
@@ -41,7 +42,8 @@
         "@types/aws-lambda": "^8.10.46",
         "@types/node": "^13.9.2",
         "aws-sdk": "^2.642.0",
-        "http-status-codes": "^1.4.0"
+        "http-status-codes": "^1.4.0",
+        "xml2js": "^0.4.23"
     },
     "repository": {
         "type": "git",

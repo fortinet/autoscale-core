@@ -34,10 +34,6 @@ export interface ReqHeaders {
     [key: string]: unknown;
 }
 
-export interface VmDescriptor {
-    id: string;
-}
-
 export interface ResourceTag {
     key: string;
     value: string;
@@ -66,6 +62,15 @@ export interface LicenseUsageRecord {
     scalingGroupName: string;
     assignedTime: number;
     vmInSync: boolean;
+}
+
+export interface VpnAttachmentRecord {
+    vmId: string;
+    ip: string;
+    vpnConnectionId: string;
+    attachmentId?: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    configuration?: { [key: string]: any };
 }
 
 export interface PlatformAdapter {

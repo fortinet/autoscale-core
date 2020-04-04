@@ -753,10 +753,8 @@ export abstract class CustomLog extends Table<CustomLogDbItem> {
 
 export interface VpnAttachmentDbItem {
     vmId: string;
-    publicIp: string;
-    customerGatewayId: string;
-    vpnConnectionId: string;
-    configuration: string;
+    ip: string;
+    vpnInfo: string;
 }
 export abstract class VpnAttachment extends Table<VpnAttachmentDbItem> {
     static __attributes: Attribute[] = [
@@ -767,23 +765,13 @@ export abstract class VpnAttachment extends Table<VpnAttachmentDbItem> {
             keyType: TypeRef.PrimaryKey
         },
         {
-            name: 'publicIp',
+            name: 'ip',
             attrType: TypeRef.StringType,
             isKey: true,
             keyType: TypeRef.SecondaryKey
         },
         {
-            name: 'customerGatewayId',
-            attrType: TypeRef.StringType,
-            isKey: false
-        },
-        {
-            name: 'vpnConnectionId',
-            attrType: TypeRef.StringType,
-            isKey: false
-        },
-        {
-            name: 'configuration',
+            name: 'vpnInfo',
             attrType: TypeRef.StringType,
             isKey: false
         }
@@ -797,10 +785,8 @@ export abstract class VpnAttachment extends Table<VpnAttachmentDbItem> {
     convertRecord(record: Record): VpnAttachmentDbItem {
         const item: VpnAttachmentDbItem = {
             vmId: this.typeConvert.valueToString(record.vmId),
-            publicIp: this.typeConvert.valueToString(record.publicIp),
-            customerGatewayId: this.typeConvert.valueToString(record.customerGatewayId),
-            vpnConnectionId: this.typeConvert.valueToString(record.vpnConnectionId),
-            configuration: this.typeConvert.valueToString(record.configuration)
+            ip: this.typeConvert.valueToString(record.ip),
+            vpnInfo: this.typeConvert.valueToString(record.vpnInfo)
         };
         return item;
     }
