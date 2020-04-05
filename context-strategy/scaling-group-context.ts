@@ -1,5 +1,5 @@
 import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
-import { AwsPlatformAdapter, LifecyleState } from '../fortigate-autoscale/aws/aws-platform';
+import { AwsPlatformAdapter, LifecyleState } from '../fortigate-autoscale/aws/aws-platform-adapter';
 import { AwsFortiGateAutoscaleSetting } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
 import { PlatformAdapter } from '../platform-adapter';
 

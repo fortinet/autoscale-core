@@ -1,42 +1,44 @@
 import { describe, it } from 'mocha';
 import * as Sinon from 'sinon';
-import { Autoscale, AutoscaleEnvironment } from '../autoscale-core';
-import { Settings, SettingItem, AutoscaleSetting } from '../autoscale-setting';
-import {
-    HealthCheckRecord,
-    HealthCheckSyncState,
-    MasterRecord,
-    MasterRecordVoteState,
-    MasterElection,
-    HealthCheckResult
-} from '../master-election';
-import { VirtualMachine, NetworkInterface } from '../virtual-machine';
-import {
-    PlatformAdapter,
-    ReqType,
-    ResourceTag,
-    LicenseStockRecord,
-    LicenseUsageRecord,
-    LicenseFile
-} from '../platform-adapter';
+
+import { Autoscale } from '../autoscale-core';
+import { AutoscaleEnvironment } from '../autoscale-environment';
+import { AutoscaleSetting, SettingItem, Settings } from '../autoscale-setting';
 import {
     CloudFunctionProxyAdapter,
     CloudFunctionResponseBody,
     LogLevel
 } from '../cloud-function-proxy';
 import {
-    MasterElectionStrategy,
+    ConstantIntervalHeartbeatSyncStrategy,
     HeartbeatSyncStrategy,
-    NoopTaggingVmStrategy,
+    MasterElectionStrategy,
     MasterElectionStrategyResult,
-    PreferredGroupMasterElection,
-    ConstantIntervalHeartbeatSyncStrategy
+    NoopTaggingVmStrategy,
+    PreferredGroupMasterElection
 } from '../context-strategy/autoscale-context';
+import {
+    NoopScalingGroupStrategy,
+    ScalingGroupStrategy
+} from '../context-strategy/scaling-group-context';
 import { FortiGateAutoscaleSetting } from '../fortigate-autoscale/fortigate-autoscale-settings';
 import {
-    ScalingGroupStrategy,
-    NoopScalingGroupStrategy
-} from '../context-strategy/scaling-group-context';
+    HealthCheckRecord,
+    HealthCheckResult,
+    HealthCheckSyncState,
+    MasterElection,
+    MasterRecord,
+    MasterRecordVoteState
+} from '../master-election';
+import {
+    LicenseFile,
+    LicenseStockRecord,
+    LicenseUsageRecord,
+    PlatformAdapter,
+    ReqType,
+    ResourceTag
+} from '../platform-adapter';
+import { NetworkInterface, VirtualMachine } from '../virtual-machine';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const objectEqual = (expected: any): { to: (actual: any) => boolean } => {
