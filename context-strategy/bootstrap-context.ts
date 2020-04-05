@@ -1,6 +1,6 @@
 import { PlatformAdapter } from '../platform-adapter';
 import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
-import { AutoscaleEnvironment } from '../autoscale-core';
+import { AutoscaleEnvironment } from '../autoscale-environment';
 export interface BootstrapContext {
     setBootstrapConfigurationStrategy(strategy: BootstrapConfigurationStrategy): void;
     handleBootstrap(): Promise<string>;
