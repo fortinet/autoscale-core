@@ -1,6 +1,6 @@
 import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
 import { AwsPlatformAdapter, LifecyleState } from '../fortigate-autoscale/aws/aws-platform';
-import { FortiGateAutoscaleSetting } from '../fortigate-autoscale/fortigate-autoscale-settings';
+import { AwsFortiGateAutoscaleSetting } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
 import { PlatformAdapter } from '../platform-adapter';
 
 /**
@@ -74,8 +74,9 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         lifecycleItem.state = LifecyleState.Launching;
         let elbAttachedDone = false;
 
-        const targetGroupArn = settings.get(FortiGateAutoscaleSetting.AwsLoadBalancerTargetGroupArn)
-            .value;
+        const targetGroupArn = settings.get(
+            AwsFortiGateAutoscaleSetting.AwsLoadBalancerTargetGroupArn
+        ).value;
         try {
             [, elbAttachedDone] = await Promise.all([
                 // update FGT source dest checking
@@ -170,7 +171,7 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         try {
             // detach instance from load balancer target group
             const targetGroupArn = settings.get(
-                FortiGateAutoscaleSetting.AwsLoadBalancerTargetGroupArn
+                AwsFortiGateAutoscaleSetting.AwsLoadBalancerTargetGroupArn
             ).value;
             await this.platform.loadBalancerDetachVm(targetGroupArn, [targetVm.id]);
             // NOTE: TODO: REVIEW: is it possible to enter a terminating state while it is in

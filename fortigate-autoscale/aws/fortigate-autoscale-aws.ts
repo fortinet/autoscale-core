@@ -1,7 +1,4 @@
-import {
-    FortiGateAutoscaleSetting as AutoscaleSetting,
-    FortiGateAutoscaleSetting
-} from '../fortigate-autoscale-settings';
+import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsPlatformAdapter, TransitGatewayContext } from './aws-platform';
 import { FortiGateBootstrapConfigStrategy, FortiGateAutoscale } from '../fortigate-autoscale';
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
@@ -13,7 +10,10 @@ import {
 } from '../../autoscale-core';
 import { VirtualMachine } from '../../virtual-machine';
 import { PreferredGroupMasterElection } from '../../context-strategy/autoscale-context';
-import { VpnAttachmentStrategy } from '../../context-strategy/vpn-attachment-context';
+import {
+    VpnAttachmentStrategy,
+    VpnAttachmentStrategyResult
+} from '../../context-strategy/vpn-attachment-context';
 import {
     NicAttachmentStrategy,
     NicAttachmentContext,
@@ -54,8 +54,8 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
             ]);
             this.alreadyLoaded.push('setuptgwvpn');
             const vpnConfiguration =
-                (vpnAttachmentRecord.configuration &&
-                    vpnAttachmentRecord.configuration.customerGatewayConfiguration) ||
+                (vpnAttachmentRecord.vpnConnection &&
+                    vpnAttachmentRecord.vpnConnection.customerGatewayConfiguration) ||
                 {};
             return await this.processConfig(config, {
                 '@device': targetVm,
@@ -74,7 +74,7 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
     async loadConfig(): Promise<string> {
         let baseConfig = await super.loadConfig();
         // if transit gateway vpn attachment is enabled.
-        if (this.settings.get(AutoscaleSetting.AwsEnableTransitGatewayVpn).truthValue) {
+        if (this.settings.get(AwsFortiGateAutoscaleSetting.AwsEnableTransitGatewayVpn).truthValue) {
             baseConfig += await this.loadVpnAttachment(this.env.targetVm);
         }
         return baseConfig;
@@ -174,17 +174,19 @@ export class FortiGateAutoscaleAws<TReq, Tcontext, TRes>
             return NicAttachmentStrategyResult.Failed;
         }
     }
-    async handleVpnAttachment(): Promise<string> {
+    async handleVpnAttachment(): Promise<VpnAttachmentStrategyResult> {
         this.proxy.logAsInfo('calling handleVpnAttachment');
         await this.vpnAttachmentStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
         const result = await this.vpnAttachmentStrategy.attach();
         this.proxy.logAsInfo('called handleVpnAttachment');
+        return result;
     }
-    handleVpnDetachment(): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    cleanupUnusedVpn(): Promise<string> {
-        throw new Error('Method not implemented.');
+    async handleVpnDetachment(): Promise<VpnAttachmentStrategyResult> {
+        this.proxy.logAsInfo('calling handleVpnDetachment');
+        await this.vpnAttachmentStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
+        const result = await this.vpnAttachmentStrategy.detach();
+        this.proxy.logAsInfo('called handleVpnDetachment');
+        return result;
     }
 
     /**
@@ -192,17 +194,15 @@ export class FortiGateAutoscaleAws<TReq, Tcontext, TRes>
      */
     async handleLaunchingVm(): Promise<string> {
         await super.handleLaunchingVm();
-        const targetVm = await this.platform.getTargetVm();
+        this.env.targetVm = await this.platform.getTargetVm();
         const settings = await this.platform.getSettings();
         // handle nic attachment
-        if (settings.get(FortiGateAutoscaleSetting.EnableNic2).truthValue) {
-            this.nicAttachmentStrategy.prepare(this.platform, this.proxy, targetVm);
-            await this.nicAttachmentStrategy.attach();
+        if (settings.get(AwsFortiGateAutoscaleSetting.EnableNic2).truthValue) {
+            await this.handleNicAttachment();
         }
         // handle transit gateway vpn attachment
-        if (settings.get(FortiGateAutoscaleSetting.AwsEnableTransitGatewayVpn).truthValue) {
-            this.vpnAttachmentStrategy.prepare(this.platform, this.proxy);
-            await this.vpnAttachmentStrategy.attach();
+        if (settings.get(AwsFortiGateAutoscaleSetting.AwsEnableTransitGatewayVpn).truthValue) {
+            await this.handleVpnAttachment();
         }
         return '';
     }
@@ -212,17 +212,15 @@ export class FortiGateAutoscaleAws<TReq, Tcontext, TRes>
      */
     async handleTerminatingVm(): Promise<string> {
         await super.handleTerminatingVm();
-        const targetVm = await this.platform.getTargetVm();
+        this.env.targetVm = await this.platform.getTargetVm();
         const settings = await this.platform.getSettings();
         // handle nic detachment
-        if (settings.get(FortiGateAutoscaleSetting.EnableNic2).truthValue) {
-            this.nicAttachmentStrategy.prepare(this.platform, this.proxy, targetVm);
-            await this.nicAttachmentStrategy.detach();
+        if (settings.get(AwsFortiGateAutoscaleSetting.EnableNic2).truthValue) {
+            await this.handleNicDetachment();
         }
         // handle transit gateway vpn attachment
-        if (settings.get(FortiGateAutoscaleSetting.AwsEnableTransitGatewayVpn).truthValue) {
-            this.vpnAttachmentStrategy.prepare(this.platform, this.proxy);
-            await this.vpnAttachmentStrategy.detach();
+        if (settings.get(AwsFortiGateAutoscaleSetting.AwsEnableTransitGatewayVpn).truthValue) {
+            await this.handleVpnDetachment();
         }
         return '';
     }

@@ -44,7 +44,7 @@ import {
     LicenseFile,
     LicenseStockRecord,
     LicenseUsageRecord,
-    VpnAttachmentRecord
+    TgwVpnAttachmentRecord
 } from '../../platform-adapter';
 import {
     HealthCheckRecord,
@@ -66,9 +66,10 @@ import {
 } from '../../db-definitions';
 import { LifecycleItemDbItem } from '../aws/aws-db-definitions';
 import { Blob } from '../../blob';
-import { AutoscaleSetting } from './aws-fortigate-autoscale-settings';
+import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { isIPv4 } from 'net';
 import { parseStringPromise as xml2jsParserPromise } from 'xml2js';
+import { JSONable } from '../../jsonable';
 
 const genChecksum = (str: string, algorithm: string): string => {
     return crypto
@@ -243,7 +244,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
 
     protected async getPairedSubnetId(vm: VirtualMachine): Promise<string> {
         const settings = await this.platform.getSettings();
-        const subnetPairs: SubnetPair[] = settings.get(AutoscaleSetting.SubnetPairs)
+        const subnetPairs: SubnetPair[] = settings.get(AwsFortiGateAutoscaleSetting.SubnetPairs)
             .jsonValue as SubnetPair[];
         const subnets: SubnetPair[] = (Array.isArray(subnetPairs) &&
             subnetPairs.filter(element => element.subnetId === vm.subnetId)) || [null];
@@ -252,7 +253,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
 
     protected async tags(): Promise<ResourceTag[]> {
         const settings = await this.platform.getSettings();
-        const tagPrefix = settings.get(AutoscaleSetting.ResourceTagPrefix).value;
+        const tagPrefix = settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value;
         return [
             {
                 key: 'FortiGateAutoscaleNicAttachment',
@@ -428,7 +429,7 @@ export interface AwsVpnConnection {
     ip: string;
     vpnConnectionId: string;
     customerGatewayId: string;
-    configuration: string;
+    vpnConnection: JSONable;
     transitGatewayId?: string;
     transitGatewayAttachmentId?: string;
 }
@@ -466,8 +467,9 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
         let customerGatewayCreated = false;
         let vpnConnectionCreated = false;
         const settings = this.platform.settings;
-        const bgpAsn = Number(settings.get(AutoscaleSetting.AwsVpnBgpAsn).value);
-        const transitGatewayId = settings.get(AutoscaleSetting.AwsTransitGatewayId).value;
+        const bgpAsn = Number(settings.get(AwsFortiGateAutoscaleSetting.AwsVpnBgpAsn).value);
+        const transitGatewayId = settings.get(AwsFortiGateAutoscaleSetting.AwsTransitGatewayId)
+            .value;
         const customerGatewayResourceName = [
             process.env.RESOURCE_TAG_PREFIX,
             'customer-gateway',
@@ -592,7 +594,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
         // ASSERT: none of these tag task throws an error. error are caught and printed to log
         await Promise.all(tagTasks);
 
-        // invoke a tgw vpn handler Lambda function to contineu the updating route tasks
+        // invoke a tgw vpn handler Lambda function to continue the updating route tasks
 
         const request = {
             attachmentId: vpnConnection.transitGatewayAttachmentId
@@ -601,10 +603,10 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
 
         // save the tgw vpn attachment record
         try {
-            await this.platform.updateTgwVpnAttachmentRecord(
+            await this.platform.saveAwsTgwVpnAttachmentRecord(
                 this.vm.id,
                 this.vm.primaryPrivateIpAddress,
-                JSON.stringify(vpnConnection.configuration)
+                vpnConnection.vpnConnection
             );
         } catch (error) {
             this.proxy.logForError('Failed to complete updateTgwVpnAttachmentRecord.', error);
@@ -614,11 +616,42 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
         this.proxy.logAsDebug('called AwsTgwVpnAttachmentStrategy.attach');
         return VpnAttachmentStrategyResult.ShouldContinue;
     }
-    detach(): Promise<VpnAttachmentStrategyResult> {
-        throw new Error('Method not implemented.');
-    }
-    cleanUp(): Promise<VpnAttachmentStrategyResult> {
-        throw new Error('Method not implemented.');
+    async detach(): Promise<VpnAttachmentStrategyResult> {
+        this.proxy.logAsDebug('calling AwsTgwVpnAttachmentStrategy.detach');
+        let vpnAttachmentRecord: TgwVpnAttachmentRecord;
+        try {
+            vpnAttachmentRecord = await this.platform.getTgwVpnAttachmentRecord(
+                this.vm.id,
+                this.vm.primaryPublicIpAddress
+            );
+        } catch (error) {
+            this.proxy.logForError(
+                'No vpn attachment associated with this vm. stop processing.',
+                error
+            );
+            this.proxy.logAsDebug('called AwsTgwVpnAttachmentStrategy.detach');
+            return VpnAttachmentStrategyResult.ShouldContinue;
+        }
+        try {
+            // the following components must be deleted one by one
+            // delete vpn
+            await this.platform.deleteAwsVpnConnection(vpnAttachmentRecord.vpnConnectionId);
+            this.proxy.logAsDebug('vpn connection deleted.');
+            // delete customer gateway
+            await this.platform.deleteAwsCustomerGateway(vpnAttachmentRecord.customerGatewayId);
+            this.proxy.logAsDebug('customer gateway deleted.');
+            // delete vpn attachment record
+            await this.platform.deleteAwsTgwVpnAttachmentRecord(
+                vpnAttachmentRecord.vmId,
+                vpnAttachmentRecord.ip
+            );
+            this.proxy.logAsDebug('vpn attachment recored deleted.');
+            this.proxy.logAsDebug('called AwsTgwVpnAttachmentStrategy.detach');
+            return VpnAttachmentStrategyResult.ShouldContinue;
+        } catch (error) {
+            this.proxy.logForError('Failed to delete vpn component.', error);
+            return VpnAttachmentStrategyResult.ShouldContinue;
+        }
     }
 
     /**
@@ -658,10 +691,10 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
             await waitFor<AwsTgwVpnAttachmentState>(emitter, checker, waitForInterval, this.proxy);
             const settings = this.platform.settings;
             const outboutRouteTable = settings.get(
-                AutoscaleSetting.AwsTransitGatewayRouteTableOutbound
+                AwsFortiGateAutoscaleSetting.AwsTransitGatewayRouteTableOutbound
             ).value;
             const inboutRouteTable = settings.get(
-                AutoscaleSetting.AwsTransitGatewayRouteTableInbound
+                AwsFortiGateAutoscaleSetting.AwsTransitGatewayRouteTableInbound
             ).value;
             await this.platform.updateTgwVpnAttachmentRouting(
                 attachmentId,
@@ -717,7 +750,7 @@ export class AwsPlatform implements PlatformAdaptee {
             ])
         );
         const settings: Settings = new Map<string, SettingItem>();
-        Object.keys(AutoscaleSetting).forEach(key => {
+        Object.keys(AwsFortiGateAutoscaleSetting).forEach(key => {
             if (records.has(key)) {
                 const record = records.get(key);
                 const settingItem = new SettingItem(
@@ -1606,15 +1639,15 @@ export class AwsPlatformAdapter implements PlatformAdapter {
 
     validateSettings(): Promise<boolean> {
         const required = [
-            AutoscaleSetting.AutoscaleHandlerUrl,
-            AutoscaleSetting.FortiGatePskSecret,
-            AutoscaleSetting.FortiGateSyncInterface,
-            AutoscaleSetting.FortiGateTrafficPort,
-            AutoscaleSetting.FortiGateAdminPort,
-            AutoscaleSetting.FortiGateInternalElbDns,
-            AutoscaleSetting.HeartbeatInterval,
-            AutoscaleSetting.ByolScalingGroupName,
-            AutoscaleSetting.PaygScalingGroupName
+            AwsFortiGateAutoscaleSetting.AutoscaleHandlerUrl,
+            AwsFortiGateAutoscaleSetting.FortiGatePskSecret,
+            AwsFortiGateAutoscaleSetting.FortiGateSyncInterface,
+            AwsFortiGateAutoscaleSetting.FortiGateTrafficPort,
+            AwsFortiGateAutoscaleSetting.FortiGateAdminPort,
+            AwsFortiGateAutoscaleSetting.FortiGateInternalElbDns,
+            AwsFortiGateAutoscaleSetting.HeartbeatInterval,
+            AwsFortiGateAutoscaleSetting.ByolScalingGroupName,
+            AwsFortiGateAutoscaleSetting.PaygScalingGroupName
         ];
         const missingKeys = required.filter(key => !this.settings.has(key)).join(', ');
         if (missingKeys) {
@@ -1663,8 +1696,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async getTargetVm(): Promise<VirtualMachine> {
         this.proxy.logAsInfo('calling getTargetVm');
         const instance = await this.adaptee.describeInstance(this.getReqVmId());
-        const byolGroupName = this.settings.get(AutoscaleSetting.ByolScalingGroupName).value;
-        const paygGroupName = this.settings.get(AutoscaleSetting.PaygScalingGroupName).value;
+        const byolGroupName = this.settings.get(AwsFortiGateAutoscaleSetting.ByolScalingGroupName)
+            .value;
+        const paygGroupName = this.settings.get(AwsFortiGateAutoscaleSetting.PaygScalingGroupName)
+            .value;
         const scalingGroups = await this.adaptee.describeAutoScalingGroups([
             byolGroupName,
             paygGroupName
@@ -1708,7 +1743,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const heartbeatDelay =
             this.createTime -
             dbItem.nextHeartBeatTime -
-            Number(this.settings.get(AutoscaleSetting.HeartbeatDelayAllowance).value);
+            Number(this.settings.get(AwsFortiGateAutoscaleSetting.HeartbeatDelayAllowance).value);
 
         const [syncState] = Object.entries(HealthCheckSyncState)
             .filter(([, value]) => {
@@ -1856,7 +1891,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         try {
             const settings = await this.getSettings();
             const table = new AwsDBDef.AwsMasterElection(
-                settings.get(AutoscaleSetting.ResourceTagPrefix).value
+                settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
             );
             const item: MasterElectionDbItem = {
                 id: rec.id,
@@ -1886,12 +1921,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async loadConfigSet(name: string, custom?: boolean): Promise<string> {
         this.proxy.logAsInfo(`loading${custom ? ' (custom)' : ''} configset: ${name}`);
         const bucket = custom
-            ? this.settings.get(AutoscaleSetting.CustomConfigSetContainer).value
-            : this.settings.get(AutoscaleSetting.AssetStorageContainer).value;
+            ? this.settings.get(AwsFortiGateAutoscaleSetting.CustomConfigSetContainer).value
+            : this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageContainer).value;
         const keyPrefix = [
             custom
-                ? this.settings.get(AutoscaleSetting.CustomConfigSetDirectory).value
-                : this.settings.get(AutoscaleSetting.AssetStorageDirectory).value,
+                ? this.settings.get(AwsFortiGateAutoscaleSetting.CustomConfigSetDirectory).value
+                : this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageDirectory).value,
             'configset'
         ];
         // if it is an AWS-only configset, load it from the aws subdirectory
@@ -1933,7 +1968,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async listLicenseStock(productName: string): Promise<LicenseStockRecord[]> {
         this.proxy.logAsInfo('calling listLicenseStock');
         const table = new AwsDBDef.AwsLicenseStock(
-            this.settings.get(AutoscaleSetting.ResourceTagPrefix).value
+            this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
         );
         const dbItems = await this.adaptee.listItemFromDb<LicenseStockDbItem>(table);
         const mapItems = dbItems
@@ -1951,7 +1986,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async listLicenseUsage(productName: string): Promise<LicenseUsageRecord[]> {
         this.proxy.logAsInfo('calling listLicenseUsage');
         const table = new AwsDBDef.AwsLicenseUsage(
-            this.settings.get(AutoscaleSetting.ResourceTagPrefix).value
+            this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
         );
         const dbItems = await this.adaptee.listItemFromDb<LicenseUsageDbItem>(table);
         const mapItems = dbItems
@@ -1973,7 +2008,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async updateLicenseStock(records: LicenseStockRecord[]): Promise<void> {
         this.proxy.logAsInfo('calling updateLicenseStock');
         const table = new AwsDBDef.AwsLicenseStock(
-            this.settings.get(AutoscaleSetting.ResourceTagPrefix).value
+            this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
         );
         const items = new Map<string, LicenseStockDbItem>(
             (await this.adaptee.listItemFromDb<LicenseStockDbItem>(table)).map(item => {
@@ -2023,7 +2058,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async updateLicenseUsage(records: LicenseUsageRecord[]): Promise<void> {
         this.proxy.logAsInfo('calling updateLicenseUsage');
         const table = new AwsDBDef.AwsLicenseUsage(
-            this.settings.get(AutoscaleSetting.ResourceTagPrefix).value
+            this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
         );
         const items = new Map<string, LicenseUsageDbItem>(
             (await this.adaptee.listItemFromDb<LicenseUsageDbItem>(table)).map(item => {
@@ -2084,7 +2119,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async listNicAttachmentRecord(): Promise<NicAttachmentRecord[]> {
         this.proxy.logAsInfo('calling listNicAttachmentRecord');
         const table = new AwsDBDef.AwsNicAttachment(
-            this.settings.get(AutoscaleSetting.ResourceTagPrefix).value
+            this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
         );
         const records = await this.adaptee.listItemFromDb<NicAttachmentDbItem>(table);
         const nicRecords: NicAttachmentRecord[] = records.map(record => {
@@ -2102,7 +2137,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('calling updateNicAttachmentRecord');
         try {
             const table = new AwsDBDef.AwsNicAttachment(
-                this.settings.get(AutoscaleSetting.ResourceTagPrefix).value
+                this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
             );
             const item: NicAttachmentDbItem = {
                 vmId: vmId,
@@ -2125,12 +2160,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('calling deleteNicAttachmentRecord');
         try {
             const table = new AwsDBDef.AwsNicAttachment(
-                this.settings.get(AutoscaleSetting.ResourceTagPrefix).value
+                this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
             );
             const item: NicAttachmentDbItem = {
                 vmId: vmId,
                 nicId: nicId,
-                attachmentState: '' // this isn't a key so the value can be arbitrary
+                attachmentState: undefined // non key attribute can set to undefined
             };
             await this.adaptee.deleteItemFromDb<NicAttachmentDbItem>(table, item);
         } catch (error) {
@@ -2283,90 +2318,6 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('calling tagNetworkInterface');
         await this.adaptee.tagResource(nicId, tags);
         this.proxy.logAsInfo('called tagNetworkInterface');
-    }
-
-    async getTgwVpnAttachmentRecord(vmId: string, ip: string): Promise<VpnAttachmentRecord | null> {
-        this.proxy.logAsInfo('calling listVpnAttachmentRecord');
-        const [record] = (await this.listVpnAttachmentRecord(vmId))
-            .filter(rec => rec.ip === ip)
-            // ASSERT: there's only 1 vpn attachment per vm
-            .slice(0, 1);
-        this.proxy.logAsInfo('called listVpnAttachmentRecord');
-        return record;
-    }
-
-    async updateTgwVpnAttachmentRouting(
-        attachmentId: string,
-        propagateFromRouteTable: string,
-        associatedRouteTable: string
-    ): Promise<void> {
-        this.proxy.logAsInfo('calling updateTgwVpnAttachmentRouting');
-        try {
-            await Promise.all([
-                this.adaptee
-                    .updateTgwRouteTablePropagation(attachmentId, propagateFromRouteTable)
-                    .catch(err => {
-                        this.proxy.logForError(
-                            'Failed to update tgw route table propagation' +
-                                ` (attchment id: ${attachmentId}) propagated from` +
-                                ` route table (id: ${propagateFromRouteTable}).`,
-                            err
-                        );
-                    }),
-                this.adaptee
-                    .updateTgwRouteTableAssociation(attachmentId, associatedRouteTable)
-                    .catch(err => {
-                        this.proxy.logForError(
-                            'Failed to update tgw route table association' +
-                                ` (attchment id: ${attachmentId}) associating` +
-                                ` route table (id: ${associatedRouteTable}).`,
-                            err
-                        );
-                    })
-            ]);
-            this.proxy.logAsInfo('called updateTgwVpnAttachmentRouting');
-        } catch (error) {
-            this.proxy.logForError('Failed to complete updateTgwVpnAttachmentRouting.', error);
-            this.proxy.logAsInfo('called updateTgwVpnAttachmentRouting');
-            throw error;
-        }
-    }
-
-    async listVpnAttachmentRecord(vmId: string): Promise<VpnAttachmentRecord[]> {
-        this.proxy.logAsInfo('calling listVpnAttachmentRecord');
-        const table = new AwsDBDef.AwsVpnAttachment(process.env.RESOURCE_TAG_PREFIX || '');
-
-        const records = await (await this.adaptee.listItemFromDb<VpnAttachmentDbItem>(table))
-            .filter(item => {
-                return item.vmId === vmId;
-            })
-            .map(item => {
-                const vpnInfo = JSON.parse(item.vpnInfo);
-                const record: VpnAttachmentRecord = {
-                    vmId: item.vmId,
-                    ip: item.ip,
-                    vpnConnectionId: vpnInfo.vpnConnectionId,
-                    attachmentId: vpnInfo.attachmentId
-                };
-                try {
-                    record.configuration =
-                        (vpnInfo.configuration && JSON.parse(vpnInfo.configuration)) || {};
-                } catch (error) {
-                    this.proxy.logForError(
-                        'Failed to de-serialize the vpn conficuration' +
-                            ` of vpn attachment record (vmId: ${item.vmId}, ip: ${item.ip}`,
-                        error
-                    );
-                    record.configuration = {};
-                }
-                return record;
-            });
-        this.proxy.logAsInfo('calling listVpnAttachmentRecord');
-        return records;
-    }
-
-    async updateTgwVpnAttachmentRecord(vmId: string, ip: string, vpnInfo: string): Promise<void> {
-        // const result: EC2.CreateVpnConnectionResult = await this.adaptee.ec2.createVpnConnection();
     }
 
     async updateVmSourceDestinationChecking(vmId: string, enable?: boolean): Promise<void> {
@@ -2562,7 +2513,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             transitGatewayId
         );
         // convert the xml format CustomerGatewayConfiguration to JSON format
-        const configuration = await xml2jsParserPromise(
+        const connectionJSON: JSONable = await xml2jsParserPromise(
             vpnConnection.CustomerGatewayConfiguration,
             {
                 trim: true
@@ -2600,7 +2551,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             ip: publicIpv4,
             vpnConnectionId: vpnConnection.VpnConnectionId,
             customerGatewayId: vpnConnection.CustomerGatewayId,
-            configuration: JSON.stringify(configuration),
+            vpnConnection: connectionJSON,
             transitGatewayId: tgwAttachment.TransitGatewayId,
             transitGatewayAttachmentId: tgwAttachment.TransitGatewayAttachmentId
         } as AwsVpnConnection;
@@ -2612,11 +2563,125 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called deleteAwsVpnConnection.');
     }
 
-    createAwsTgwVpnAttachment(bgpAsn: number, publicIpv4: string): Promise<void> {
-        throw new Error('Method not implemented.');
+    async listVpnAttachmentRecord(vmId: string): Promise<TgwVpnAttachmentRecord[]> {
+        this.proxy.logAsInfo('calling listVpnAttachmentRecord');
+        const table = new AwsDBDef.AwsVpnAttachment(process.env.RESOURCE_TAG_PREFIX || '');
+
+        const records = await (await this.adaptee.listItemFromDb<VpnAttachmentDbItem>(table))
+            .filter(item => {
+                return item.vmId === vmId;
+            })
+            .map(item => {
+                let vpnConnection: JSONable;
+                try {
+                    vpnConnection = JSON.parse(item.vpnConnection);
+                } catch (error) {
+                    this.proxy.logForError(
+                        'Failed to de-serialize the vpn configuration' +
+                            ` of vpn attachment record (vmId: ${item.vmId}, ip: ${item.ip}`,
+                        error
+                    );
+                    vpnConnection = {};
+                }
+                const record: TgwVpnAttachmentRecord = {
+                    vmId: item.vmId,
+                    ip: item.ip,
+                    vpnConnectionId: vpnConnection.vpnConnectionId as string,
+                    attachmentId: vpnConnection.attachmentId as string,
+                    customerGatewayId: vpnConnection.customerGatewayId as string,
+                    vpnConnection: vpnConnection
+                };
+                return record;
+            });
+        this.proxy.logAsInfo('calling listVpnAttachmentRecord');
+        return records;
     }
 
-    async getAwsTgwVpnAttachmentState(attachmentId: string): Proise<AwsTgwVpnAttachmentState> {
+    async getTgwVpnAttachmentRecord(vmId: string, ip: string): Promise<TgwVpnAttachmentRecord> {
+        this.proxy.logAsInfo('calling listVpnAttachmentRecord');
+        const [record] = (await this.listVpnAttachmentRecord(vmId))
+            .filter(rec => rec.ip === ip)
+            // ASSERT: there's only 1 vpn attachment per vm
+            .slice(0, 1);
+        if (!record) {
+            throw new Error(`No vpn attachment found for vm (id: ${vmId}, ip: ${ip})`);
+        }
+        this.proxy.logAsInfo('called listVpnAttachmentRecord');
+        return record;
+    }
+
+    async saveAwsTgwVpnAttachmentRecord(
+        vmId: string,
+        ip: string,
+        vpnConnection: JSONable
+    ): Promise<void> {
+        this.proxy.logAsInfo('calling saveTgwVpnAttachmentRecord');
+        const table = new AwsDBDef.AwsVpnAttachment(process.env.RESOURCE_TAG_PREFIX || '');
+        // ASSERT: item is vliad
+        const dbItem: VpnAttachmentDbItem = {
+            vmId: vmId,
+            ip: ip,
+            vpnConnection: JSON.stringify(vpnConnection)
+        };
+        const conditionExp: AwsDdbOperations = {
+            Expression: '',
+            type: CreateOrUpdate.CreateOrReplace
+        };
+        await this.adaptee.saveItemToDb<VpnAttachmentDbItem>(table, dbItem, conditionExp);
+        this.proxy.logAsInfo('called saveTgwVpnAttachmentRecord');
+    }
+
+    async deleteAwsTgwVpnAttachmentRecord(vmId: string, ip: string): Promise<void> {
+        this.proxy.logAsInfo('calling deleteAwsTgwVpnAttachmentRecord');
+        const table = new AwsDBDef.AwsVpnAttachment(process.env.RESOURCE_TAG_PREFIX || '');
+        const item: VpnAttachmentDbItem = {
+            vmId: vmId,
+            ip: ip,
+            vpnConnection: undefined // non key attribute can set to undefined
+        };
+        await this.adaptee.deleteItemFromDb<VpnAttachmentDbItem>(table, item);
+
+        this.proxy.logAsInfo('called deleteAwsTgwVpnAttachmentRecord');
+    }
+
+    async updateTgwVpnAttachmentRouting(
+        attachmentId: string,
+        propagateFromRouteTable: string,
+        associatedRouteTable: string
+    ): Promise<void> {
+        this.proxy.logAsInfo('calling updateTgwVpnAttachmentRouting');
+        try {
+            await Promise.all([
+                this.adaptee
+                    .updateTgwRouteTablePropagation(attachmentId, propagateFromRouteTable)
+                    .catch(err => {
+                        this.proxy.logForError(
+                            'Failed to update tgw route table propagation' +
+                                ` (attchment id: ${attachmentId}) propagated from` +
+                                ` route table (id: ${propagateFromRouteTable}).`,
+                            err
+                        );
+                    }),
+                this.adaptee
+                    .updateTgwRouteTableAssociation(attachmentId, associatedRouteTable)
+                    .catch(err => {
+                        this.proxy.logForError(
+                            'Failed to update tgw route table association' +
+                                ` (attchment id: ${attachmentId}) associating` +
+                                ` route table (id: ${associatedRouteTable}).`,
+                            err
+                        );
+                    })
+            ]);
+            this.proxy.logAsInfo('called updateTgwVpnAttachmentRouting');
+        } catch (error) {
+            this.proxy.logForError('Failed to complete updateTgwVpnAttachmentRouting.', error);
+            this.proxy.logAsInfo('called updateTgwVpnAttachmentRouting');
+            throw error;
+        }
+    }
+
+    async getAwsTgwVpnAttachmentState(attachmentId: string): Promise<AwsTgwVpnAttachmentState> {
         this.proxy.logAsInfo('calling getAwsTgwVpnAttachmentStatus');
         const attachment = await this.adaptee.describeTgwAttachment(attachmentId);
         if (!attachment) {
@@ -2628,6 +2693,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             );
         }
         this.proxy.logAsInfo('called getAwsTgwVpnAttachmentStatus');
+        const [state] = Object.entries(AwsTgwVpnAttachmentState)
+            .filter(([, value]) => {
+                return attachment.State === value;
+            })
+            .map(([, v]) => v);
+        return state;
     }
 
     async tagResource(resourceId: string, tags: ResourceTag[]): Promise<void> {
@@ -2639,10 +2710,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     invokeAutoscaleFunction(invokableFunction: string, parameters: { [key: string]: any }): void {
         this.proxy.logAsInfo('calling invokeAwsLambda');
-        const handlerName = this.settings.get(AutoscaleSetting.AwsTransitGatewayVpnHandlerName)
-            .value;
-        const invocationSecretAccessKey = this.settings.get(AutoscaleSetting.FortiGatePskSecret)
-            .value;
+        const handlerName = this.settings.get(
+            AwsFortiGateAutoscaleSetting.AwsTransitGatewayVpnHandlerName
+        ).value;
+        const invocationSecretAccessKey = this.settings.get(
+            AwsFortiGateAutoscaleSetting.FortiGatePskSecret
+        ).value;
         const payload = {
             invokeMethod: invokableFunction,
             invocationSecretKey: invocationSecretAccessKey

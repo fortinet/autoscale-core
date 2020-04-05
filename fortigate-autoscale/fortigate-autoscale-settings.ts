@@ -1,6 +1,6 @@
-import { AutoscaleSetting as Settings } from '../autoscale-setting';
+import { AutoscaleSetting } from '../autoscale-setting';
 
-enum FortiGateAutoscaleSetting {
+export enum FortiGateAutoscaleSettingEX {
     CustomConfigSetContainer = 'custom-configset-container',
     CustomConfigSetDirectory = 'custom-configset-directory',
     CustomConfigSetName = 'custom-configset-name',
@@ -11,4 +11,4 @@ enum FortiGateAutoscaleSetting {
     FortiGateTrafficPort = 'fortigate-traffic-port'
 }
 
-export const AutoscaleSetting = { ...Settings, ...FortiGateAutoscaleSetting };
+export const FortiGateAutoscaleSetting = { ...AutoscaleSetting, ...FortiGateAutoscaleSettingEX };

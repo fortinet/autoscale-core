@@ -1,5 +1,5 @@
 import * as HttpStatusCodes from 'http-status-codes';
-import { FortiGateAutoscaleSetting } from './fortigate-autoscale-settings';
+import { AwsFortiGateAutoscaleSetting } from './aws/aws-fortigate-autoscale-settings';
 import { PlatformAdapter, ReqType } from '../platform-adapter';
 import { CloudFunctionProxyAdapter, CloudFunctionProxy } from '../cloud-function-proxy';
 import {
@@ -161,22 +161,23 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         let baseConfig = '';
         // check if second nic is enabled, config for the second nic must be prepended to
         // base config
-        if (this.settings.get(FortiGateAutoscaleSetting.EnableNic2).truthValue) {
+        if (this.settings.get(AwsFortiGateAutoscaleSetting.EnableNic2).truthValue) {
             baseConfig += await this.loadNic2();
         }
         baseConfig += await this.loadBase(); // alwasy load base config
         // if internal elb is integrated
-        if (this.settings.get(FortiGateAutoscaleSetting.EnableInternalElb).truthValue) {
+        if (this.settings.get(AwsFortiGateAutoscaleSetting.EnableInternalElb).truthValue) {
             baseConfig += await this.loadInternalElbWeb();
         }
         // if faz integration is enabled, require this 'fazintegration' configset
-        if (this.settings.get(FortiGateAutoscaleSetting.EnableFazIntegration).truthValue) {
+        if (this.settings.get(AwsFortiGateAutoscaleSetting.EnableFazIntegration).truthValue) {
             baseConfig += await this.loadFazIntegration();
         }
         // check if other custom configsets are required
         // NOTE: additional required configsets should be processed last
-        let customConfigSetName = this.settings.get(FortiGateAutoscaleSetting.CustomConfigSetName)
-            .value;
+        let customConfigSetName = this.settings.get(
+            AwsFortiGateAutoscaleSetting.CustomConfigSetName
+        ).value;
         // remove whitespaces
         customConfigSetName = customConfigSetName.replace(new RegExp('\\s', 'gm'), '');
         // load additional required configsets
@@ -198,18 +199,18 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
             return this.processConfigV2(config, sourceData);
         }
 
-        const psksecret = this.settings.get(FortiGateAutoscaleSetting.FortiGatePskSecret).value;
+        const psksecret = this.settings.get(AwsFortiGateAutoscaleSetting.FortiGatePskSecret).value;
         const syncInterface =
-            this.settings.get(FortiGateAutoscaleSetting.FortiGateSyncInterface).value || 'port1';
+            this.settings.get(AwsFortiGateAutoscaleSetting.FortiGateSyncInterface).value || 'port1';
         const trafficPort =
-            this.settings.get(FortiGateAutoscaleSetting.FortiGateTrafficPort).value || '443';
+            this.settings.get(AwsFortiGateAutoscaleSetting.FortiGateTrafficPort).value || '443';
         const adminPort =
-            this.settings.get(FortiGateAutoscaleSetting.FortiGateAdminPort).value || '8443';
-        const intElbDns = this.settings.get(FortiGateAutoscaleSetting.FortiGateInternalElbDns)
+            this.settings.get(AwsFortiGateAutoscaleSetting.FortiGateAdminPort).value || '8443';
+        const intElbDns = this.settings.get(AwsFortiGateAutoscaleSetting.FortiGateInternalElbDns)
             .value;
-        const hbInterval = this.settings.get(FortiGateAutoscaleSetting.HeartbeatInterval).value;
+        const hbInterval = this.settings.get(AwsFortiGateAutoscaleSetting.HeartbeatInterval).value;
         const hbCallbackUrl =
-            this.settings.get(FortiGateAutoscaleSetting.AutoscaleHandlerUrl).value || '';
+            this.settings.get(AwsFortiGateAutoscaleSetting.AutoscaleHandlerUrl).value || '';
         return config
             .replace(new RegExp('{SYNC_INTERFACE}', 'gm'), syncInterface)
             .replace(new RegExp('{EXTERNAL_INTERFACE}', 'gm'), 'port1')

@@ -8,7 +8,6 @@ import { VirtualMachine } from '../virtual-machine';
 export interface VpnAttachmentContext {
     handleVpnAttachment(): Promise<VpnAttachmentStrategyResult>;
     handleVpnDetachment(): Promise<VpnAttachmentStrategyResult>;
-    cleanupUnusedVpn(): Promise<VpnAttachmentStrategyResult>;
     setVpnAttachmentStrategy(strategy: VpnAttachmentStrategy): void;
 }
 
@@ -27,18 +26,14 @@ export interface VpnAttachmentStrategy {
     ): Promise<void>;
     attach(): Promise<VpnAttachmentStrategyResult>;
     detach(): Promise<VpnAttachmentStrategyResult>;
-    cleanUp(): Promise<VpnAttachmentStrategyResult>;
 }
 
 export class NoopVpnAttachmentStrategy implements VpnAttachmentStrategy {
-    attach(): Promise<string> {
-        throw new Error('Method not implemented.');
+    attach(): Promise<VpnAttachmentStrategyResult> {
+        return Promise.resolve(VpnAttachmentStrategyResult.ShouldContinue);
     }
-    detach(): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    cleanUp(): Promise<void> {
-        throw new Error('Method not implemented.');
+    detach(): Promise<VpnAttachmentStrategyResult> {
+        return Promise.resolve(VpnAttachmentStrategyResult.ShouldContinue);
     }
     prepare(
         // eslint-disable-next-line @typescript-eslint/no-unused-vars

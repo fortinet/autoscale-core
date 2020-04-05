@@ -1,7 +1,7 @@
-import { AutoscaleSetting as Settings } from '../fortigate-autoscale-settings';
+import { FortiGateAutoscaleSetting } from '../fortigate-autoscale-settings';
 
 // NOTE: every key must start with 'Aws' prefix but the value do not need the prefix
-enum AwsAutoscaleSetting {
+export enum AwsAutoscaleSettingEx {
     AwsVpnBgpAsn = 'aws-vpn-bgp-asn',
     AwsEnableTransitGatewayVpn = 'enable-transit-gateway-vpn',
     AwsLoadBalancerTargetGroupArn = 'fortigate-autoscale-target-group-arn',
@@ -11,4 +11,7 @@ enum AwsAutoscaleSetting {
     AwsTransitGatewayVpnHandlerName = 'transit-gateway-vpn-handler-name'
 }
 
-export const AutoscaleSetting = { ...Settings, ...AwsAutoscaleSetting };
+export const AwsFortiGateAutoscaleSetting = {
+    ...FortiGateAutoscaleSetting,
+    ...AwsAutoscaleSettingEx
+};

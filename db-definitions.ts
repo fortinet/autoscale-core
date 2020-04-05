@@ -754,7 +754,7 @@ export abstract class CustomLog extends Table<CustomLogDbItem> {
 export interface VpnAttachmentDbItem {
     vmId: string;
     ip: string;
-    vpnInfo: string;
+    vpnConnection: string;
 }
 export abstract class VpnAttachment extends Table<VpnAttachmentDbItem> {
     static __attributes: Attribute[] = [
@@ -771,7 +771,7 @@ export abstract class VpnAttachment extends Table<VpnAttachmentDbItem> {
             keyType: TypeRef.SecondaryKey
         },
         {
-            name: 'vpnInfo',
+            name: 'vpnConnection',
             attrType: TypeRef.StringType,
             isKey: false
         }
@@ -786,7 +786,7 @@ export abstract class VpnAttachment extends Table<VpnAttachmentDbItem> {
         const item: VpnAttachmentDbItem = {
             vmId: this.typeConvert.valueToString(record.vmId),
             ip: this.typeConvert.valueToString(record.ip),
-            vpnInfo: this.typeConvert.valueToString(record.vpnInfo)
+            vpnConnection: this.typeConvert.valueToString(record.vpnConnection)
         };
         return item;
     }

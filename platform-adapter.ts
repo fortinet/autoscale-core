@@ -3,6 +3,7 @@ import { VirtualMachine, NetworkInterface } from './virtual-machine';
 import { HealthCheckRecord, MasterRecord } from './master-election';
 import { NicAttachmentRecord } from './context-strategy/nic-attachment-context';
 import { KeyValue } from './db-definitions';
+import { JSONable } from 'jsonable';
 
 export enum ReqType {
     LaunchingVm = 'LaunchingVm',
@@ -64,13 +65,13 @@ export interface LicenseUsageRecord {
     vmInSync: boolean;
 }
 
-export interface VpnAttachmentRecord {
+export interface TgwVpnAttachmentRecord {
     vmId: string;
     ip: string;
     vpnConnectionId: string;
     attachmentId?: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    configuration?: { [key: string]: any };
+    customerGatewayId?: string;
+    vpnConnection?: JSONable;
 }
 
 export interface PlatformAdapter {
