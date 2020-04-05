@@ -3,6 +3,7 @@ import { VirtualMachine, NetworkInterface } from './virtual-machine';
 import { HealthCheckRecord, MasterRecord } from './master-election';
 import { NicAttachmentRecord } from './context-strategy/nic-attachment-context';
 import { KeyValue } from './db-definitions';
+import { JSONable } from 'jsonable';
 
 export enum ReqType {
     LaunchingVm = 'LaunchingVm',
@@ -34,10 +35,6 @@ export interface ReqHeaders {
     [key: string]: unknown;
 }
 
-export interface VmDescriptor {
-    id: string;
-}
-
 export interface ResourceTag {
     key: string;
     value: string;
@@ -66,6 +63,15 @@ export interface LicenseUsageRecord {
     scalingGroupName: string;
     assignedTime: number;
     vmInSync: boolean;
+}
+
+export interface TgwVpnAttachmentRecord {
+    vmId: string;
+    ip: string;
+    vpnConnectionId: string;
+    attachmentId?: string;
+    customerGatewayId?: string;
+    vpnConnection?: JSONable;
 }
 
 export interface PlatformAdapter {

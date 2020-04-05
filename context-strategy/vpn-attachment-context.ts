@@ -1,37 +1,48 @@
 import { PlatformAdapter } from '../platform-adapter';
 import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
+import { VirtualMachine } from '../virtual-machine';
 
 /**
  * To provide VPN connection attachment related logics
  */
 export interface VpnAttachmentContext {
-    handleVpnAttachment(): Promise<string>;
-    handleVpnDetachment(): Promise<string>;
-    cleanupUnusedVpn(): Promise<string>;
+    handleVpnAttachment(): Promise<VpnAttachmentStrategyResult>;
+    handleVpnDetachment(): Promise<VpnAttachmentStrategyResult>;
     setVpnAttachmentStrategy(strategy: VpnAttachmentStrategy): void;
 }
 
+export enum VpnAttachmentStrategyResult {
+    Success = 'success',
+    Failed = 'failed',
+    ShouldTerminateVm = 'should-terminate-vm',
+    ShouldContinue = 'should-continue'
+}
+
 export interface VpnAttachmentStrategy {
-    prepare(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter): Promise<void>;
-    attach(): Promise<string>;
-    detach(): Promise<string>;
-    cleanUp(): Promise<void>;
+    prepare(
+        platform: PlatformAdapter,
+        proxy: CloudFunctionProxyAdapter,
+        vm: VirtualMachine
+    ): Promise<void>;
+    attach(): Promise<VpnAttachmentStrategyResult>;
+    detach(): Promise<VpnAttachmentStrategyResult>;
 }
 
 export class NoopVpnAttachmentStrategy implements VpnAttachmentStrategy {
-    attach(): Promise<string> {
-        throw new Error('Method not implemented.');
+    attach(): Promise<VpnAttachmentStrategyResult> {
+        return Promise.resolve(VpnAttachmentStrategyResult.ShouldContinue);
     }
-    detach(): Promise<string> {
-        throw new Error('Method not implemented.');
+    detach(): Promise<VpnAttachmentStrategyResult> {
+        return Promise.resolve(VpnAttachmentStrategyResult.ShouldContinue);
     }
-    cleanUp(): Promise<void> {
-        throw new Error('Method not implemented.');
-    }
-    prepare(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter): Promise<void> {
+    prepare(
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        platform: PlatformAdapter,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        proxy: CloudFunctionProxyAdapter,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        vm: VirtualMachine
+    ): Promise<void> {
         return Promise.resolve();
-    }
-    apply(): Promise<string> {
-        return Promise.resolve('');
     }
 }
