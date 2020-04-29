@@ -114,8 +114,12 @@ dist
 
 # end of github suggested gitignore
 
-# project-specific ignored files
-
-# local dev / test / dist / compile directories and files
+# project-specific gitignore
+# local dev directory
 local
+dist
 out
+
+# npm package.json and package-lock.json
+package.json
+package-lock.json

@@ -1,14 +1,51 @@
+import { AutoscaleSetting } from '../autoscale-setting';
 import {
-    MasterElectionStrategy,
     MasterElection,
-    MasterElectionStrategyResult,
     MasterRecordVoteState,
     MasterRecord,
-    PlatformAdapter,
-    CloudFunctionProxyAdapter,
-    LogLevel
-} from '../autoscale-core';
-import { AutoscaleSetting } from '../autoscale-setting';
+    HeartbeatSyncTiming
+} from '../master-election';
+import { PlatformAdapter } from '../platform-adapter';
+import { CloudFunctionProxyAdapter, LogLevel } from '../cloud-function-proxy';
+import { VirtualMachine } from '../virtual-machine';
+
+/**
+ * To provide Autoscale basic logics
+ */
+export interface AutoscaleContext {
+    setMasterElectionStrategy(strategy: MasterElectionStrategy): void;
+    handleMasterElection(): Promise<string>;
+    setHeartbeatSyncStrategy(strategy: HeartbeatSyncStrategy): void;
+    handleHeartbeatSync(): Promise<string>;
+    doTargetHealthCheck(): Promise<HeartbeatSyncTiming>;
+    doMasterHealthCheck(): Promise<HeartbeatSyncTiming>;
+}
+
+export interface MasterElectionStrategy {
+    prepare(
+        election: MasterElection,
+        platform: PlatformAdapter,
+        proxy: CloudFunctionProxyAdapter
+    ): Promise<void>;
+    result(): Promise<MasterElection>;
+    apply(): Promise<MasterElectionStrategyResult>;
+}
+
+export enum MasterElectionStrategyResult {
+    ShouldStop = 'ShouldStop',
+    ShouldContinue = 'ShouldContinue'
+}
+
+export interface HeartbeatSyncStrategy {
+    prepare(
+        platform: PlatformAdapter,
+        proxy: CloudFunctionProxyAdapter,
+        vm: VirtualMachine
+    ): Promise<void>;
+    result(): Promise<MasterElection>;
+    run(): Promise<MasterElectionStrategyResult>;
+}
+
 export class PreferredGroupMasterElection implements MasterElectionStrategy {
     env: MasterElection;
     platform: PlatformAdapter;
@@ -28,7 +65,7 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
     result(): Promise<MasterElection> {
         return Promise.resolve(this.res);
     }
-    async apply(): Promise<string> {
+    async apply(): Promise<MasterElectionStrategyResult> {
         this.proxy.log('applying PreferredGroupMasterElection strategy.', LogLevel.Log);
         const result = await this.run();
         this.proxy.log('applied PreferredGroupMasterElection strategy.', LogLevel.Log);
@@ -37,8 +74,8 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
     /**
      * Only vm in the specified byol scaling group can be elected as the new master
      */
-    async run(): Promise<string> {
-        const settings = this.platform.getSettings();
+    async run(): Promise<MasterElectionStrategyResult> {
+        const settings = await this.platform.getSettings();
         // get the master scaling group
         const settingGroupName = settings.get(AutoscaleSetting.MasterScalingGroupName).value;
         const electionDuration = Number(settings.get(AutoscaleSetting.MasterElectionTimeout).value);
