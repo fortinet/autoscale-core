@@ -10,7 +10,7 @@ import {
 import { PlatformAdapter } from '../platform-adapter';
 import { CloudFunctionProxyAdapter, LogLevel } from '../cloud-function-proxy';
 import { VirtualMachine } from '../virtual-machine';
-import { waitFor, WaitForPromiseEmitter, WaitForConditionChecker } from '../autoscale-core';
+import { waitFor, WaitForPromiseEmitter, WaitForConditionChecker } from '../helper-function';
 
 /**
  * To provide Autoscale basic logics
