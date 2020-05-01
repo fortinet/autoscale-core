@@ -7,7 +7,8 @@ import { AutoscaleSetting, SettingItem, Settings } from '../autoscale-setting';
 import {
     CloudFunctionProxyAdapter,
     CloudFunctionResponseBody,
-    LogLevel
+    LogLevel,
+    ReqType
 } from '../cloud-function-proxy';
 import {
     ConstantIntervalHeartbeatSyncStrategy,
@@ -35,24 +36,13 @@ import {
     LicenseStockRecord,
     LicenseUsageRecord,
     PlatformAdapter,
-    ReqType,
     ResourceTag
 } from '../platform-adapter';
 import { NetworkInterface, VirtualMachine } from '../virtual-machine';
+import { compare } from '../helper-function';
+import { AwsFortiGateAutoscaleSetting } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const objectEqual = (expected: any): { to: (actual: any) => boolean } => {
-    return {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        to: (actual: { [key: string]: any }): boolean => {
-            return (
-                Object.entries(actual).filter(([k, v]) => {
-                    return !(expected[k] !== undefined && expected[k] === v);
-                }).length === 0
-            );
-        }
-    };
-};
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
@@ -98,6 +88,9 @@ const TEST_MASTER_ELECTION: MasterElection = {
 };
 
 class TestPlatformAdapter implements PlatformAdapter {
+    listAutoscaleVm(identifyScalingGroup?: boolean, listNic?: boolean): Promise<VirtualMachine[]> {
+        throw new Error('Method not implemented.');
+    }
     vmEqualTo(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean {
         throw new Error('Method not implemented.');
     }
@@ -306,16 +299,23 @@ describe('sanity test', () => {
         autoscale.setMasterElectionStrategy(ms);
         autoscale.setHeartbeatSyncStrategy(hs);
         autoscale.setScalingGroupStrategy(ss);
-        autoscale.setTaggingVmStrategy(new NoopTaggingVmStrategy());
+        autoscale.setTaggingAutoscaleVmStrategy(new NoopTaggingVmStrategy());
     });
-    it('Conflicted settings count in FortiGateAutoscaleSettings and AutoscaleSettings', () => {
-        const entriesA = Object.entries(AutoscaleSetting);
-        const mapB = new Map(Object.entries(FortiGateAutoscaleSetting));
-        const conflict = entriesA.filter(([key, value]) => {
-            // filter if the same key exists in B and the values are different
-            return mapB.has(key) && mapB.get(key) !== value;
-        });
-        Sinon.assert.match(conflict.length, 0); // expect no conflict
+    it('No conflicted settings in AutoscaleSettings', () => {
+        const conflictCheck = (
+            o: { [key: string]: string },
+            against: { [key: string]: string }
+        ) => {
+            const entriesA = Object.entries(against);
+            const mapB = new Map(Object.entries(o));
+            const conflict = entriesA.filter(([key, value]) => {
+                // filter if the same key exists in B and the values are different
+                return mapB.has(key) && mapB.get(key) !== value;
+            });
+            Sinon.assert.match(conflict.length, 0); // expect no conflict
+        };
+        conflictCheck(FortiGateAutoscaleSetting, AutoscaleSetting);
+        conflictCheck(AwsFortiGateAutoscaleSetting, FortiGateAutoscaleSetting);
     });
     it('handleMasterElection', async () => {
         const stub1 = Sinon.stub(x, 'logAsInfo');
@@ -381,14 +381,14 @@ describe('sanity test', () => {
         const stub7 = Sinon.stub(autoscale, 'handleMasterElection').callsFake(() => {
             return Promise.resolve(me);
         });
-        const stub8 = Sinon.stub(autoscale, 'handleTaggingVm');
+        const stub8 = Sinon.stub(autoscale, 'handleTaggingAutoscaleVm');
         const stub9 = Sinon.stub(p, 'equalToVm').callsFake((a, b) => {
             Sinon.assert.match(a, TEST_VM);
             Sinon.assert.match(b, TEST_VM);
             return true;
         });
         const stub10 = Sinon.stub(p, 'updateHealthCheckRecord').callsFake(hcr => {
-            Sinon.assert.match(objectEqual(hcr).to(TEST_HCR), true);
+            Sinon.assert.match(compare(hcr).isEqualTo(TEST_HCR), true);
             Sinon.assert.match(hcr.vmId, TEST_HCR.vmId);
             Sinon.assert.match(hcr.scalingGroupName, TEST_HCR.scalingGroupName);
             return Promise.resolve();
@@ -402,14 +402,14 @@ describe('sanity test', () => {
 
         try {
             const result = await autoscale.handleHeartbeatSync();
-            Sinon.assert.match(objectEqual(await stub1.returnValues[0]).to(TEST_HCR), true);
+            Sinon.assert.match(compare(await stub1.returnValues[0]).isEqualTo(TEST_HCR), true);
             Sinon.assert.match(stub2.called, false);
             Sinon.assert.match(stub3.called, false);
             Sinon.assert.match(stub4.called, false);
 
             Sinon.assert.match(stub5.called, false);
             Sinon.assert.match(await stub6.called, false);
-            Sinon.assert.match(objectEqual(await stub7.returnValues[0]).to(me), true);
+            Sinon.assert.match(compare(await stub7.returnValues[0]).isEqualTo(me), true);
             Sinon.assert.match(stub8.called, false);
             Sinon.assert.match(stub9.called, false);
             Sinon.assert.match(stub10.called, true);

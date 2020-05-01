@@ -1,7 +1,10 @@
 /**
  * export core modules
  */
+import * as DBDef from './db-definitions';
+
 export * from './autoscale-core';
+export * from './autoscale-environment';
 export * from './autoscale-setting';
 export * from './cloud-function-proxy';
 export * from './master-election';
@@ -14,10 +17,16 @@ export * from './context-strategy/scaling-group-context';
 export * from './context-strategy/vpn-attachment-context';
 export * from './context-strategy/bootstrap-context';
 export * from './context-strategy/licensing-context';
-import * as DBDef from './db-definitions';
 export { DBDef };
 
 /**
  * export fortigate-autoscale modules
  */
 export * from './fortigate-autoscale/index';
+
+/**
+ * export scripts
+ */
+export * from './scripts/code-packman';
+export * from './scripts/make-dist';
+export * from './scripts/aws-testman';

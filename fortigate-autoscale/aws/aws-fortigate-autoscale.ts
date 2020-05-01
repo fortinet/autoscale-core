@@ -1,6 +1,9 @@
 import { AutoscaleEnvironment } from '../../autoscale-environment';
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
-import { PreferredGroupMasterElection } from '../../context-strategy/autoscale-context';
+import {
+    PreferredGroupMasterElection,
+    ConstantIntervalHeartbeatSyncStrategy
+} from '../../context-strategy/autoscale-context';
 import {
     NicAttachmentContext,
     NicAttachmentStrategy,
@@ -8,21 +11,27 @@ import {
 } from '../../context-strategy/nic-attachment-context';
 import {
     VpnAttachmentStrategy,
-    VpnAttachmentStrategyResult
+    VpnAttachmentStrategyResult,
+    NoopVpnAttachmentStrategy
 } from '../../context-strategy/vpn-attachment-context';
 import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../../helper-function';
 import { FortiGateAutoscale } from '../fortigate-autoscale';
 import { FortiGateBootstrapConfigStrategy } from '../fortigate-bootstrap-config-strategy';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsPlatformAdapter, TransitGatewayContext } from './aws-platform-adapter';
+import { AwsNicAttachmentStrategy } from './aws-nic-attachment-strategy';
+import { AwsTgwVpnAttachmentStrategy } from './aws-tgw-vpn-attachment-strategy';
+import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strategy';
+import { AwsTaggingAutoscaleVmStrategy } from './aws-tagging-autoscale-vm-strategy';
 
 /**
- * FortiGate Autoscale - AWS class, with capabilities:
+ * AWS FortiGate Autoscale - class, with capabilities:
  * inherited capabilities and
- * AWS Transit Gateway VPN attachment
- *
+ * FortiGate bootstrap configuration
+ * FortiGate hybrid licensing model
+ * a secondary network interface
  */
-export class FortiGateAutoscaleAws<TReq, Tcontext, TRes>
+export class AwsFortiGateAutoscale<TReq, Tcontext, TRes>
     extends FortiGateAutoscale<TReq, Tcontext, TRes>
     implements NicAttachmentContext, TransitGatewayContext {
     nicAttachmentStrategy: NicAttachmentStrategy;
@@ -30,11 +39,26 @@ export class FortiGateAutoscaleAws<TReq, Tcontext, TRes>
     get platform(): AwsPlatformAdapter {
         return super.platform as AwsPlatformAdapter;
     }
+    set platform(p: AwsPlatformAdapter) {
+        super.platform = p;
+    }
     constructor(p: AwsPlatformAdapter, e: AutoscaleEnvironment, x: CloudFunctionProxyAdapter) {
         super(p, e, x);
+        // use AWS Hybrid scaling group strategy
+        this.setScalingGroupStrategy(new AwsHybridScalingGroupStrategy());
+        // use peferred group master election for Hybrid licensing model
+        this.setMasterElectionStrategy(new PreferredGroupMasterElection());
+        // use a constant interval heartbeat sync strategy
+        this.setHeartbeatSyncStrategy(new ConstantIntervalHeartbeatSyncStrategy());
+        // use AWS resource tagging strategy
+        this.setTaggingAutoscaleVmStrategy(new AwsTaggingAutoscaleVmStrategy());
         // use FortiGate bootstrap configuration strategy
         this.setBootstrapConfigurationStrategy(new FortiGateBootstrapConfigStrategy());
-        this.setMasterElectionStrategy(new PreferredGroupMasterElection());
+        // use the secondary nic attachment strategy to create and attach an additional nic
+        // during launching
+        this.setNicAttachmentStrategy(new AwsNicAttachmentStrategy());
+        // use Noop vpn attachment strategy
+        this.setVpnAttachmentStrategy(new NoopVpnAttachmentStrategy());
     }
     setNicAttachmentStrategy(strategy: NicAttachmentStrategy): void {
         this.nicAttachmentStrategy = strategy;
@@ -159,5 +183,25 @@ export class FortiGateAutoscaleAws<TReq, Tcontext, TRes>
             await this.handleVpnDetachment();
         }
         return '';
+    }
+}
+
+/**
+ * AWS FortiGate Autoscale with Transit Gateway Integration - class, with capabilities:
+ * inherited capabilities and
+ * FortiGate bootstrap configuration
+ * FortiGate hybrid licensing model
+ * Single network interface
+ * BGP VPN attachment for Transit Gateway Integration
+ */
+export class AwsFortiGateAutoscaleTgw<TReq, Tcontext, TRes> extends AwsFortiGateAutoscale<
+    TReq,
+    Tcontext,
+    TRes
+> {
+    constructor(p: AwsPlatformAdapter, e: AutoscaleEnvironment, x: CloudFunctionProxyAdapter) {
+        super(p, e, x);
+        // use AWS Transit Gateway VPN attachment strategy
+        this.setVpnAttachmentStrategy(new AwsTgwVpnAttachmentStrategy());
     }
 }

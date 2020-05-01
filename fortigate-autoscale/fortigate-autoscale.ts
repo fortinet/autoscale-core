@@ -2,13 +2,14 @@ import * as HttpStatusCodes from 'http-status-codes';
 
 import { Autoscale, CloudFunctionHandler, HttpError } from '../autoscale-core';
 import { AutoscaleEnvironment } from '../autoscale-environment';
-import { CloudFunctionProxy } from '../cloud-function-proxy';
+import { CloudFunctionProxy, ReqType } from '../cloud-function-proxy';
 import {
     BootstrapConfigurationStrategy,
     BootstrapContext
 } from '../context-strategy/bootstrap-context';
 import { LicensingModelContext } from '../context-strategy/licensing-context';
-import { PlatformAdapter, ReqType } from '../platform-adapter';
+import { PlatformAdapter } from '../platform-adapter';
+import { VmTagging } from '../context-strategy/autoscale-context';
 
 /**
  * FortiGate class with capabilities:
@@ -31,8 +32,11 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             this.env = env;
             this.proxy.logAsInfo('calling handleRequest.');
             this.proxy.logAsInfo('request integrity check.');
-            // check whether all necessary request information are all there or not
+            // TODO: check whether all necessary request information are all there or not using
+            // the platform checkRequestIntegrity() method. temporarily disable this checking from
+            // the next line for now.
             // await this.platform.checkRequestIntegrity();
+
             // init the platform. this step is important
             await this.platform.init();
             const requestType = await this.platform.getRequestType();
@@ -89,10 +93,10 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             (await this.platform.getHealthCheckRecord(this.env.targetVm.id));
 
         // if there exists a health check record for this vm, this request may probably be
-        // a redundant request. ignore it.
+        // a duplicate request. ignore it.
         if (this.env.targetHealthCheckRecord) {
             this.proxy.logAsWarning(
-                `Health check record for vm (id: ${this.env.targetId}) ` +
+                `Health check record for vm (id: ${this.env.targetVm.id}) ` +
                     'already exists. It looks like this bootstrap configuration request' +
                     " isn't normal. ignore it by returning empty."
             );
@@ -110,12 +114,25 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
         // master election is triggered
         // master election is finalized
         // master election isn't needed
-        await this.handleMasterElection();
+        const masterElection = await this.handleMasterElection();
 
         // assert master record should be available now
         // get master record again
-        this.env.masterRecord = this.env.masterRecord || (await this.platform.getMasterRecord());
+        this.env.masterVm = masterElection.newMaster || masterElection.oldMaster;
+        this.env.masterRecord = masterElection.newMasterRecord || masterElection.oldMasterRecord;
 
+        // tag the new vm
+        const vmTagging: VmTagging = {
+            vmId: this.env.targetVm.id,
+            newVm: true, // ASSERT: vm in boostraping is a new vm
+            newMasterRole:
+                (masterElection.newMaster &&
+                    this.platform.vmEqualTo(this.env.targetVm, this.env.masterVm)) ||
+                false
+        };
+        await this.handleTaggingAutoscaleVm([vmTagging]);
+
+        // get the bootstrap configuration
         await this.bootstrapConfigStrategy.prepare(this.platform, this.proxy, this.env);
         await this.bootstrapConfigStrategy.apply();
         const bootstrapConfig = this.bootstrapConfigStrategy.getConfiguration();

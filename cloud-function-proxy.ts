@@ -6,6 +6,36 @@ export enum LogLevel {
     Debug = 'Debug'
 }
 
+export enum ReqType {
+    LaunchingVm = 'LaunchingVm',
+    LaunchedVm = 'LaunchedVm',
+    TerminatingVm = 'TerminatingVm',
+    TerminatedVm = 'TerminatedVm',
+    BootstrapConfig = 'BootstrapConfig',
+    HeartbeatSync = 'HeartbeatSync',
+    StatusMessage = 'StatusMessage'
+}
+
+export enum ReqMethod {
+    GET,
+    POST,
+    PUT,
+    DELETE,
+    PATCH,
+    HEAD,
+    TRACE,
+    OPTIONS,
+    CONNECT
+}
+
+export interface ReqBody {
+    [key: string]: unknown;
+}
+
+export interface ReqHeaders {
+    [key: string]: unknown;
+}
+
 export type CloudFunctionResponseBody = string | {};
 
 export interface CloudFunctionProxyAdapter {

@@ -36,8 +36,8 @@ export type WaitForConditionChecker<TInput> = (
 ) => Promise<boolean>;
 
 /**
- * A repeatedly running function that periodically takes a custom action, check the result
- * against a condition, and quit waiting until the condtion is met.
+ * A repeatedly running function that periodically takes a custom action, checks the result
+ * against a condition, and stops once the condition is met.
  *
  * @template TResult a generic type for the values being passed between emitter and checker.
  * @param {WaitForPromiseEmitter<TResult>} promiseEmitter the emitter that return a value of TResult
@@ -94,3 +94,43 @@ export async function waitFor<TResult>(
         throw error;
     }
 }
+
+/**
+ * Compare anything
+ *
+ * @param {*} anyA one of the two value to be compare with each other
+ * @param {*} anyB one of the two value to be compare with each other
+ * @returns {boolean} true if their result of JSON.stringify are qual.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function compareAny(anyA: any, anyB: any): boolean {
+    return JSON.stringify(anyA) === JSON.stringify(anyB);
+}
+
+export function compareObject(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    objectA: { [key: string]: any },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    objectB: { [key: string]: any }
+): boolean {
+    return (
+        typeof objectA === 'object' && typeof objectB === 'object' && compareAny(objectA, objectB)
+    );
+}
+
+/**
+ * A compareAny(a, b) equivalent. Allows for taking one object as parameter first, then
+ * take more more objects as parameter in the returned functions.
+ * @param {any} objectA an object to compare
+ * @returns {} an object of functions that compare objectA with others provided as parameters of
+ * each function.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const compare = (anyA: any): { isEqualTo: (anyB: any) => boolean } => {
+    return {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        isEqualTo: (anyB: any): boolean => {
+            return compareAny(anyA, anyB);
+        }
+    };
+};

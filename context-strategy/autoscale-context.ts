@@ -20,8 +20,8 @@ export interface AutoscaleContext {
     handleMasterElection(): Promise<MasterElection | null>;
     setHeartbeatSyncStrategy(strategy: HeartbeatSyncStrategy): void;
     handleHeartbeatSync(): Promise<string>;
-    setTaggingVmStrategy(strategy: TaggingVmStrategy): void;
-    handleTaggingVm(taggings: VmTagging[]): Promise<void>;
+    setTaggingAutoscaleVmStrategy(strategy: TaggingVmStrategy): void;
+    handleTaggingAutoscaleVm(taggings: VmTagging[]): Promise<void>;
 }
 
 export interface MasterElectionStrategy {
@@ -357,14 +357,11 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
     }
 }
 
-export enum VmTaggingType {
-    newVm = 'new',
-    newMasterVm = 'new-master',
-    oldMasterVm = 'old-master'
-}
 export interface VmTagging {
-    vm: VirtualMachine;
-    type: VmTaggingType;
+    vmId: string;
+    newVm?: boolean;
+    newMasterRole?: boolean;
+    clear?: boolean;
 }
 
 export interface TaggingVmStrategy {
@@ -377,22 +374,20 @@ export interface TaggingVmStrategy {
 }
 
 export class NoopTaggingVmStrategy implements TaggingVmStrategy {
-    private platform: PlatformAdapter;
     private proxy: CloudFunctionProxyAdapter;
-    private taggings: VmTagging[];
     prepare(
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         platform: PlatformAdapter,
         proxy: CloudFunctionProxyAdapter,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         taggings: VmTagging[]
     ): Promise<void> {
-        this.platform = platform;
         this.proxy = proxy;
-        this.taggings = taggings;
         return Promise.resolve();
     }
     apply(): Promise<void> {
         this.proxy.logAsInfo('calling NoopTaggingVmStrategy.apply.');
         this.proxy.logAsInfo('called NoopTaggingVmStrategy.apply.');
-        return Promise.resolve(this.platform && this.taggings && undefined);
+        return Promise.resolve();
     }
 }

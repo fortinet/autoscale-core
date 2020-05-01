@@ -1,8 +1,8 @@
 import { AutoscaleSetting } from '../autoscale-setting';
 
 export enum FortiGateAutoscaleSettingEX {
-    CustomConfigSetContainer = 'custom-configset-container',
-    CustomConfigSetDirectory = 'custom-configset-directory',
+    CustomAssetContainer = 'custom-asset-container',
+    CustomAssetDirectory = 'custom-asset-directory',
     CustomConfigSetName = 'custom-configset-name',
     FortiGateAdminPort = 'fortigate-admin-port',
     FortiGateInternalElbDns = 'fortigate-protected-internal-elb-dns',

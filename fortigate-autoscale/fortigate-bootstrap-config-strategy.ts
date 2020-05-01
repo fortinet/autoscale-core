@@ -231,13 +231,16 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         try {
             for (nodePath of matches) {
                 let replaceBy = null;
-                const resRoot =
-                    typeof nodePath === 'string' ? nodePath.split('.')[0].substr(1) : '';
-                if (resourceMap[resRoot]) {
-                    replaceBy = configSetResourceFinder(resourceMap, nodePath);
-                }
-                if (replaceBy) {
-                    conf = conf.replace(new RegExp(nodePath, 'g'), replaceBy);
+                // check if it is in v2 format: {@SourceType.property[#num][.subProperty[#num]...]}
+                if (nodePath.indexOf('@') === 1) {
+                    const resRoot =
+                        typeof nodePath === 'string' ? nodePath.split('.')[0].substr(1) : '';
+                    if (resourceMap[resRoot]) {
+                        replaceBy = configSetResourceFinder(resourceMap, nodePath);
+                    }
+                    if (replaceBy) {
+                        conf = conf.replace(new RegExp(nodePath, 'g'), replaceBy);
+                    }
                 }
             }
             return this.processConfig(conf); // process config V1

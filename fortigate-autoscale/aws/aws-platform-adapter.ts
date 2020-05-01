@@ -1,18 +1,16 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult, Context, ScheduledEvent } from 'aws-lambda';
 import { ExpressionAttributeValueMap } from 'aws-sdk/clients/dynamodb';
 import EC2 from 'aws-sdk/clients/ec2';
 import path from 'path';
 import process from 'process';
 import { parseStringPromise as xml2jsParserPromise } from 'xml2js';
 
-import { mapHttpMethod } from '../../autoscale-core';
 import { Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
 import {
-    CloudFunctionProxy,
     CloudFunctionProxyAdapter,
-    CloudFunctionResponseBody,
-    LogLevel
+    LogLevel,
+    ReqMethod,
+    ReqType
 } from '../../cloud-function-proxy';
 import { NicAttachmentRecord } from '../../context-strategy/nic-attachment-context';
 import { VpnAttachmentContext } from '../../context-strategy/vpn-attachment-context';
@@ -44,19 +42,18 @@ import {
     LicenseStockRecord,
     LicenseUsageRecord,
     PlatformAdapter,
-    ReqBody,
-    ReqHeaders,
-    ReqMethod,
-    ReqType,
     ResourceTag,
     TgwVpnAttachmentRecord
 } from '../../platform-adapter';
 import { NetworkInterface, VirtualMachine } from '../../virtual-machine';
+import { AwsApiGatewayEventProxy, AwsScheduledEventProxy } from './aws-cloud-function-proxy';
 import { LifecycleItemDbItem } from './aws-db-definitions';
 import * as AwsDBDef from './aws-db-definitions';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsPlatformAdaptee } from './aws-platform-adaptee';
 
+export const TAG_KEY_RESOURCE_GROUP = 'tag:ResourceGroup';
+export const TAG_KEY_AUTOSCALE_ROLE = 'AutoscaleRole';
 /**
  * created based on aws ec2 TransitGatewayPropagationState
  */
@@ -128,171 +125,6 @@ export interface LifecycleItem {
     timestamp: number;
 }
 
-export class AwsLambdaProxy extends CloudFunctionProxy<
-    APIGatewayProxyEvent,
-    Context,
-    APIGatewayProxyResult
-> {
-    request: APIGatewayProxyEvent;
-    context: Context;
-    log(message: string, level: LogLevel): void {
-        switch (level) {
-            case LogLevel.Debug:
-                console.debug(message);
-                break;
-            case LogLevel.Error:
-                console.error(message);
-                break;
-            case LogLevel.Info:
-                console.info(message);
-                break;
-            case LogLevel.Warn:
-                console.warn(message);
-                break;
-            default:
-                console.log(message);
-        }
-    }
-
-    /**
-     * return a formatted AWS Lambda handler response
-     * @param  {number} httpStatusCode http status code
-     * @param  {CloudFunctionResponseBody} body response body
-     * @param  {{}} headers response header
-     * @returns {APIGatewayProxyResult} response
-     */
-    formatResponse(
-        httpStatusCode: number,
-        body: CloudFunctionResponseBody,
-        headers?: { [key: string]: string }
-    ): APIGatewayProxyResult {
-        return {
-            statusCode: httpStatusCode,
-            headers: headers,
-            body: (typeof body === 'string' && body) || JSON.stringify(body),
-            isBase64Encoded: false
-        };
-    }
-    getRequestAsString(): string {
-        return JSON.stringify(this.request);
-    }
-}
-
-export class AwsApiGatewayEventProxy extends CloudFunctionProxy<
-    APIGatewayProxyEvent,
-    Context,
-    APIGatewayProxyResult
-> {
-    request: APIGatewayProxyEvent;
-    context: Context;
-    log(message: string, level: LogLevel): void {
-        switch (level) {
-            case LogLevel.Debug:
-                console.debug(message);
-                break;
-            case LogLevel.Error:
-                console.error(message);
-                break;
-            case LogLevel.Info:
-                console.info(message);
-                break;
-            case LogLevel.Warn:
-                console.warn(message);
-                break;
-            default:
-                console.log(message);
-        }
-    }
-
-    /**
-     * return a formatted AWS Lambda handler response
-     * @param  {number} httpStatusCode http status code
-     * @param  {CloudFunctionResponseBody} body response body
-     * @param  {{}} headers response header
-     * @returns {APIGatewayProxyResult} response
-     */
-    formatResponse(
-        httpStatusCode: number,
-        body: CloudFunctionResponseBody,
-        headers?: { [key: string]: string }
-    ): APIGatewayProxyResult {
-        return {
-            statusCode: httpStatusCode,
-            headers: headers,
-            body: (typeof body === 'string' && body) || JSON.stringify(body),
-            isBase64Encoded: false
-        };
-    }
-    getRequestAsString(): string {
-        return JSON.stringify(this.request);
-    }
-    getReqBody(): ReqBody {
-        let body: ReqBody;
-        try {
-            body = (this.request.body && JSON.parse(this.request.body)) || {};
-        } catch (error) {}
-        return body;
-    }
-    getReqHeaders(): ReqHeaders {
-        const headers: ReqHeaders = { ...this.request.headers };
-        return headers;
-    }
-    getReqMethod(): ReqMethod {
-        return mapHttpMethod(this.request.httpMethod);
-    }
-}
-
-export class AwsScheduledEventProxy extends CloudFunctionProxy<
-    ScheduledEvent,
-    Context,
-    { [key: string]: unknown }
-> {
-    request: ScheduledEvent;
-    context: Context;
-    log(message: string, level: LogLevel): void {
-        switch (level) {
-            case LogLevel.Debug:
-                console.debug(message);
-                break;
-            case LogLevel.Error:
-                console.error(message);
-                break;
-            case LogLevel.Info:
-                console.info(message);
-                break;
-            case LogLevel.Warn:
-                console.warn(message);
-                break;
-            default:
-                console.log(message);
-        }
-    }
-
-    /**
-     * return a formatted AWS Lambda handler response
-     * @param  {number} httpStatusCode http status code
-     * @param  {CloudFunctionResponseBody} body response body
-     * @param  {{}} headers response header
-     * @returns {{}} empty object
-     */
-    formatResponse(
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        httpStatusCode: number,
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        body: CloudFunctionResponseBody,
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        headers: {}
-    ): { [key: string]: unknown } {
-        return {};
-    }
-    getReqBody(): ScheduledEvent {
-        return this.request;
-    }
-    getRequestAsString(): string {
-        return JSON.stringify(this.request);
-    }
-}
-
 export class AwsPlatformAdapter implements PlatformAdapter {
     adaptee: AwsPlatformAdaptee;
     proxy: CloudFunctionProxyAdapter;
@@ -318,7 +150,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async deleteVmFromScalingGroup(vmId: string): Promise<void> {
         this.proxy.logAsInfo('calling deleteVmFromScalingGroup');
         try {
-            await this.adaptee.terminateInstanceInAutoscalingGroup(vmId);
+            await this.adaptee.terminateInstanceInAutoScalingGroup(vmId);
         } catch (error) {
             this.proxy.logForError('Failed to delele vm from scaling group.', error);
         }
@@ -461,7 +293,8 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 };
             }),
             networkInterfaces: (enis && enis.map(this.eniToNic)) || undefined,
-            networkInterfaceIds: instance.NetworkInterfaces.map(eni => eni.NetworkInterfaceId)
+            networkInterfaceIds: instance.NetworkInterfaces.map(eni => eni.NetworkInterfaceId),
+            sourceData: {}
         };
         Object.assign(vm.sourceData, instance);
         return vm;
@@ -515,6 +348,60 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         return vm;
     }
 
+    async listAutoscaleVm(
+        identifyScalingGroup?: boolean,
+        listNic?: boolean
+    ): Promise<VirtualMachine[]> {
+        this.proxy.logAsInfo('calling listAutoscaleVm');
+        const tag: ResourceTag = {
+            key: TAG_KEY_RESOURCE_GROUP,
+            value: this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
+        };
+        const instances = await this.adaptee.listInstancesByTags([tag]);
+        let scalingGroupMap = new Map<string, string>();
+        if (identifyScalingGroup) {
+            scalingGroupMap = await this.adaptee.identifyInstanceScalingGroup(
+                instances.map(instance => instance.InstanceId)
+            );
+        }
+        const nicMap = new Map<string, EC2.NetworkInterface[]>();
+        if (listNic) {
+            await Promise.all(
+                instances.map(async instance => {
+                    const nics = await this.adaptee.listNetworkInterfacesByInstanceId(
+                        instance.InstanceId
+                    );
+                    nicMap.set(instance.InstanceId, nics);
+                })
+            );
+        }
+        this.proxy.logAsInfo('called listAutoscaleVm');
+        const vms: VirtualMachine[] = instances.map(instance => {
+            return this.instanceToVm(
+                instance,
+                scalingGroupMap.get(instance.InstanceId),
+                nicMap.get(instance.InstanceId)
+            );
+        });
+        return vms;
+    }
+
+    async listMasterRoleVmId(): Promise<string[]> {
+        const tags: ResourceTag[] = [];
+        // list vm with resource group tag
+        tags.push({
+            key: TAG_KEY_RESOURCE_GROUP,
+            value: this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
+        });
+        // list vm with autoscale role tag
+        tags.push({
+            key: TAG_KEY_AUTOSCALE_ROLE,
+            value: 'master'
+        });
+        const instances = await this.adaptee.listInstancesByTags(tags);
+        return instances.map(instance => instance.InstanceId);
+    }
+
     async getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord> {
         this.proxy.logAsInfo('calling getHealthCheckRecord');
         const table = new AwsDBDef.AwsAutoscale(process.env.RESOURCE_TAG_PREFIX || '');
@@ -525,30 +412,36 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             }
         ]);
 
-        // if heartbeatDelay is <= 0, it means hb arrives early or ontime
-        const heartbeatDelay =
-            this.createTime -
-            dbItem.nextHeartBeatTime -
-            Number(this.settings.get(AwsFortiGateAutoscaleSetting.HeartbeatDelayAllowance).value);
+        let record: HealthCheckRecord;
 
-        const [syncState] = Object.entries(HealthCheckSyncState)
-            .filter(([, value]) => {
-                return dbItem.syncState === value;
-            })
-            .map(([, v]) => v);
-        const record: HealthCheckRecord = {
-            vmId: vmId,
-            scalingGroupName: dbItem.scalingGroupName,
-            ip: dbItem.ip,
-            masterIp: dbItem.masterIp,
-            heartbeatInterval: dbItem.heartBeatInterval,
-            heartbeatLossCount: dbItem.heartBeatLossCount,
-            nextHeartbeatTime: dbItem.nextHeartBeatTime,
-            syncState: syncState,
-            seq: dbItem.seq,
-            healthy: heartbeatDelay <= 0,
-            upToDate: true
-        };
+        if (dbItem) {
+            // if heartbeatDelay is <= 0, it means hb arrives early or ontime
+            const heartbeatDelay =
+                this.createTime -
+                dbItem.nextHeartBeatTime -
+                Number(
+                    this.settings.get(AwsFortiGateAutoscaleSetting.HeartbeatDelayAllowance).value
+                );
+
+            const [syncState] = Object.entries(HealthCheckSyncState)
+                .filter(([, value]) => {
+                    return dbItem.syncState === value;
+                })
+                .map(([, v]) => v);
+            record = {
+                vmId: vmId,
+                scalingGroupName: dbItem.scalingGroupName,
+                ip: dbItem.ip,
+                masterIp: dbItem.masterIp,
+                heartbeatInterval: dbItem.heartBeatInterval,
+                heartbeatLossCount: dbItem.heartBeatLossCount,
+                nextHeartbeatTime: dbItem.nextHeartBeatTime,
+                syncState: syncState,
+                seq: dbItem.seq,
+                healthy: heartbeatDelay <= 0,
+                upToDate: true
+            };
+        }
         this.proxy.logAsInfo('called getHealthCheckRecord');
         return record;
     }
@@ -558,28 +451,32 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const filterExp: AwsDdbOperations = {
             Expression: ''
         };
-        filterExp.Expression = filters.map(kv => `${kv.key} = :${kv.value}`).join(' AND ');
-        // ASSERT: there's only 1 matching master record
-        const [masterRecord] = await this.adaptee.listItemFromDb<MasterElectionDbItem>(
-            table,
-            filterExp
-        );
-        const [voteState] = Object.entries(MasterRecordVoteState)
-            .filter(([, value]) => {
-                return masterRecord.voteState === value;
-            })
-            .map(([, v]) => v);
+        if (filters) {
+            filterExp.Expression = filters.map(kv => `${kv.key} = :${kv.value}`).join(' AND ');
+        }
+        // ASSERT: there's only 1 matching master record or no matching record.
+        const [record] = await this.adaptee.listItemFromDb<MasterElectionDbItem>(table, filterExp);
+        let masterRecord: MasterRecord;
+        if (record) {
+            const [voteState] = Object.entries(MasterRecordVoteState)
+                .filter(([, value]) => {
+                    return record.voteState === value;
+                })
+                .map(([, v]) => v);
+            masterRecord = {
+                id: record.id,
+                vmId: record.vmId,
+                ip: record.ip,
+                scalingGroupName: record.scalingGroupName,
+                virtualNetworkId: record.virtualNetworkId,
+                subnetId: record.subnetId,
+                voteEndTime: Number(record.voteEndTime),
+                voteState: voteState
+            };
+        }
+
         this.proxy.logAsInfo('called getMasterRecord');
-        return {
-            id: masterRecord.id,
-            vmId: masterRecord.vmId,
-            ip: masterRecord.ip,
-            scalingGroupName: masterRecord.scalingGroupName,
-            virtualNetworkId: masterRecord.virtualNetworkId,
-            subnetId: masterRecord.subnetId,
-            voteEndTime: Number(masterRecord.voteEndTime),
-            voteState: voteState
-        };
+        return masterRecord;
     }
     equalToVm(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean {
         if (!(vmA && vmB) || JSON.stringify(vmA) !== JSON.stringify(vmB)) {
@@ -707,11 +604,11 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async loadConfigSet(name: string, custom?: boolean): Promise<string> {
         this.proxy.logAsInfo(`loading${custom ? ' (custom)' : ''} configset: ${name}`);
         const bucket = custom
-            ? this.settings.get(AwsFortiGateAutoscaleSetting.CustomConfigSetContainer).value
+            ? this.settings.get(AwsFortiGateAutoscaleSetting.CustomAssetContainer).value
             : this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageContainer).value;
         const keyPrefix = [
             custom
-                ? this.settings.get(AwsFortiGateAutoscaleSetting.CustomConfigSetDirectory).value
+                ? this.settings.get(AwsFortiGateAutoscaleSetting.CustomAssetDirectory).value
                 : this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageDirectory).value,
             'configset'
         ];
@@ -1102,7 +999,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
 
     async tagNetworkInterface(nicId: string, tags: ResourceTag[]): Promise<void> {
         this.proxy.logAsInfo('calling tagNetworkInterface');
-        await this.adaptee.tagResource(nicId, tags);
+        await this.adaptee.tagResource([nicId], tags);
         this.proxy.logAsInfo('called tagNetworkInterface');
     }
 
@@ -1292,7 +1189,6 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const vpnConnection = await this.adaptee.createVpnConnection(
             'ipsec.1',
             bgpAsn,
-            publicIpv4,
             customerGatewayId,
             false,
             null,
@@ -1487,10 +1383,20 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         return state;
     }
 
-    async tagResource(resourceId: string, tags: ResourceTag[]): Promise<void> {
+    async tagResource(resourceIds: string[], tags: ResourceTag[]): Promise<void> {
         this.proxy.logAsInfo('calling tagResource.');
-        await this.adaptee.tagResource(resourceId, tags);
+        await this.adaptee.tagResource(resourceIds, tags);
         this.proxy.logAsInfo('called tagResource.');
+    }
+
+    async removeMasterRoleTag(vmIds: string[]): Promise<void> {
+        this.proxy.logAsInfo('calling removeMasterRoleTag.');
+        const tag: ResourceTag = {
+            key: TAG_KEY_AUTOSCALE_ROLE,
+            value: 'master'
+        };
+        await this.adaptee.untagResource(vmIds, [tag]);
+        this.proxy.logAsInfo('called removeMasterRoleTag.');
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

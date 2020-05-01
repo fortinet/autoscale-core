@@ -84,7 +84,9 @@ export abstract class Table<T> {
         readonly typeConvert: TypeConverter,
         readonly namePrefix: string = '',
         readonly nameSuffix: string = ''
-    ) {}
+    ) {
+        this._attributes = new Map<string, Attribute>();
+    }
     /**
      * validate the input before putting into the database
      * @param {T} input the input object to be validated
@@ -152,7 +154,7 @@ export abstract class Table<T> {
     }
 
     get primaryKey(): Attribute {
-        const [pk] = Array.from(this._keys.values()).filter(
+        const [pk] = Array.from(this.keys.values()).filter(
             key => key.keyType === TypeRef.PrimaryKey
         );
         return pk;
@@ -206,8 +208,16 @@ export abstract class Table<T> {
             this._schema = null;
         }
     }
-    addAttribute(attr: Attribute): void {
-        this.alterAttributes([attr]);
+    addAttribute(def: Attribute): void {
+        const attr: Attribute = {
+            name: def.name,
+            isKey: def.isKey,
+            attrType: def.attrType
+        };
+        if (def.isKey && def.keyType) {
+            attr.keyType = def.keyType;
+        }
+        this._attributes.set(attr.name, attr);
     }
     // NOTE: no deleting attribute method should be provided.
     abstract convertRecord(record: Record): T;
@@ -288,7 +298,9 @@ export abstract class Autoscale extends Table<AutoscaleDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('Autoscale');
-        this.alterAttributes(Autoscale.__attributes);
+        Autoscale.__attributes.forEach(def => {
+            this.addAttribute(def);
+        });
     }
     convertRecord(record: Record): AutoscaleDbItem {
         const item: AutoscaleDbItem = {
@@ -364,7 +376,9 @@ export abstract class MasterElection extends Table<MasterElectionDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('MasterElection');
-        this.alterAttributes(MasterElection.__attributes);
+        MasterElection.__attributes.forEach(def => {
+            this.addAttribute(def);
+        });
     }
     convertRecord(record: Record): MasterElectionDbItem {
         const item: MasterElectionDbItem = {
@@ -415,7 +429,9 @@ export abstract class FortiAnalyzer extends Table<FortiAnalyzerDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('FortiAnalyzer');
-        this.alterAttributes(FortiAnalyzer.__attributes);
+        FortiAnalyzer.__attributes.forEach(def => {
+            this.addAttribute(def);
+        });
     }
     convertRecord(record: Record): FortiAnalyzerDbItem {
         const item: FortiAnalyzerDbItem = {
@@ -467,7 +483,9 @@ export abstract class Settings extends Table<SettingsDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('Settings');
-        this.alterAttributes(Settings.__attributes);
+        Settings.__attributes.forEach(def => {
+            this.addAttribute(def);
+        });
     }
     convertRecord(record: Record): SettingsDbItem {
         const item: SettingsDbItem = {

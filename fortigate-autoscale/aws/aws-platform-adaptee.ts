@@ -15,12 +15,12 @@ import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings
 import { AwsDdbOperations } from './aws-platform-adapter';
 
 export class AwsPlatformAdaptee implements PlatformAdaptee {
-    docClient: DocumentClient;
-    s3: S3;
-    ec2: EC2;
-    autoscaling: AutoScaling;
-    elbv2: ELBv2;
-    lambda: Lambda;
+    protected docClient: DocumentClient;
+    protected s3: S3;
+    protected ec2: EC2;
+    protected autoscaling: AutoScaling;
+    protected elbv2: ELBv2;
+    protected lambda: Lambda;
     constructor() {
         this.docClient = new DocumentClient({ apiVersion: '2012-08-10' });
         this.s3 = new S3({ apiVersion: '2006-03-01' });
@@ -29,23 +29,15 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         this.elbv2 = new ELBv2({ apiVersion: '2015-12-01' });
         this.lambda = new Lambda({ apiVersion: '2015-03-31' });
     }
-    // abstract checkReqIntegrity(proxy: CloudFunctionProxyAdapter): void;
-    // abstract getReqType(proxy: CloudFunctionProxyAdapter): Promise<ReqType>;
-    // abstract getReqMethod(proxy: CloudFunctionProxyAdapter): ReqMethod;
-    // abstract getReqBody(proxy: CloudFunctionProxyAdapter): ReqBody;
-    // abstract getReqHeaders(proxy: CloudFunctionProxyAdapter): ReqHeaders;
     async loadSettings(): Promise<Settings> {
         const table = new AwsDBDef.AwsSettings(process.env.RESOURCE_TAG_PREFIX || '');
         const records: Map<string, SettingsDbItem> = new Map(
-            await (await this.listItemFromDb<SettingsDbItem>(table)).map(rec => [
-                rec.settingKey,
-                rec
-            ])
+            (await this.listItemFromDb<SettingsDbItem>(table)).map(rec => [rec.settingKey, rec])
         );
         const settings: Settings = new Map<string, SettingItem>();
-        Object.keys(AwsFortiGateAutoscaleSetting).forEach(key => {
-            if (records.has(key)) {
-                const record = records.get(key);
+        Object.values(AwsFortiGateAutoscaleSetting).forEach(value => {
+            if (records.has(value)) {
+                const record = records.get(value);
                 const settingItem = new SettingItem(
                     record.settingKey,
                     record.settingValue,
@@ -53,7 +45,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                     record.editable,
                     record.jsonEncoded
                 );
-                settings.set(key, settingItem);
+                settings.set(value, settingItem);
             }
         });
         return settings;
@@ -132,7 +124,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             Key: keys
         };
         const result = await this.docClient.get(getItemInput).promise();
-        return table.convertRecord(result.Item);
+        return (result.Item && table.convertRecord(result.Item)) || null;
     }
     /**
      * Delte a given item from the db
@@ -263,22 +255,46 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         }
     }
 
-    async describeInstance(instanceId: string): Promise<EC2.Instance> {
+    async listInstancesByTags(tags: ResourceTag[]): Promise<EC2.Instance[]> {
         const request: EC2.DescribeInstancesRequest = {
-            Filters: [
-                {
-                    Name: 'instance-id',
-                    Values: [instanceId]
-                }
-            ]
+            Filters: tags.map(tag => {
+                return {
+                    Name: tag.key,
+                    Values: [tag.value]
+                };
+            })
         };
-        let instance: EC2.Instance;
         const result = await this.ec2.describeInstances(request).promise();
-        result.Reservations.forEach(reserv => {
-            const [ins] = reserv.Instances.filter(i => i.InstanceId === instanceId);
-            instance = ins || instance;
+        const instances: Map<string, EC2.Instance> = new Map();
+        result.Reservations.forEach(reservation => {
+            reservation.Instances.forEach(instance => {
+                if (!instances.has(instance.InstanceId)) {
+                    instances.set(instance.InstanceId, instance);
+                }
+            });
         });
-        return instance;
+        return Array.from(instances.values());
+    }
+
+    async identifyInstanceScalingGroup(instanceIds: string[]): Promise<Map<string, string>> {
+        const request: AutoScaling.DescribeAutoScalingInstancesType = {
+            InstanceIds: instanceIds
+        };
+        const result = await this.autoscaling.describeAutoScalingInstances(request).promise();
+        const map: Map<string, string> = new Map();
+        result.AutoScalingInstances.forEach(detail => {
+            map.set(detail.InstanceId, detail.AutoScalingGroupName);
+        });
+        return map;
+    }
+
+    async describeInstance(instanceId: string): Promise<EC2.Instance> {
+        const tag: ResourceTag = {
+            key: 'instance-id',
+            value: instanceId
+        };
+        const instances = await this.listInstancesByTags([tag]);
+        return instances.find(instance => instance.InstanceId === instanceId);
     }
 
     async describeAutoScalingGroups(
@@ -329,12 +345,20 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         return result.NetworkInterfaces;
     }
 
+    async listNetworkInterfacesByInstanceId(instanceId: string): Promise<EC2.NetworkInterface[]> {
+        const tag: ResourceTag = {
+            key: 'attachment.instance-id',
+            value: instanceId
+        };
+        return await this.listNetworkInterfacesByTags([tag]);
+    }
+
     async listNetworkInterfacesById(nicIds: string[]): Promise<EC2.NetworkInterface[]> {
         const request: EC2.DescribeNetworkInterfacesRequest = {
             NetworkInterfaceIds: nicIds
         };
         const result = await this.ec2.describeNetworkInterfaces(request).promise();
-        return result.NetworkInterfaces;
+        return result.NetworkInterfaces.filter(nic => nicIds.includes(nic.NetworkInterfaceId));
     }
 
     async describeNetworkInterface(nicId: string): Promise<EC2.NetworkInterface> {
@@ -345,18 +369,33 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         return nic;
     }
 
-    async attachNetworkInterface(instanceId: string, nicId: string, index: number): Promise<void> {
+    async attachNetworkInterface(
+        instanceId: string,
+        nicId: string,
+        index: number
+    ): Promise<EC2.AttachNetworkInterfaceResult> {
         const request: EC2.AttachNetworkInterfaceRequest = {
             DeviceIndex: index,
             InstanceId: instanceId,
             NetworkInterfaceId: nicId
         };
-        await this.ec2.attachNetworkInterface(request).promise();
+        return await this.ec2.attachNetworkInterface(request).promise();
     }
     async detachNetworkInterface(instanceId: string, nicId: string): Promise<void> {
         const eni = await this.describeNetworkInterface(nicId);
         if (!eni.Attachment) {
             throw new Error(`Eni (id: ${eni.NetworkInterfaceId}) isn't attached to any instancee`);
+        }
+        const instance = await this.describeInstance(instanceId);
+        if (
+            instance.NetworkInterfaces.filter(eni2 => {
+                return eni2.NetworkInterfaceId === nicId;
+            }).length === 0
+        ) {
+            throw new Error(
+                `Eni (id: ${eni.NetworkInterfaceId}) isn't attached to` +
+                    ` instancee (id: ${instanceId})`
+            );
         }
         const request: EC2.DetachNetworkInterfaceRequest = {
             AttachmentId: eni.Attachment.AttachmentId
@@ -364,14 +403,23 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         await this.ec2.detachNetworkInterface(request).promise();
     }
 
-    async tagResource(resId: string, tags: ResourceTag[]): Promise<void> {
+    async tagResource(resIds: string[], tags: ResourceTag[]): Promise<void> {
         const request: EC2.CreateTagsRequest = {
-            Resources: [resId],
+            Resources: resIds,
             Tags: tags.map(tag => {
                 return { Key: tag.key, Value: tag.value };
             })
         };
         await this.ec2.createTags(request).promise();
+    }
+    async untagResource(resIds: string[], tags: ResourceTag[]): Promise<void> {
+        const request: EC2.DeleteTagsRequest = {
+            Resources: resIds,
+            Tags: tags.map(tag => {
+                return { Key: tag.key, Value: tag.value };
+            })
+        };
+        await this.ec2.deleteTags(request).promise();
     }
     async completeLifecycleAction(
         autoScalingGroupName: string,
@@ -418,7 +466,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         await this.elbv2.deregisterTargets(input).promise();
     }
 
-    async terminateInstanceInAutoscalingGroup(
+    async terminateInstanceInAutoScalingGroup(
         instanceId: string,
         descCapacity?: boolean
     ): Promise<void> {
@@ -482,16 +530,11 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
     async createVpnConnection(
         vpnType: string,
         bgpAsn: number,
-        publicIpv4: string,
         customerGatewayId: string,
         staticRouteOnly = false,
         vpnGatewayId?: string,
         transitGatewayId?: string
     ): Promise<EC2.VpnConnection> {
-        // validate ip
-        if (publicIpv4 && !isIPv4(publicIpv4)) {
-            throw new Error(`Invalid IPv4 format: ${publicIpv4}.`);
-        }
         // validate vpn type
         if (vpnType !== 'ipsec.1') {
             throw new Error(`Unsupported VPN type: ${vpnType}`);
@@ -559,6 +602,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             TransitGatewayAttachmentId: attachmentId,
             TransitGatewayRouteTableId: routeTableId
         };
+        // TODO: KNOWN ISSUE: if attempt to enable one which was already enabled, will throw an error
+        // TransitGatewayRouteTablePropagation.Duplicate
+        // this error should be caught and ignored.
         const result = await this.ec2.enableTransitGatewayRouteTablePropagation(request).promise();
         return result.Propagation.State;
     }
@@ -571,6 +617,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             TransitGatewayAttachmentId: attachmentId,
             TransitGatewayRouteTableId: routeTableId
         };
+        // TODO: KNOWN ISSUE: if attempt to associate one which was already associated, will throw an error
+        // Resource.AlreadyAssociated
+        // this error should be caught and ignored.
         const result = await this.ec2.associateTransitGatewayRouteTable(request).promise();
         return result.Association.State;
     }
