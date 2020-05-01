@@ -15,8 +15,6 @@ import {
     VpnAttachment
 } from '../../db-definitions';
 
-export { Table } from '../../db-definitions';
-
 export const AwsTypeRefs: TypeRefMap = new Map<TypeRef, string>([
     [TypeRef.StringType, 'S'],
     [TypeRef.NumberType, 'N'],
