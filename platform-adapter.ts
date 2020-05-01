@@ -32,16 +32,22 @@ export interface PlatformAdapter {
     getRequestType(): ReqType;
     getReqHeartbeatInterval(): number;
     getSettings(): Promise<Settings>;
+    /**
+     * validate settings by checking the integrity of each required setting item. Ensure that they
+     * have been added properly.
+     * @returns Promise
+     */
+    validateSettings(): Promise<boolean>;
     getTargetVm(): Promise<VirtualMachine | null>;
     getMasterVm(): Promise<VirtualMachine | null>;
     getHealthCheckRecord(vm: VirtualMachine): Promise<HealthCheckRecord | null>;
     getMasterRecord(): Promise<MasterRecord | null>;
-    equalToVm(vmA: VirtualMachine, vmB: VirtualMachine): boolean;
+    equalToVm(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean;
     describeVm(desc: VmDescriptor): Promise<VirtualMachine>;
     deleteVm(vm: VirtualMachine): Promise<void>;
     createHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
     updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
-    loadConfigSet(name: string): Promise<string>;
+    loadConfigSet(name: string, custom?: boolean): Promise<string>;
     /**
      * create the master record in the db system.
      * @param rec the new master record

@@ -95,7 +95,9 @@ export interface LicensingStrategy {
 export interface AutoscaleCore
     extends AutoscaleContext,
         ScalingGroupContext,
-        LicensingModelContext {}
+        LicensingModelContext {
+    init(): Promise<void>;
+}
 
 export interface HAActivePassiveBoostrapStrategy {
     prepare(
@@ -129,6 +131,9 @@ export class Autoscale implements AutoscaleCore {
         this.platform = p;
         this.env = e;
         this.proxy = x;
+    }
+    async init(): Promise<void> {
+        await this.platform.init();
     }
 
     async handleLaunchingVm(): Promise<string> {
@@ -293,10 +298,13 @@ export class Autoscale implements AutoscaleCore {
             }
         }
         // after master election complete (election may not be necessary in some cases)
-        // get the election result then update the autoscale environment.
-        const election: MasterElection = await this.masterElectionStrategy.result();
-        this.env.masterRecord = election.newMasterRecord;
-        this.env.masterVm = election.newMaster;
+        // if election strategy is applied, get the election result
+        // then update the autoscale environment.
+        if (this.masterElectionStrategy.applied) {
+            const election: MasterElection = await this.masterElectionStrategy.result();
+            this.env.masterRecord = election.newMasterRecord;
+            this.env.masterVm = election.newMaster;
+        }
         this.proxy.logAsInfo('called handleMasterElection.');
         return '';
     }
@@ -343,7 +351,7 @@ export class Autoscale implements AutoscaleCore {
     }
 }
 
-type FinderRef = { [key: string]: any } | [] | string | null;
+type FinderRef = { [key: string]: FinderRef } | [] | string | null;
 export function configSetResourceFinder(resObject: FinderRef, nodePath: string): FinderRef {
     const [, mPath] = nodePath.match(/^{(.+)}$/i);
     if (!resObject || !nodePath) {

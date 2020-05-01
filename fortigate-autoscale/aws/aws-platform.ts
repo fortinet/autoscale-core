@@ -1,6 +1,10 @@
+import path from 'path';
+import process from 'process';
+import fs from 'fs';
 import { APIGatewayProxyEvent, Context, APIGatewayProxyResult } from 'aws-lambda';
 import * as EC2 from 'aws-sdk/clients/ec2';
 import { DocumentClient } from 'aws-sdk/clients/dynamodb';
+import { S3 } from 'aws-sdk';
 
 import * as AwsDBDef from './aws-db-definitions';
 import { VpnAttachmentContext } from '../../context-strategy/vpn-attachment-context';
@@ -10,7 +14,7 @@ import {
     NicAttachmentStatus
 } from '../../context-strategy/nic-attachment-context';
 import { VirtualMachine } from '../../virtual-machine';
-import { SubnetPair, AutoscaleSetting, SettingItem, Settings } from '../../autoscale-setting';
+import { SubnetPair, SettingItem, Settings } from '../../autoscale-setting';
 import { PlatformAdaptee, mapHttpMethod } from '../../autoscale-core';
 import {
     CloudFunctionProxy,
@@ -20,6 +24,8 @@ import {
 import { ReqMethod, ReqType, PlatformAdapter, VmDescriptor } from '../../platform-adapter';
 import { HealthCheckRecord, MasterRecord, MasterRecordVoteState } from '../../master-election';
 import { Table } from '../../db-definitions';
+import { Blob } from '../../blob';
+import { FortiGateAutoscaleSetting } from '../fortigate-autoscale-settings';
 
 /**
  * To provide AWS Transit Gateway integration related logics
@@ -59,7 +65,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
 
     protected async getPairedSubnetId(vm: VirtualMachine): Promise<string> {
         const settings = await this.platform.getSettings();
-        const subnetPairs: SubnetPair[] = settings.get(AutoscaleSetting.SubnetPairs)
+        const subnetPairs: SubnetPair[] = settings.get(FortiGateAutoscaleSetting.SubnetPairs)
             .jsonValue as SubnetPair[];
         const subnets: SubnetPair[] = (Array.isArray(subnetPairs) &&
             subnetPairs.filter(element => element.subnetId === vm.subnetId)) || [null];
@@ -141,6 +147,7 @@ export interface DynamoDbOperationConditions {
 export class AwsPlatform
     implements PlatformAdaptee<APIGatewayProxyEvent, Context, APIGatewayProxyResult> {
     docClient: DocumentClient;
+    s3: S3;
     constructor() {
         this.docClient = new DocumentClient({ apiVersion: '2012-08-10' });
     }
@@ -185,6 +192,34 @@ export class AwsPlatform
             ConditionExpression: conditionExp
         };
         await this.docClient.put(params).promise();
+    }
+
+    /**
+     * get a blob from a storage
+     * @param  {string} s3Bucket the s3 bucket nemt
+     * @param  {string} s3KeyPrefix the s3 key prefix to the blob file
+     * @returns {Promise} Blob
+     */
+    async getBlobFromStorage(s3Bucket: string, s3KeyPrefix: string): Promise<Blob> {
+        // DEBUG:
+        // for local debugging use, the next lines get files from local file system instead
+        if (process.env.LOCAL_DEV_MODE === 'true') {
+            const keyPrefix = s3KeyPrefix.split('/');
+            const isCustom = keyPrefix.includes('custom-configset');
+            const assetsDir =
+                (isCustom && process.env.LOCAL_CUSTOM_ASSETS_DIR) || process.env.LOCAL_ASSESTS_DIR;
+            const fileName = keyPrefix.splice(keyPrefix.lastIndexOf('configset')).join('/');
+            const filePath = path.resolve(process.cwd(), assetsDir, fileName);
+            const buffer = fs.readFileSync(filePath);
+            return {
+                content: buffer.toString()
+            };
+        } else {
+            const data = await this.s3.getObject({ Bucket: s3Bucket, Key: s3KeyPrefix }).promise();
+            return {
+                content: (data && data.Body && data.Body.toString()) || ''
+            };
+        }
     }
     createNetworkInterface(
         description: string,
@@ -252,6 +287,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     adaptee: AwsPlatform;
     proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>;
     settings: Settings;
+    readonly awsOnlyConfigset = ['setuptgwvpn', 'internalelbwebserv'];
     constructor(
         p: AwsPlatform,
         proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
@@ -261,6 +297,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     }
     async init(): Promise<void> {
         this.settings = await this.adaptee.loadSettings();
+        await this.validateSettings();
     }
     getRequestType(): ReqType {
         return this.adaptee.getReqType(this.proxy);
@@ -268,10 +305,25 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     getReqHeartbeatInterval(): number {
         throw new Error('Method not implemented.');
     }
-    async getSettings(): Promise<Settings> {
-        return (
-            (this.settings && Promise.resolve(this.settings)) || (await this.adaptee.loadSettings())
-        );
+    getSettings(): Promise<Settings> {
+        return Promise.resolve(this.settings);
+    }
+
+    validateSettings(): Promise<boolean> {
+        const required = [
+            FortiGateAutoscaleSetting.AutoscaleHandlerUrl,
+            FortiGateAutoscaleSetting.FortiGatePskSecret,
+            FortiGateAutoscaleSetting.FortiGateSyncInterface,
+            FortiGateAutoscaleSetting.FortiGateTrafficPort,
+            FortiGateAutoscaleSetting.FortiGateAdminPort,
+            FortiGateAutoscaleSetting.FortiGateInternalElbDns,
+            FortiGateAutoscaleSetting.HeartbeatInterval
+        ];
+        const missingKeys = required.filter(key => !this.settings.has(key)).join(', ');
+        if (missingKeys) {
+            throw new Error(`The following required setting item not found: ${missingKeys}`);
+        }
+        return Promise.resolve(true);
     }
     getTargetVm(): Promise<VirtualMachine> {
         throw new Error('Method not implemented.');
@@ -285,8 +337,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     getMasterRecord(): Promise<MasterRecord> {
         throw new Error('Method not implemented.');
     }
-    equalToVm(vmA: VirtualMachine, vmB: VirtualMachine): boolean {
-        throw new Error('Method not implemented.');
+    equalToVm(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean {
+        if (!(vmA && vmB) || JSON.stringify(vmA) !== JSON.stringify(vmB)) {
+            return false;
+        } else {
+            return true;
+        }
     }
     describeVm(desc: VmDescriptor): Promise<VirtualMachine> {
         throw new Error('Method not implemented.');
@@ -305,7 +361,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         try {
             const settings = await this.getSettings();
             const table = new AwsDBDef.AwsMasterElection(
-                settings.get(AutoscaleSetting.ResourceTagPrefix).value
+                settings.get(FortiGateAutoscaleSetting.ResourceTagPrefix).value
             );
             const item: MasterRecord = {
                 id: rec.id,
@@ -337,7 +393,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         try {
             const settings = await this.getSettings();
             const table = new AwsDBDef.AwsMasterElection(
-                settings.get(AutoscaleSetting.ResourceTagPrefix).value
+                settings.get(FortiGateAutoscaleSetting.ResourceTagPrefix).value
             );
             const item: MasterRecord = {
                 id: rec.id,
@@ -362,8 +418,25 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             throw error;
         }
     }
-    loadConfigSet(name: string): Promise<string> {
-        throw new Error('Method not implemented.');
+    async loadConfigSet(name: string, custom?: boolean): Promise<string> {
+        this.proxy.logAsInfo(`loading${custom ? ' (custom)' : ''} configset: ${name}`);
+        const bucket = custom
+            ? this.settings.get(FortiGateAutoscaleSetting.CustomConfigSetContainer).value
+            : this.settings.get(FortiGateAutoscaleSetting.AssetStorageContainer).value;
+        const keyPrefix = [
+            custom
+                ? this.settings.get(FortiGateAutoscaleSetting.CustomConfigSetDirectory).value
+                : this.settings.get(FortiGateAutoscaleSetting.AssetStorageDirectory).value,
+            'configset'
+        ];
+        // if it is an AWS-only configset, load it from the aws subdirectory
+        if (this.awsOnlyConfigset.includes(name)) {
+            keyPrefix.push('aws');
+        }
+        keyPrefix.push(name);
+        const blob = await this.adaptee.getBlobFromStorage(bucket, path.join(...keyPrefix));
+        this.proxy.logAsInfo('configset loaded.');
+        return blob.content;
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     getTgwVpnAttachmentRecord(id: string): Promise<{ [key: string]: any }> {

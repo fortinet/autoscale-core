@@ -29,6 +29,7 @@ export interface MasterElectionStrategy {
     ): Promise<void>;
     result(): Promise<MasterElection>;
     apply(): Promise<MasterElectionStrategyResult>;
+    readonly applied: boolean;
 }
 
 export enum MasterElectionStrategyResult {
@@ -51,6 +52,7 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
     platform: PlatformAdapter;
     res: MasterElection;
     proxy: CloudFunctionProxyAdapter;
+    private _applied: boolean;
     prepare(
         env: MasterElection,
         platform: PlatformAdapter,
@@ -59,7 +61,23 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
         this.env = env;
         this.platform = platform;
         this.proxy = proxy;
+        this.res = {
+            oldMaster: this.env.oldMaster,
+            oldMasterRecord: this.env.oldMasterRecord,
+            newMaster: null, // no initial new master
+            newMasterRecord: null, // no initial new master record
+            candidate: this.env.candidate,
+            candidateHealthCheck: this.env.candidateHealthCheck,
+            preferredScalingGroup: this.env.preferredScalingGroup,
+            electionDuration: this.env.electionDuration,
+            signature: ''
+        };
+        this._applied = false;
         return Promise.resolve();
+    }
+
+    get applied(): boolean {
+        return this._applied;
     }
 
     result(): Promise<MasterElection> {
@@ -67,6 +85,7 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
     }
     async apply(): Promise<MasterElectionStrategyResult> {
         this.proxy.log('applying PreferredGroupMasterElection strategy.', LogLevel.Log);
+        this._applied = true;
         const result = await this.run();
         this.proxy.log('applied PreferredGroupMasterElection strategy.', LogLevel.Log);
         return result;
@@ -79,8 +98,13 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
         // get the master scaling group
         const settingGroupName = settings.get(AutoscaleSetting.MasterScalingGroupName).value;
         const electionDuration = Number(settings.get(AutoscaleSetting.MasterElectionTimeout).value);
+        const signature = this.env.candidate
+            ? `${this.env.candidate.scalingGroupName}:${
+                  this.env.candidate.instanceId
+              }:${Date.now()}`
+            : '';
         const masterRecord: MasterRecord = {
-            id: `${this.env.candidate.scalingGroupName}::${this.env.candidate.instanceId}`,
+            id: `${signature}`,
             ip: this.env.candidate.primaryPrivateIpAddress,
             instanceId: this.env.candidate.instanceId,
             scalingGroupName: this.env.candidate.scalingGroupName,
@@ -89,7 +113,8 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
             voteEndTime: null,
             voteState: MasterRecordVoteState.Pending
         };
-        // candidate in the preferred scaling group?
+
+        // candidate not in the preferred scaling group? no election will be run
         if (this.env.candidate.scalingGroupName !== settingGroupName) {
             this.proxy.log(
                 `The candidate (id: ${this.env.candidate.instanceId}) ` +
@@ -103,8 +128,14 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
             // but is in a non-master role. If it qualifies for election and wins the election, the
             // master election can be deemed done immediately as master record created.
             if (this.env.candidateHealthCheck && this.env.candidateHealthCheck.healthy) {
-                masterRecord.voteEndTime = Date.now() + electionDuration * 1000;
+                masterRecord.voteEndTime = Date.now(); // election ends immediately
                 masterRecord.voteState = MasterRecordVoteState.Done;
+            }
+            // otherwise, the election should be pending
+            else {
+                // election will end in now + electionduration
+                masterRecord.voteEndTime = Date.now() + electionDuration * 1000;
+                masterRecord.voteState = MasterRecordVoteState.Pending;
             }
             try {
                 // if old master record is provided, will purge it.
@@ -118,6 +149,10 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
                     `Master election completed. New master is (id: ${this.env.candidate.instanceId})`,
                     LogLevel.Info
                 );
+                // the candidate becomes the new master because it wins the election
+                this.env.newMaster = this.env.candidate;
+                // update the new master record
+                this.res.newMasterRecord = masterRecord;
                 return MasterElectionStrategyResult.ShouldContinue;
             } catch (error) {
                 this.proxy.logForError(

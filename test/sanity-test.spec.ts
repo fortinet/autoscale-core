@@ -21,6 +21,7 @@ import {
     MasterElectionStrategy,
     MasterElectionStrategyResult
 } from '../context-strategy/autoscale-context';
+import { FortiGateAutoscaleSetting } from '../fortigate-autoscale/fortigate-autoscale-settings';
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
@@ -64,6 +65,9 @@ const TEST_MASTER_ELECTION: MasterElection = {
 };
 
 class TestPlatformAdapter implements PlatformAdapter {
+    validateSettings(): Promise<boolean> {
+        return Promise.resolve(true);
+    }
     loadConfigSet(name: string): Promise<string> {
         throw new Error('Method not implemented.');
     }
@@ -167,10 +171,20 @@ describe('sanity test', () => {
             },
             result() {
                 return Promise.resolve(TEST_MASTER_ELECTION);
-            }
+            },
+            applied: false
         };
         autoscale = new Autoscale(p, e, x);
         autoscale.setMasterElectionStrategy(ms);
+    });
+    it('Conflicted settings count in FortiGateAutoscaleSettings and AutoscaleSettings', () => {
+        const entriesA = Object.entries(AutoscaleSetting);
+        const mapB = new Map(Object.entries(FortiGateAutoscaleSetting));
+        const conflict = entriesA.filter(([key, value]) => {
+            // filter if the same key exists in B and the values are different
+            return mapB.has(key) && mapB.get(key) !== value;
+        });
+        Sinon.assert.match(conflict.length, 0); // expect no conflict
     });
     it('handleMasterElection', async () => {
         const stub1 = Sinon.stub(x, 'logAsInfo');
@@ -193,7 +207,7 @@ describe('sanity test', () => {
             Sinon.assert.match(await stub2.returnValues[0], s);
             Sinon.assert.match(stub3.called, true);
             Sinon.assert.match(stub4.notCalled, true);
-            Sinon.assert.match(stub5.called, true);
+            Sinon.assert.match(stub5.called, false);
             Sinon.assert.match(result, '');
         } catch (error) {
             console.log(error);
