@@ -22,6 +22,12 @@ import {
 } from './master-election';
 import { VirtualMachine } from './virtual-machine';
 import { CloudFunctionProxy, CloudFunctionProxyAdapter } from './cloud-function-proxy';
+import {
+    LicensingModelContext,
+    LicensingStrategy,
+    LicensingStrategyResult
+} from './context-strategy/licensing-context';
+import path from 'path';
 
 export class HttpError extends Error {
     public readonly name: string;
@@ -141,23 +147,6 @@ export interface CloudFunctionHandler<TReq, TContext, TRes> {
     ): Promise<TRes>;
 }
 
-/**
- * To provide Licensing model related logics such as license assignment.
- */
-export interface LicensingModelContext {
-    setLicensingStrategy(strategy: LicensingStrategy): void;
-    handleLicenseAssignment(): Promise<string>;
-}
-
-export interface LicensingStrategy {
-    prepare(
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        vm: VirtualMachine
-    ): Promise<void>;
-    apply(): Promise<string>;
-}
-
 export interface AutoscaleCore
     extends AutoscaleContext,
         ScalingGroupContext,
@@ -235,11 +224,11 @@ export class Autoscale implements AutoscaleCore {
         const success = await this.heartbeatSyncStrategy.forceOutOfSync();
         if (success) {
             this.env.targetHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                this.env.targetVm
+                this.env.targetVm.id
             );
         }
         // 2. if it is a master vm, remove its master tag
-        if (this.platform.equalToVm(targetVm, this.env.masterVm)) {
+        if (this.platform.vmEqualTo(targetVm, this.env.masterVm)) {
             const vmTaggings: VmTagging[] = [
                 {
                     vm: targetVm,
@@ -262,6 +251,7 @@ export class Autoscale implements AutoscaleCore {
         this.proxy.logAsInfo('calling handleHeartbeatSync.');
         let response = '';
         let error: Error;
+        const unhealthyVms: VirtualMachine[] = [];
 
         // load target vm
         if (!this.env.targetVm) {
@@ -287,7 +277,7 @@ export class Autoscale implements AutoscaleCore {
         // if it's not up to date, load it from db.
         else {
             this.env.targetHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                this.env.targetVm
+                this.env.targetVm.id
             );
         }
 
@@ -300,7 +290,7 @@ export class Autoscale implements AutoscaleCore {
             await this.scalingGroupStrategy.onLaunchedVm();
         }
 
-        const heartbeatTiming = await this.heartbeatSyncStrategy.result;
+        const heartbeatTiming = await this.heartbeatSyncStrategy.healthCheckResult;
         // If the timing indicates that it should be dropped,
         // don't update. Respond immediately. return.
         if (heartbeatTiming === HealthCheckResult.Dropped) {
@@ -314,7 +304,7 @@ export class Autoscale implements AutoscaleCore {
         // get master healthcheck record
         if (this.env.masterVm) {
             this.env.masterHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                this.env.masterVm
+                this.env.masterVm.id
             );
         } else {
             this.env.masterHealthCheckRecord = undefined;
@@ -334,14 +324,47 @@ export class Autoscale implements AutoscaleCore {
 
         const masterElection = await this.handleMasterElection();
 
+        // handle unhealthy vm
+
+        // target not healthy?
+
         // if new master is elected, reload the masterVm, master record to this.env.
         if (masterElection.newMaster) {
             this.env.masterVm = masterElection.newMaster;
             this.env.masterRecord = masterElection.newMasterRecord;
             this.env.masterHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                this.env.masterVm
+                this.env.masterVm.id
             );
+
+            // what to do with the old master?
+
+            // old master unhealthy?
+            const oldMasterHealthCheck =
+                masterElection.oldMaster &&
+                (await this.platform.getHealthCheckRecord(masterElection.oldMaster.id));
+            if (oldMasterHealthCheck && !oldMasterHealthCheck.healthy) {
+                if (
+                    unhealthyVms.filter(vm => {
+                        return this.platform.vmEqualTo(vm, masterElection.oldMaster);
+                    }).length === 0
+                ) {
+                    unhealthyVms.push(masterElection.oldMaster);
+                }
+            }
         }
+
+        // ASSERT: target healthcheck record is up to date
+        if (!this.env.targetHealthCheckRecord.healthy) {
+            if (
+                unhealthyVms.filter(vm => {
+                    return this.platform.vmEqualTo(vm, this.env.targetVm);
+                }).length === 0
+            ) {
+                unhealthyVms.push(this.env.targetVm);
+            }
+        }
+
+        await this.handleUnhealthyVm(unhealthyVms);
 
         // the health check record may need to update again.
         // if master vote state is done, and if the target vm is holding a different master ip or
@@ -397,7 +420,7 @@ export class Autoscale implements AutoscaleCore {
             // if master election is pending, only need to know the current result. do not need
             // to redo the election.
             // but if the target is also the pending master, the master election need to complete
-            if (this.platform.equalToVm(this.env.targetVm, this.env.masterVm)) {
+            if (this.platform.vmEqualTo(this.env.targetVm, this.env.masterVm)) {
                 // only complete the election when the pending master is healthy and still in-sync
                 if (
                     this.env.targetHealthCheckRecord &&
@@ -427,7 +450,7 @@ export class Autoscale implements AutoscaleCore {
             // get master vm healthcheck record
             if (!this.env.masterHealthCheckRecord) {
                 this.env.masterHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                    this.env.masterVm
+                    this.env.masterVm.id
                 );
             }
             // master is unhealthy, master election required.
@@ -468,18 +491,60 @@ export class Autoscale implements AutoscaleCore {
         this.proxy.logAsInfo('called handleMasterElection.');
         return election;
     }
-    removeTargetVmFromAutoscale(): Promise<void> {
-        throw new Error('Method not implemented.');
-        // TODO:
-        // await this.terminatingVmStrategy.apply();
+    async handleUnhealthyVm(vms: VirtualMachine[]): Promise<void> {
+        this.proxy.logAsInfo('calling handleUnhealthyVm.');
+        // call the platform scaling group to terminate the vm in the list
+        await Promise.all(
+            vms.map(vm => {
+                this.proxy.logAsInfo(`handling unhealthy vm(id: ${vm.id})...`);
+                return this.platform
+                    .deleteVmFromScalingGroup(vm.id)
+                    .then(() => {
+                        this.proxy.logAsInfo(`handling vm (id: ${vm.id}) completed.`);
+                    })
+                    .catch(err => {
+                        this.proxy.logForError('handling unhealthy vm failed.', err);
+                    });
+            })
+        );
+        this.proxy.logAsInfo('called handleUnhealthyVm.');
     }
-    removeMasterVmFromAutoscale(): Promise<void> {
-        throw new Error('Method not implemented.');
-        // TODO:
-        // await this.terminatingVmStrategy.apply();
-    }
-    handleLicenseAssignment(): Promise<string> {
-        throw new Error('Method not implemented.');
+    async handleLicenseAssignment(productName: string): Promise<string> {
+        this.proxy.logAsInfo('calling handleLicenseAssignment.');
+        const licenseDir: string = path.join(
+            this.settings.get(AutoscaleSetting.AssetStorageDirectory).value,
+            this.settings.get(AutoscaleSetting.LicenseFIleDirectory).value,
+            productName
+        );
+        this.licensingStrategy.prepare(
+            this.platform,
+            this.proxy,
+            this.env.targetVm,
+            productName,
+            this.settings.get(AutoscaleSetting.AssetStorageContainer).value,
+            licenseDir
+        );
+        let result: LicensingStrategyResult;
+        let licenseContent = '';
+        try {
+            result = await this.licensingStrategy.apply();
+        } catch (error) {
+            this.proxy.logForError('Error in running licensing strategy.', error);
+        }
+        if (result === LicensingStrategyResult.LicenseAssigned) {
+            licenseContent = await this.licensingStrategy.getLicenseContent();
+        } else if (result === LicensingStrategyResult.LicenseNotRequired) {
+            this.proxy.logAsInfo(
+                `license isn't required for this vm (id: ${this.env.targetVm.id})`
+            );
+        } else if (result === LicensingStrategyResult.LicenseOutOfStock) {
+            this.proxy.logAsError(
+                'License out of stock. ' +
+                    `No license is assigned to this vm (id: ${this.env.masterVm.id})`
+            );
+        }
+        this.proxy.logAsInfo('called handleLicenseAssignment.');
+        return licenseContent;
     }
 }
 

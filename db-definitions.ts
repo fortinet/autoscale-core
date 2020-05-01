@@ -30,20 +30,45 @@ export interface Record {
 
 export enum CreateOrUpdate {
     unknown,
-    create,
-    update
+    CreateOrReplace,
+    UpdateExisting
 }
 
-export interface DbTable {
-    readonly name: string;
-    readonly primaryKey: Attribute;
-    readonly schema: Map<string, SchemaElement>;
-    readonly keys: Map<string, Attribute>;
-    readonly attributes: Map<string, Attribute>;
-    validateInput(input: Record): void;
+/**
+ * must be implement to provide platform specific data type conversion
+ *
+ * @export
+ * @abstract
+ * @class TypeConvert
+ */
+export abstract class TypeConverter {
+    /**
+     * convert a value of string type stored in the db to a js primitive string type
+     *
+     * @abstract
+     * @param {unknown} value
+     * @returns {string}
+     */
+    abstract valueToString(value: unknown): string;
+    /**
+     * convert a value of number type stored in the db to a js primitive number type
+     *
+     * @abstract
+     * @param {unknown} value
+     * @returns {number}
+     */
+    abstract valueToNumber(value: unknown): number;
+    /**
+     * convert a value of boolean type stored in the db to a js boolean primitive type
+     *
+     * @abstract
+     * @param {unknown} value
+     * @returns {boolean}
+     */
+    abstract valueToBoolean(value: unknown): boolean;
 }
 
-export abstract class Table<T> implements DbTable {
+export abstract class Table<T> {
     static TypeRefMap: Map<TypeRef, string> = new Map<TypeRef, string>([
         [TypeRef.StringType, 'String'],
         [TypeRef.NumberType, 'Number'],
@@ -55,13 +80,17 @@ export abstract class Table<T> implements DbTable {
     protected _schema: Map<string, SchemaElement>;
     protected _keys: Map<string, Attribute>;
     protected _attributes: Map<string, Attribute>;
-    constructor(readonly namePrefix: string = '', readonly nameSuffix: string = '') {}
+    constructor(
+        readonly typeConvert: TypeConverter,
+        readonly namePrefix: string = '',
+        readonly nameSuffix: string = ''
+    ) {}
     /**
      * validate the input before putting into the database
-     * @param {{}} input the input object to be validated
+     * @param {T} input the input object to be validated
      * @throws an Error object
      */
-    validateInput(input: Record): void {
+    validateInput<T>(input: T): void {
         const keys = Object.keys(input);
         this.attributes.forEach(attrName => {
             if (!keys.includes) {
@@ -182,6 +211,17 @@ export abstract class Table<T> implements DbTable {
     }
     // NOTE: no deleting attribute method should be provided.
     abstract convertRecord(record: Record): T;
+    assign(target: T, record: Record): void {
+        for (const p in Object.keys(target)) {
+            if (typeof p === 'string') {
+                target[p] = this.typeConvert.valueToString(record[p]);
+            } else if (typeof p === 'number') {
+                target[p] = this.typeConvert.valueToNumber(record[p]);
+            } else if (typeof p === 'boolean') {
+                target[p] = this.typeConvert.valueToBoolean(record[p]);
+            }
+        }
+    }
 }
 export interface AutoscaleDbItem {
     vmId: string;
@@ -194,7 +234,8 @@ export interface AutoscaleDbItem {
     syncState: string;
     seq: number;
 }
-export class Autoscale extends Table<AutoscaleDbItem> {
+
+export abstract class Autoscale extends Table<AutoscaleDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'vmId',
@@ -243,23 +284,23 @@ export class Autoscale extends Table<AutoscaleDbItem> {
             isKey: false
         }
     ];
-    constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+    constructor(typeConvert, namePrefix = '', nameSuffix = '') {
+        super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('Autoscale');
         this.alterAttributes(Autoscale.__attributes);
     }
     convertRecord(record: Record): AutoscaleDbItem {
         const item: AutoscaleDbItem = {
-            vmId: record.vmId as string,
-            scalingGroupName: record.scalingGroupName as string,
-            ip: record.masterIp as string,
-            masterIp: record.masterIp as string,
-            heartBeatLossCount: Number(record.heartBeatLossCount as string),
-            heartBeatInterval: Number(record.heartBeatInterval as string),
-            nextHeartBeatTime: Number(record.nextHeartBeatTime as string),
-            syncState: record.syncState as string,
-            seq: Number(record.seq as string)
+            vmId: this.typeConvert.valueToString(record.vmId),
+            scalingGroupName: this.typeConvert.valueToString(record.scalingGroupName),
+            ip: this.typeConvert.valueToString(record.masterIp),
+            masterIp: this.typeConvert.valueToString(record.masterIp),
+            heartBeatLossCount: this.typeConvert.valueToNumber(record.heartBeatLossCount),
+            heartBeatInterval: this.typeConvert.valueToNumber(record.heartBeatInterval),
+            nextHeartBeatTime: this.typeConvert.valueToNumber(record.nextHeartBeatTime),
+            syncState: this.typeConvert.valueToString(record.syncState),
+            seq: this.typeConvert.valueToNumber(record.seq)
         };
         return item;
     }
@@ -271,10 +312,10 @@ export interface MasterElectionDbItem {
     ip: string;
     virtualNetworkId: string;
     subnetId: string;
-    voteEndTime: string;
+    voteEndTime: number;
     voteState: string;
 }
-export class MasterElection extends Table<MasterElectionDbItem> {
+export abstract class MasterElection extends Table<MasterElectionDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'scalingGroupName',
@@ -319,22 +360,22 @@ export class MasterElection extends Table<MasterElectionDbItem> {
             isKey: false
         }
     ];
-    constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+    constructor(typeConvert, namePrefix = '', nameSuffix = '') {
+        super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('MasterElection');
         this.alterAttributes(MasterElection.__attributes);
     }
     convertRecord(record: Record): MasterElectionDbItem {
         const item: MasterElectionDbItem = {
-            scalingGroupName: record.scalingGroupName as string,
-            vmId: record.vmId as string,
-            id: record.id as string,
-            ip: record.ip as string,
-            virtualNetworkId: record.virtualNetworkId as string,
-            subnetId: record.subnetId as string,
-            voteEndTime: record.voteEndTime as string,
-            voteState: record.voteState as string
+            scalingGroupName: this.typeConvert.valueToString(record.scalingGroupName),
+            vmId: this.typeConvert.valueToString(record.vmId),
+            id: this.typeConvert.valueToString(record.id),
+            ip: this.typeConvert.valueToString(record.ip),
+            virtualNetworkId: this.typeConvert.valueToString(record.virtualNetworkId),
+            subnetId: this.typeConvert.valueToString(record.subnetId),
+            voteEndTime: this.typeConvert.valueToNumber(record.voteEndTime),
+            voteState: this.typeConvert.valueToString(record.voteState)
         };
         return item;
     }
@@ -346,7 +387,7 @@ export interface FortiAnalyzerDbItem {
     vip: string;
 }
 
-export class FortiAnalyzer extends Table<FortiAnalyzerDbItem> {
+export abstract class FortiAnalyzer extends Table<FortiAnalyzerDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'vmId',
@@ -370,18 +411,18 @@ export class FortiAnalyzer extends Table<FortiAnalyzerDbItem> {
             isKey: false
         }
     ];
-    constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+    constructor(typeConvert, namePrefix = '', nameSuffix = '') {
+        super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('FortiAnalyzer');
         this.alterAttributes(FortiAnalyzer.__attributes);
     }
     convertRecord(record: Record): FortiAnalyzerDbItem {
         const item: FortiAnalyzerDbItem = {
-            vmId: record.vmId as string,
-            ip: record.ip as string,
-            master: record.master as string,
-            vip: record.vip as string
+            vmId: this.typeConvert.valueToString(record.vmId),
+            ip: this.typeConvert.valueToString(record.ip),
+            master: this.typeConvert.valueToString(record.master),
+            vip: this.typeConvert.valueToString(record.vip)
         };
         return item;
     }
@@ -390,10 +431,10 @@ export interface SettingsDbItem {
     settingKey: string;
     settingValue: string;
     description: string;
-    jsonEncoded: string;
-    editable: string;
+    jsonEncoded: boolean;
+    editable: boolean;
 }
-export class Settings extends Table<SettingsDbItem> {
+export abstract class Settings extends Table<SettingsDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'settingKey',
@@ -422,19 +463,19 @@ export class Settings extends Table<SettingsDbItem> {
             isKey: false
         }
     ];
-    constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+    constructor(typeConvert, namePrefix = '', nameSuffix = '') {
+        super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('Settings');
         this.alterAttributes(Settings.__attributes);
     }
     convertRecord(record: Record): SettingsDbItem {
         const item: SettingsDbItem = {
-            settingKey: record.settingKey as string,
-            settingValue: record.settingValue as string,
-            description: record.description as string,
-            jsonEncoded: record.jsonEncoded as string,
-            editable: record.editable as string
+            settingKey: this.typeConvert.valueToString(record.settingKey),
+            settingValue: this.typeConvert.valueToString(record.settingValue),
+            description: this.typeConvert.valueToString(record.description),
+            jsonEncoded: this.typeConvert.valueToBoolean(record.jsonEncoded),
+            editable: this.typeConvert.valueToBoolean(record.editable)
         };
         return item;
     }
@@ -444,7 +485,7 @@ export interface NicAttachmentDbItem {
     nicId: string;
     attachmentState: string;
 }
-export class NicAttachment extends Table<NicAttachmentDbItem> {
+export abstract class NicAttachment extends Table<NicAttachmentDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'vmId',
@@ -463,17 +504,17 @@ export class NicAttachment extends Table<NicAttachmentDbItem> {
             isKey: false
         }
     ];
-    constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+    constructor(typeConvert, namePrefix = '', nameSuffix = '') {
+        super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('NicAttachment');
         this.alterAttributes(NicAttachment.__attributes);
     }
     convertRecord(record: Record): NicAttachmentDbItem {
         const item: NicAttachmentDbItem = {
-            vmId: record.vmId as string,
-            nicId: record.nicId as string,
-            attachmentState: record.attachmentState as string
+            vmId: this.typeConvert.valueToString(record.vmId),
+            nicId: this.typeConvert.valueToString(record.nicId),
+            attachmentState: this.typeConvert.valueToString(record.attachmentState)
         };
         return item;
     }
@@ -488,7 +529,7 @@ export interface VmInfoCacheDbItem {
     timestamp: number;
     expireTime: number;
 }
-export class VmInfoCache extends Table<VmInfoCacheDbItem> {
+export abstract class VmInfoCache extends Table<VmInfoCacheDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'id',
@@ -527,21 +568,21 @@ export class VmInfoCache extends Table<VmInfoCacheDbItem> {
             isKey: false
         }
     ];
-    constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+    constructor(typeConvert, namePrefix = '', nameSuffix = '') {
+        super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('VmInfoCache');
         this.alterAttributes(VmInfoCache.__attributes);
     }
     convertRecord(record: Record): VmInfoCacheDbItem {
         const item: VmInfoCacheDbItem = {
-            id: record.id as string,
-            vmId: record.vmId as string,
-            index: record.index as number,
-            scalingGroupName: record.scalingGroupName as string,
-            info: record.info as string,
-            timestamp: Number(record.timestamp as string),
-            expireTime: Number(record.expireTime as string)
+            id: this.typeConvert.valueToString(record.id),
+            vmId: this.typeConvert.valueToString(record.vmId),
+            index: this.typeConvert.valueToNumber(record.index),
+            scalingGroupName: this.typeConvert.valueToString(record.scalingGroupName),
+            info: this.typeConvert.valueToString(record.info),
+            timestamp: this.typeConvert.valueToNumber(record.timestamp),
+            expireTime: this.typeConvert.valueToNumber(record.expireTime)
         };
         return item;
     }
@@ -549,10 +590,11 @@ export class VmInfoCache extends Table<VmInfoCacheDbItem> {
 
 export interface LicenseStockDbItem {
     checksum: string;
-    fileName: string;
     algorithm: string;
+    fileName: string;
+    productName: string;
 }
-export class LicenseStock extends Table<LicenseStockDbItem> {
+export abstract class LicenseStock extends Table<LicenseStockDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'checksum',
@@ -561,54 +603,55 @@ export class LicenseStock extends Table<LicenseStockDbItem> {
             keyType: TypeRef.PrimaryKey
         },
         {
+            name: 'algorithm',
+            attrType: TypeRef.StringType,
+            isKey: false
+        },
+        {
             name: 'fileName',
             attrType: TypeRef.StringType,
             isKey: false
         },
         {
-            name: 'algorithm',
+            name: 'productName',
             attrType: TypeRef.StringType,
             isKey: false
         }
     ];
-    constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+    constructor(typeConvert, namePrefix = '', nameSuffix = '') {
+        super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('LicenseStock');
         this.alterAttributes(LicenseStock.__attributes);
     }
     convertRecord(record: Record): LicenseStockDbItem {
         const item: LicenseStockDbItem = {
-            checksum: record.checksum as string,
-            fileName: record.fileName as string,
-            algorithm: record.algorithm as string
+            checksum: this.typeConvert.valueToString(record.checksum),
+            algorithm: this.typeConvert.valueToString(record.algorithm),
+            fileName: this.typeConvert.valueToString(record.fileName),
+            productName: this.typeConvert.valueToString(record.productName)
         };
         return item;
     }
 }
 
 export interface LicenseUsageDbItem {
-    id: string;
     checksum: string;
-    fileName: string;
     algorithm: string;
-    scalingGroupName: string;
+    fileName: string;
+    productName: string;
     vmId: string;
+    scalingGroupName: string;
     assignedTime: number;
-    blobKey: string;
+    vmInSync: boolean;
 }
-export class LicenseUsage extends Table<LicenseUsageDbItem> {
+export abstract class LicenseUsage extends Table<LicenseUsageDbItem> {
     static __attributes: Attribute[] = [
-        {
-            name: 'id',
-            attrType: TypeRef.StringType,
-            isKey: true,
-            keyType: TypeRef.PrimaryKey
-        },
         {
             name: 'checksum',
             attrType: TypeRef.StringType,
-            isKey: false
+            isKey: true,
+            keyType: TypeRef.PrimaryKey
         },
         {
             name: 'fileName',
@@ -617,11 +660,6 @@ export class LicenseUsage extends Table<LicenseUsageDbItem> {
         },
         {
             name: 'algorithm',
-            attrType: TypeRef.StringType,
-            isKey: false
-        },
-        {
-            name: 'scalingGroupName',
             attrType: TypeRef.StringType,
             isKey: false
         },
@@ -631,32 +669,42 @@ export class LicenseUsage extends Table<LicenseUsageDbItem> {
             isKey: false
         },
         {
+            name: 'scalingGroupName',
+            attrType: TypeRef.StringType,
+            isKey: false
+        },
+        {
+            name: 'product',
+            attrType: TypeRef.StringType,
+            isKey: false
+        },
+        {
             name: 'assignedTime',
             attrType: TypeRef.NumberType,
             isKey: false
         },
         {
-            name: 'blobKey',
-            attrType: TypeRef.StringType,
+            name: 'vmInSync',
+            attrType: TypeRef.BooleanType,
             isKey: false
         }
     ];
-    constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+    constructor(typeConvert, namePrefix = '', nameSuffix = '') {
+        super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('LicenseUsage');
         this.alterAttributes(LicenseUsage.__attributes);
     }
     convertRecord(record: Record): LicenseUsageDbItem {
         const item: LicenseUsageDbItem = {
-            id: record.id as string,
-            checksum: record.checksum as string,
-            fileName: record.fileName as string,
-            algorithm: record.algorithm as string,
-            scalingGroupName: record.scalingGroupName as string,
-            vmId: record.vmId as string,
-            assignedTime: Number(record.assignedTime as string),
-            blobKey: record.blobKey as string
+            checksum: this.typeConvert.valueToString(record.checksum),
+            fileName: this.typeConvert.valueToString(record.fileName),
+            algorithm: this.typeConvert.valueToString(record.algorithm),
+            productName: this.typeConvert.valueToString(record.product),
+            vmId: this.typeConvert.valueToString(record.vmId),
+            scalingGroupName: this.typeConvert.valueToString(record.scalingGroupName),
+            assignedTime: this.typeConvert.valueToNumber(record.assignedTime),
+            vmInSync: this.typeConvert.valueToBoolean(record.vmInSync)
         };
         return item;
     }
@@ -664,10 +712,10 @@ export class LicenseUsage extends Table<LicenseUsageDbItem> {
 
 export interface CustomLogDbItem {
     id: string;
-    timestamp: string;
+    timestamp: number;
     logContent: string;
 }
-export class CustomLog extends Table<CustomLogDbItem> {
+export abstract class CustomLog extends Table<CustomLogDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'id',
@@ -677,7 +725,7 @@ export class CustomLog extends Table<CustomLogDbItem> {
         },
         {
             name: 'timestamp',
-            attrType: TypeRef.StringType,
+            attrType: TypeRef.NumberType,
             isKey: true,
             keyType: TypeRef.SecondaryKey
         },
@@ -687,17 +735,17 @@ export class CustomLog extends Table<CustomLogDbItem> {
             isKey: false
         }
     ];
-    constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+    constructor(typeConvert, namePrefix = '', nameSuffix = '') {
+        super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('CustomLog');
         this.alterAttributes(CustomLog.__attributes);
     }
     convertRecord(record: Record): CustomLogDbItem {
         const item: CustomLogDbItem = {
-            id: record.id as string,
-            timestamp: record.timestamp as string,
-            logContent: record.logContent as string
+            id: this.typeConvert.valueToString(record.id),
+            timestamp: this.typeConvert.valueToNumber(record.timestamp),
+            logContent: this.typeConvert.valueToString(record.logContent)
         };
         return item;
     }
@@ -710,7 +758,7 @@ export interface VpnAttachmentDbItem {
     vpnConnectionId: string;
     configuration: string;
 }
-export class VpnAttachment extends Table<VpnAttachmentDbItem> {
+export abstract class VpnAttachment extends Table<VpnAttachmentDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'vmId',
@@ -740,19 +788,19 @@ export class VpnAttachment extends Table<VpnAttachmentDbItem> {
             isKey: false
         }
     ];
-    constructor(namePrefix = '', nameSuffix = '') {
-        super(namePrefix, nameSuffix);
+    constructor(typeConvert, namePrefix = '', nameSuffix = '') {
+        super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('VpnAttachment');
         this.alterAttributes(VpnAttachment.__attributes);
     }
     convertRecord(record: Record): VpnAttachmentDbItem {
         const item: VpnAttachmentDbItem = {
-            vmId: record.vmId as string,
-            publicIp: record.publicIp as string,
-            customerGatewayId: record.customerGatewayId as string,
-            vpnConnectionId: record.vpnConnectionId as string,
-            configuration: record.configuration as string
+            vmId: this.typeConvert.valueToString(record.vmId),
+            publicIp: this.typeConvert.valueToString(record.publicIp),
+            customerGatewayId: this.typeConvert.valueToString(record.customerGatewayId),
+            vpnConnectionId: this.typeConvert.valueToString(record.vpnConnectionId),
+            configuration: this.typeConvert.valueToString(record.configuration)
         };
         return item;
     }

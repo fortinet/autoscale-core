@@ -12,11 +12,11 @@ import {
     configSetResourceFinder,
     Autoscale,
     CloudFunctionHandler,
-    HttpError,
-    LicensingModelContext
+    HttpError
 } from '../autoscale-core';
 import { Settings } from '../autoscale-setting';
 import { VirtualMachine } from '../virtual-machine';
+import { LicensingModelContext } from '../context-strategy/licensing-context';
 
 export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationStrategy {
     static SUCCESS = 'SUCCESS';
@@ -52,7 +52,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
     async apply(): Promise<BootstrapConfigStrategyResult> {
         const config = await this.loadConfig();
         // target is the master? return config sets for active role
-        if (this.platform.equalToVm(this.env.targetVm, this.env.masterVm)) {
+        if (this.platform.vmEqualTo(this.env.targetVm, this.env.masterVm)) {
             this.config = await this.getActiveRoleConfig(config, this.env.targetVm);
             this.proxy.logAsInfo('loaded configuration for active role.');
         }
@@ -361,7 +361,7 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
         // load target healthcheck record
         this.env.targetHealthCheckRecord =
             this.env.targetHealthCheckRecord ||
-            (await this.platform.getHealthCheckRecord(this.env.targetVm));
+            (await this.platform.getHealthCheckRecord(this.env.targetVm.id));
 
         // if there exists a health check record for this vm, this request may probably be
         // a redundant request. ignore it.
