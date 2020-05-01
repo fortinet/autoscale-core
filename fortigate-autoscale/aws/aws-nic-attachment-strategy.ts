@@ -1,4 +1,5 @@
 import { SubnetPair } from '../../autoscale-setting';
+import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import {
     NicAttachmentRecord,
     NicAttachmentStatus,
@@ -8,15 +9,15 @@ import {
 import { ResourceTag } from '../../platform-adapter';
 import { NetworkInterface, VirtualMachine } from '../../virtual-machine';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsLambdaProxy, AwsPlatformAdapter } from './aws-platform';
+import { AwsPlatformAdapter } from './aws-platform-adapter';
 
 export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
     vm: VirtualMachine;
     platform: AwsPlatformAdapter;
-    proxy: AwsLambdaProxy;
+    proxy: CloudFunctionProxyAdapter;
     prepare(
         platform: AwsPlatformAdapter,
-        proxy: AwsLambdaProxy,
+        proxy: CloudFunctionProxyAdapter,
         vm: VirtualMachine
     ): Promise<void> {
         this.vm = vm;
@@ -147,7 +148,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
 
     protected async getPairedSubnetId(vm: VirtualMachine): Promise<string> {
         const settings = await this.platform.getSettings();
-        const subnetPairs: SubnetPair[] = settings.get(AwsFortiGateAutoscaleSetting.SubnetPairs)
+        const subnetPairs: SubnetPair[] = settings.get(AwsFortiGateAutoscaleSetting.SubnetPair)
             .jsonValue as SubnetPair[];
         const subnets: SubnetPair[] = (Array.isArray(subnetPairs) &&
             subnetPairs.filter(element => element.subnetId === vm.subnetId)) || [null];

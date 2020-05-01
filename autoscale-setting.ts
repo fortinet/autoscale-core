@@ -16,13 +16,13 @@ export enum AutoscaleSetting {
     HeartbeatInterval = 'heartbeat-interval',
     HeartbeatLossCount = 'heartbeat-loss-count',
     HeartbeatSyncActionUnhealthyVm = 'heartbeat-sync-action-unhealthy-vm',
-    LicenseFIleDirectory = 'licens-file-directory',
+    LicenseFIleDirectory = 'license-file-directory',
     MasterElectionTimeout = 'master-election-timeout',
     MasterScalingGroupName = 'master-scaling-group-name',
     PaygScalingGroupName = 'payg-scaling-group-name',
     RequiredConfigSet = 'required-configset',
     ResourceTagPrefix = 'resource-tag-prefix',
-    SubnetPairs = 'subnet-pairs'
+    SubnetPair = 'subnet-pair'
 }
 
 export interface SubnetPair {

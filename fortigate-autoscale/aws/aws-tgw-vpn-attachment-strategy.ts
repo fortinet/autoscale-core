@@ -1,26 +1,26 @@
-import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../../autoscale-core';
+import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import {
     VpnAttachmentStrategy,
     VpnAttachmentStrategyResult
 } from '../../context-strategy/vpn-attachment-context';
+import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../../helper-function';
 import { ResourceTag, TgwVpnAttachmentRecord } from '../../platform-adapter';
 import { VirtualMachine } from '../../virtual-machine';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import {
-    AwsLambdaProxy,
     AwsPlatformAdapter,
     AwsVpnAttachmentState,
     AwsVpnConnection
-} from './aws-platform';
+} from './aws-platform-adapter';
 
 export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
     protected vm: VirtualMachine;
     protected platform: AwsPlatformAdapter;
-    protected proxy: AwsLambdaProxy;
+    protected proxy: CloudFunctionProxyAdapter;
     protected bgpAsn: number;
     prepare(
         platform: AwsPlatformAdapter,
-        proxy: AwsLambdaProxy,
+        proxy: CloudFunctionProxyAdapter,
         vm: VirtualMachine,
         bgpAsn = 65000
     ): Promise<void> {
@@ -131,10 +131,10 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
         // tag the resources
         const tagTasks = [
             this.platform
-                .tagResource(customerGatewayId, [
-                    ...tags,
-                    { key: 'Name', value: customerGatewayResourceName }
-                ])
+                .tagResource(
+                    [customerGatewayId],
+                    [...tags, { key: 'Name', value: customerGatewayResourceName }]
+                )
                 .catch(err => {
                     this.proxy.logForError(
                         'tag not added to customer gateway' + ` (id: ${customerGatewayId})`,
@@ -143,10 +143,10 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
                     return true;
                 }),
             this.platform
-                .tagResource(vpnConnection.vpnConnectionId, [
-                    ...tags,
-                    { key: 'Name', value: vpnResourceName }
-                ])
+                .tagResource(
+                    [vpnConnection.vpnConnectionId],
+                    [...tags, { key: 'Name', value: vpnResourceName }]
+                )
                 .catch(err => {
                     this.proxy.logForError(
                         'tag not added to vpn connection' +
@@ -156,10 +156,10 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
                     return true;
                 }),
             this.platform
-                .tagResource(vpnConnection.transitGatewayAttachmentId, [
-                    ...tags,
-                    { key: 'Name', value: tgwAttachmentResourceName }
-                ])
+                .tagResource(
+                    [vpnConnection.transitGatewayAttachmentId],
+                    [...tags, { key: 'Name', value: tgwAttachmentResourceName }]
+                )
                 .catch(err => {
                     this.proxy.logForError(
                         'tag not added to transit gateway attachment' +

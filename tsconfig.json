@@ -74,5 +74,5 @@
         // "emitDecoratorMetadata": true,         /* Enables experimental support for emitting type metadata for decorators. */
     },
     "include": ["*.ts", "!*.d.ts"],
-    "exclude": ["dist", "out"]
+    "exclude": ["dist", "out", "local"]
 }

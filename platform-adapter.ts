@@ -1,39 +1,10 @@
 import { Settings } from './autoscale-setting';
-import { VirtualMachine, NetworkInterface } from './virtual-machine';
-import { HealthCheckRecord, MasterRecord } from './master-election';
+import { ReqType } from './cloud-function-proxy';
 import { NicAttachmentRecord } from './context-strategy/nic-attachment-context';
 import { KeyValue } from './db-definitions';
-import { JSONable } from 'jsonable';
-
-export enum ReqType {
-    LaunchingVm = 'LaunchingVm',
-    LaunchedVm = 'LaunchedVm',
-    TerminatingVm = 'TerminatingVm',
-    TerminatedVm = 'TerminatedVm',
-    BootstrapConfig = 'BootstrapConfig',
-    HeartbeatSync = 'HeartbeatSync',
-    StatusMessage = 'StatusMessage'
-}
-
-export enum ReqMethod {
-    GET,
-    POST,
-    PUT,
-    DELETE,
-    PATCH,
-    HEAD,
-    TRACE,
-    OPTIONS,
-    CONNECT
-}
-
-export interface ReqBody {
-    [key: string]: unknown;
-}
-
-export interface ReqHeaders {
-    [key: string]: unknown;
-}
+import { JSONable } from './jsonable';
+import { HealthCheckRecord, MasterRecord } from './master-election';
+import { NetworkInterface, VirtualMachine } from './virtual-machine';
 
 export interface ResourceTag {
     key: string;
@@ -96,6 +67,10 @@ export interface PlatformAdapter {
     validateSettings(): Promise<boolean>;
     getTargetVm(): Promise<VirtualMachine | null>;
     getMasterVm(): Promise<VirtualMachine | null>;
+    listAutoscaleVm(
+        identifyScalingGroup?: boolean,
+        listNic?: boolean
+    ): Promise<VirtualMachine[] | null>;
     getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord | null>;
     getMasterRecord(filters?: KeyValue[]): Promise<MasterRecord | null>;
     vmEqualTo(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean;

@@ -2,14 +2,13 @@ import path from 'path';
 
 import { AutoscaleEnvironment } from './autoscale-environment';
 import { AutoscaleSetting, Settings } from './autoscale-setting';
-import { CloudFunctionProxy, CloudFunctionProxyAdapter } from './cloud-function-proxy';
+import { CloudFunctionProxy, CloudFunctionProxyAdapter, ReqMethod } from './cloud-function-proxy';
 import {
     AutoscaleContext,
     HeartbeatSyncStrategy,
     MasterElectionStrategy,
     TaggingVmStrategy,
-    VmTagging,
-    VmTaggingType
+    VmTagging
 } from './context-strategy/autoscale-context';
 import {
     LicensingModelContext,
@@ -26,7 +25,7 @@ import {
     MasterElection,
     MasterRecordVoteState
 } from './master-election';
-import { PlatformAdapter, ReqMethod } from './platform-adapter';
+import { PlatformAdapter } from './platform-adapter';
 import { VirtualMachine } from './virtual-machine';
 
 export class HttpError extends Error {
@@ -94,7 +93,7 @@ export class Autoscale implements AutoscaleCore {
     proxy: CloudFunctionProxyAdapter;
     env: AutoscaleEnvironment;
     settings: Settings;
-    taggingVmStrategy: TaggingVmStrategy;
+    taggingAutoscaleVmStrategy: TaggingVmStrategy;
     scalingGroupStrategy: ScalingGroupStrategy;
     heartbeatSyncStrategy: HeartbeatSyncStrategy;
     masterElectionStrategy: MasterElectionStrategy;
@@ -113,8 +112,8 @@ export class Autoscale implements AutoscaleCore {
     setHeartbeatSyncStrategy(strategy: HeartbeatSyncStrategy): void {
         this.heartbeatSyncStrategy = strategy;
     }
-    setTaggingVmStrategy(strategy: TaggingVmStrategy): void {
-        this.taggingVmStrategy = strategy;
+    setTaggingAutoscaleVmStrategy(strategy: TaggingVmStrategy): void {
+        this.taggingAutoscaleVmStrategy = strategy;
     }
     setLicensingStrategy(strategy: LicensingStrategy): void {
         this.licensingStrategy = strategy;
@@ -157,11 +156,11 @@ export class Autoscale implements AutoscaleCore {
         if (this.platform.vmEqualTo(targetVm, this.env.masterVm)) {
             const vmTaggings: VmTagging[] = [
                 {
-                    vm: targetVm,
-                    type: VmTaggingType.oldMasterVm
+                    vmId: targetVm.id,
+                    clear: true
                 }
             ];
-            await this.handleTaggingVm(vmTaggings);
+            await this.handleTaggingAutoscaleVm(vmTaggings);
         }
         this.proxy.logAsInfo('called handleTerminatingVm.');
         return '';
@@ -312,9 +311,11 @@ export class Autoscale implements AutoscaleCore {
         this.proxy.logAsInfo('called handleHeartbeatSync.');
         return response;
     }
-    async handleTaggingVm(taggings: VmTagging[]): Promise<void> {
-        this.taggingVmStrategy.prepare(this.platform, this.proxy, taggings);
-        await this.taggingVmStrategy.apply();
+    async handleTaggingAutoscaleVm(taggings: VmTagging[]): Promise<void> {
+        this.proxy.logAsInfo('calling handleTaggingAutoscaleVm.');
+        this.taggingAutoscaleVmStrategy.prepare(this.platform, this.proxy, taggings);
+        await this.taggingAutoscaleVmStrategy.apply();
+        this.proxy.logAsInfo('called handleTaggingAutoscaleVm.');
     }
 
     async handleMasterElection(): Promise<MasterElection> {
@@ -391,28 +392,6 @@ export class Autoscale implements AutoscaleCore {
         // get the election result
         // then update the autoscale environment.
         const election = await this.masterElectionStrategy.result();
-        // update the env
-        this.env.masterRecord = election.newMasterRecord;
-        this.env.masterVm = election.newMaster;
-
-        // if master role has switched, need to tag the new master
-        // add tags (or called labels in some platforms) to the target and master vm
-        const vmTaggings: VmTagging[] = [];
-        // if there's new master, update its tag
-        if (election.newMaster) {
-            vmTaggings.push({
-                vm: election.newMaster,
-                type: VmTaggingType.newMasterVm
-            });
-        }
-        // if old master exists, need to deal with its tag too.
-        if (election.oldMaster) {
-            vmTaggings.push({
-                vm: election.oldMaster,
-                type: VmTaggingType.newMasterVm
-            });
-        }
-        await this.handleTaggingVm(vmTaggings);
 
         this.proxy.logAsInfo('called handleMasterElection.');
         return election;
