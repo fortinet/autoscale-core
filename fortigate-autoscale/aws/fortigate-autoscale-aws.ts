@@ -5,13 +5,19 @@ import {
 import { AwsPlatformAdapter, TransitGatewayContext } from './aws-platform';
 import { FortiGateBootstrapConfigStrategy, FortiGateAutoscale } from '../fortigate-autoscale';
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
-import { AutoscaleEnvironment } from '../../autoscale-core';
+import {
+    AutoscaleEnvironment,
+    WaitForPromiseEmitter,
+    WaitForConditionChecker,
+    waitFor
+} from '../../autoscale-core';
 import { VirtualMachine } from '../../virtual-machine';
 import { PreferredGroupMasterElection } from '../../context-strategy/autoscale-context';
 import { VpnAttachmentStrategy } from '../../context-strategy/vpn-attachment-context';
 import {
     NicAttachmentStrategy,
-    NicAttachmentContext
+    NicAttachmentContext,
+    NicAttachmentStrategyResult
 } from '../../context-strategy/nic-attachment-context';
 
 export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigStrategy {
@@ -91,14 +97,73 @@ export class FortiGateAutoscaleAws<TReq, Tcontext, TRes>
     setVpnAttachmentStrategy(strategy: VpnAttachmentStrategy): void {
         this.vpnAttachmentStrategy = strategy;
     }
-    handleNicAttachment(): Promise<string> {
-        throw new Error('Method not implemented.');
+    async handleNicAttachment(): Promise<NicAttachmentStrategyResult> {
+        this.proxy.logAsInfo('calling handleNicAttachment');
+        this.nicAttachmentStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
+        try {
+            const result = await this.nicAttachmentStrategy.attach();
+            // ASSERT: the result is either Failed or Success
+            if (result === NicAttachmentStrategyResult.Failed) {
+                this.proxy.logAsError(
+                    'Failed to complete nic attachment on ' + `vm(id: ${this.env.targetVm.id})`
+                );
+                this.proxy.logAsInfo('called handleNicAttachment');
+                return NicAttachmentStrategyResult.ShouldTerminateVm;
+            } else {
+                this.proxy.logAsInfo('called handleNicAttachment');
+                return NicAttachmentStrategyResult.ShouldContinue;
+            }
+        } catch (error) {
+            this.proxy.logForError('Error in handling nic attachment.', error);
+            this.proxy.logAsInfo('called handleNicAttachment');
+            return NicAttachmentStrategyResult.ShouldTerminateVm;
+        }
     }
-    handleNicDetachment(): Promise<string> {
-        throw new Error('Method not implemented.');
+    async handleNicDetachment(): Promise<NicAttachmentStrategyResult> {
+        this.proxy.logAsInfo('calling handleNicDetachment');
+        this.nicAttachmentStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
+        try {
+            const result = await this.nicAttachmentStrategy.detach();
+            // ASSERT: the result is either Failed or Success
+            if (result === NicAttachmentStrategyResult.Failed) {
+                this.proxy.logAsError(
+                    'Failed to complete nic detachment on ' + `vm(id: ${this.env.targetVm.id})`
+                );
+                this.proxy.logAsInfo('called handleNicDetachment');
+                return NicAttachmentStrategyResult.ShouldTerminateVm;
+            } else {
+                this.proxy.logAsInfo('called handleNicDetachment');
+                return NicAttachmentStrategyResult.ShouldContinue;
+            }
+        } catch (error) {
+            this.proxy.logForError('Error in handling nic detachment.', error);
+            this.proxy.logAsInfo('called handleNicDetachment');
+            return NicAttachmentStrategyResult.ShouldTerminateVm;
+        }
     }
-    cleanupUnusedNic(): Promise<string> {
-        throw new Error('Method not implemented.');
+    async cleanupUnusedNic(): Promise<NicAttachmentStrategyResult> {
+        this.proxy.logAsInfo('calling cleanupUnusedNic');
+        const emitter: WaitForPromiseEmitter<number> = () => {
+            return this.nicAttachmentStrategy.cleanUp();
+        };
+        const checker: WaitForConditionChecker<number> = (failureNum, callCount) => {
+            if (callCount >= 3) {
+                throw new Error(`maximum amount of attempts ${callCount} have been reached.`);
+            }
+            return Promise.resolve(failureNum === 0);
+        };
+        try {
+            await waitFor<number>(emitter, checker, 5000, this.proxy);
+            this.proxy.logAsInfo('called cleanupUnusedNic');
+            return NicAttachmentStrategyResult.Success;
+        } catch (error) {
+            this.proxy.logForError(
+                'Cleanup incomplete. Some network interfaces cannot be deleted',
+                error
+            );
+            this.proxy.logAsInfo('called cleanupUnusedNic');
+            return NicAttachmentStrategyResult.Failed;
+        }
     }
     handleVpnAttachment(): Promise<string> {
         throw new Error('Method not implemented.');
