@@ -9,7 +9,8 @@ enum FortiGateOwnAutoscaleSetting {
     EnableTransitGatewayVpn = 'enable-transit-gateway-vpn',
     CustomConfigSetContainer = 'custom-configset-container',
     CustomConfigSetDirectory = 'custom-configset-directory',
-    CustomConfigSetName = 'custom-configset-name'
+    CustomConfigSetName = 'custom-configset-name',
+    LoadBalancerTargetGroupArn = 'fortigate-autoscale-target-group-arn'
 }
 
 export const FortiGateAutoscaleSetting = { ...AutoscaleSetting, ...FortiGateOwnAutoscaleSetting };

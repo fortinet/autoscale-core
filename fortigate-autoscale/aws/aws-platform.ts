@@ -4,7 +4,7 @@ import fs from 'fs';
 import { APIGatewayProxyEvent, Context, APIGatewayProxyResult, ScheduledEvent } from 'aws-lambda';
 import EC2 from 'aws-sdk/clients/ec2';
 import { DocumentClient, ExpressionAttributeValueMap } from 'aws-sdk/clients/dynamodb';
-import { S3, AutoScaling } from 'aws-sdk';
+import { S3, AutoScaling, ELBv2 } from 'aws-sdk';
 
 import * as AwsDBDef from './aws-db-definitions';
 import { VpnAttachmentContext } from '../../context-strategy/vpn-attachment-context';
@@ -53,6 +53,7 @@ import {
     DbTable,
     AutoscaleDbItem
 } from '../../db-definitions';
+import { LifecycleItemDbItem } from '../aws/aws-db-definitions';
 import { Blob } from '../../blob';
 import { FortiGateAutoscaleSetting } from '../fortigate-autoscale-settings';
 
@@ -375,22 +376,24 @@ export interface AwsDdbOperations {
     createOrUpdate?: CreateOrUpdate;
 }
 
-export abstract class AwsPlatformAdaptee implements PlatformAdaptee {
+export class AwsPlatform implements PlatformAdaptee {
     docClient: DocumentClient;
     s3: S3;
     ec2: EC2;
     autoscaling: AutoScaling;
+    elbv2: ELBv2;
     constructor() {
         this.docClient = new DocumentClient({ apiVersion: '2012-08-10' });
         this.s3 = new S3({ apiVersion: '2006-03-01' });
         this.ec2 = new EC2({ apiVersion: '2016-11-15' });
         this.autoscaling = new AutoScaling({ apiVersion: '2011-01-01' });
+        this.elbv2 = new ELBv2({ apiVersion: '2015-12-01' });
     }
-    abstract checkReqIntegrity(proxy: CloudFunctionProxyAdapter): void;
-    abstract getReqType(proxy: CloudFunctionProxyAdapter): Promise<ReqType>;
-    abstract getReqMethod(proxy: CloudFunctionProxyAdapter): ReqMethod;
-    abstract getReqBody(proxy: CloudFunctionProxyAdapter): ReqBody;
-    abstract getReqHeaders(proxy: CloudFunctionProxyAdapter): ReqHeaders;
+    // abstract checkReqIntegrity(proxy: CloudFunctionProxyAdapter): void;
+    // abstract getReqType(proxy: CloudFunctionProxyAdapter): Promise<ReqType>;
+    // abstract getReqMethod(proxy: CloudFunctionProxyAdapter): ReqMethod;
+    // abstract getReqBody(proxy: CloudFunctionProxyAdapter): ReqBody;
+    // abstract getReqHeaders(proxy: CloudFunctionProxyAdapter): ReqHeaders;
     async loadSettings(): Promise<Settings> {
         const table = new AwsDBDef.AwsSettings(process.env.RESOURCE_TAG_PREFIX || '');
         const records: Map<string, SettingsDbItem> = new Map(
@@ -699,6 +702,72 @@ export abstract class AwsPlatformAdaptee implements PlatformAdaptee {
         };
         await this.ec2.createTags(request).promise();
     }
+    async completeLifecycleAction(
+        autoScalingGroupName: string,
+        actionResult: LifecycleActionResult,
+        actionToken: string,
+        hookName: string
+    ): Promise<void> {
+        const actionType: AutoScaling.CompleteLifecycleActionType = {
+            LifecycleHookName: hookName,
+            AutoScalingGroupName: autoScalingGroupName,
+            LifecycleActionToken: actionToken,
+            LifecycleActionResult: actionResult
+        };
+        await this.autoscaling.completeLifecycleAction(actionType).promise();
+    }
+
+    async updateInstanceSrcDestChecking(instanceId: string, enable?: boolean): Promise<void> {
+        const request: EC2.ModifyInstanceAttributeRequest = {
+            SourceDestCheck: {
+                Value: enable
+            },
+            InstanceId: instanceId
+        };
+        await this.ec2.modifyInstanceAttribute(request).promise();
+    }
+
+    async elbRegisterTargets(targetGroupArn: string, instanceIds: string[]): Promise<void> {
+        const input: ELBv2.Types.RegisterTargetsInput = {
+            TargetGroupArn: targetGroupArn,
+            Targets: instanceIds.map(id => {
+                return { Id: id };
+            })
+        };
+        await this.elbv2.registerTargets(input).promise();
+    }
+
+    async elbDeregisterTargets(targetGroupArn: string, instanceIds: string[]): Promise<void> {
+        const input: ELBv2.Types.DeregisterTargetsInput = {
+            TargetGroupArn: targetGroupArn,
+            Targets: instanceIds.map(id => {
+                return { Id: id };
+            })
+        };
+        await this.elbv2.deregisterTargets(input).promise();
+    }
+}
+
+export enum LifecycleActionResult {
+    Continue = 'CONTINUE',
+    Abandon = 'ABANDON'
+}
+
+export enum LifecyleState {
+    Launching = 'launching',
+    Launched = 'launched',
+    Terminating = 'terminating',
+    Terminated = 'terminated'
+}
+
+export interface LifecycleItem {
+    vmId: string;
+    scalingGroupName: string;
+    actionResult: LifecycleActionResult;
+    actionToken: string;
+    hookName: string;
+    state: LifecyleState;
+    timestamp: number;
 }
 
 export class AwsLambdaProxy extends CloudFunctionProxy<
@@ -745,178 +814,367 @@ export class AwsLambdaProxy extends CloudFunctionProxy<
             isBase64Encoded: false
         };
     }
+    getRequestAsString(): string {
+        return JSON.stringify(this.request);
+    }
 }
 
-export class AwsApiGatewayEventAdaptee extends AwsPlatformAdaptee {
-    checkReqIntegrity(
-        proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
-    ): void {
-        const reqMethod = this.getReqMethod(proxy);
-        const headers = this.getReqHeaders(proxy);
-        if (reqMethod === ReqMethod.GET && headers['Fos-instance-id'] === null) {
-            throw new Error('Invalid request. Fos-instance-id is missing in [GET] request header.');
-        } else if (reqMethod === ReqMethod.POST) {
-            const body: ReqBody = this.getReqBody(proxy);
-            if (!body.instance) {
-                throw new Error(
-                    'Invalid request. instance is missing in [POST] ' +
-                        `request body: ${proxy.request.body}`
-                );
-            }
-        } else {
-            throw new Error(`Invalid request. Unsupported request method: [${reqMethod}]`);
+export class AwsApiGatewayEventProxy extends CloudFunctionProxy<
+    APIGatewayProxyEvent,
+    Context,
+    APIGatewayProxyResult
+> {
+    request: APIGatewayProxyEvent;
+    context: Context;
+    log(message: string, level: LogLevel): void {
+        switch (level) {
+            case LogLevel.Debug:
+                console.debug(message);
+                break;
+            case LogLevel.Error:
+                console.error(message);
+                break;
+            case LogLevel.Info:
+                console.info(message);
+                break;
+            case LogLevel.Warn:
+                console.warn(message);
+                break;
+            default:
+                console.log(message);
         }
     }
-    getReqMethod(
-        proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
-    ): ReqMethod {
-        return mapHttpMethod(proxy.request.httpMethod);
+
+    /**
+     * return a formatted AWS Lambda handler response
+     * @param  {number} httpStatusCode http status code
+     * @param  {CloudFunctionResponseBody} body response body
+     * @param  {{}} headers response header
+     * @returns {APIGatewayProxyResult} response
+     */
+    formatResponse(
+        httpStatusCode: number,
+        body: CloudFunctionResponseBody,
+        headers: {}
+    ): APIGatewayProxyResult {
+        return {
+            statusCode: httpStatusCode,
+            body: (typeof body === 'string' && body) || JSON.stringify(body),
+            isBase64Encoded: false
+        };
     }
-    getReqType(
-        proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
-    ): Promise<ReqType> {
-        const reqMethod = this.getReqMethod(proxy);
-        if (reqMethod === ReqMethod.GET) {
-            return Promise.resolve(ReqType.BootstrapConfig);
-        } else if (reqMethod === ReqMethod.POST) {
-            const body = this.getReqBody(proxy);
-            if (body.status) {
-                return Promise.resolve(ReqType.StatusMessage);
-            } else if (body.instance) {
-                return Promise.resolve(ReqType.HeartbeatSync);
-            } else {
-                throw new Error(
-                    `Invalid request body: [instance: ${body.instance}],` +
-                        ` [status: ${body.status}]`
-                );
-            }
-        } else {
-            throw new Error(`Unsupported request method: ${reqMethod}`);
-        }
+    getRequestAsString(): string {
+        return JSON.stringify(this.request);
     }
-    getReqHeaders(
-        proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
-    ): ReqHeaders {
-        const headers: ReqHeaders = { ...proxy.request.headers };
-        return headers;
-    }
-    getReqBody(
-        proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
-    ): ReqBody {
+    getReqBody(): ReqBody {
         let body: ReqBody;
         try {
-            body = (proxy.request.body && JSON.parse(proxy.request.body)) || {};
+            body = (this.request.body && JSON.parse(this.request.body)) || {};
         } catch (error) {}
         return body;
     }
+    getReqHeaders(): ReqHeaders {
+        const headers: ReqHeaders = { ...this.request.headers };
+        return headers;
+    }
+    getReqMethod(): ReqMethod {
+        return mapHttpMethod(this.request.httpMethod);
+    }
 }
 
-export class AwsScheduleEventAdaptee extends AwsPlatformAdaptee {
-    checkReqIntegrity(
-        proxy: CloudFunctionProxy<ScheduledEvent, Context, APIGatewayProxyResult>
-    ): void {
-        if (!(proxy.request.source && proxy.request['detail-type'])) {
-            proxy.logAsError(
-                "Request isn't an AWS schedule event." + ` request content: ${proxy.request}`
-            );
-            throw new Error('Invalid request. Not an AWS schedule event type.');
+export class AwsScheduledEventProxy extends CloudFunctionProxy<
+    ScheduledEvent,
+    Context,
+    { [key: string]: unknown }
+> {
+    request: ScheduledEvent;
+    context: Context;
+    log(message: string, level: LogLevel): void {
+        switch (level) {
+            case LogLevel.Debug:
+                console.debug(message);
+                break;
+            case LogLevel.Error:
+                console.error(message);
+                break;
+            case LogLevel.Info:
+                console.info(message);
+                break;
+            case LogLevel.Warn:
+                console.warn(message);
+                break;
+            default:
+                console.log(message);
         }
     }
+
     /**
-     * This method is unsed in this implementation.
-     * @returns {ReqMethod} will always return undefined
+     * return a formatted AWS Lambda handler response
+     * @param  {number} httpStatusCode http status code
+     * @param  {CloudFunctionResponseBody} body response body
+     * @param  {{}} headers response header
+     * @returns {{}} empty object
      */
-    getReqMethod(): ReqMethod {
-        return undefined;
-    }
-    getReqType(
-        proxy: CloudFunctionProxy<ScheduledEvent, Context, APIGatewayProxyResult>
-    ): Promise<ReqType> {
-        if (proxy.request.source === 'aws.autoscaling') {
-            if (proxy.request['detail-type'] === 'EC2 Instance-launch Lifecycle Action') {
-                return Promise.resolve(ReqType.LaunchingVm);
-            } else if (proxy.request['detail-type'] === 'EC2 Instance Launch Successful') {
-                return Promise.resolve(ReqType.LaunchedVm);
-            } else if (proxy.request['detail-type'] === 'EC2 Instance-terminate Lifecycle Action') {
-                return Promise.resolve(ReqType.TerminatingVm);
-            } else if (proxy.request['detail-type'] === 'EC2 Instance Terminate Successful') {
-                return Promise.resolve(ReqType.TerminatedVm);
-            } else {
-                throw new Error(
-                    'Invalid request. ' +
-                        `Unsupported request detail-type: [${proxy.request['detail-type']}]`
-                );
-            }
-        }
-        throw new Error(`Unknown supported source: [${proxy.request.source}]`);
-    }
-    /**
-     * This method is unsed in this implementation.
-     * @returns {ReqHeaders} an empty object
-     */
-    getReqHeaders(): ReqHeaders {
+    formatResponse(
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        httpStatusCode: number,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        body: CloudFunctionResponseBody,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        headers: {}
+    ): { [key: string]: unknown } {
         return {};
     }
-    /**
-     * This method is unsed in this implementation.
-     * @returns {ReqBody} an empty object
-     */
-    getReqBody(): ReqBody {
-        return {};
+    getReqBody(): ScheduledEvent {
+        return this.request;
+    }
+    getRequestAsString(): string {
+        return JSON.stringify(this.request);
     }
 }
+
+// export class AwsApiGatewayEventAdaptee extends AwsPlatform {
+//     checkReqIntegrity(
+//         proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
+//     ): void {
+//         const reqMethod = this.getReqMethod(proxy);
+//         const headers = this.getReqHeaders(proxy);
+//         if (reqMethod === ReqMethod.GET && headers['Fos-instance-id'] === null) {
+//             throw new Error('Invalid request. Fos-instance-id is missing in [GET] request header.');
+//         } else if (reqMethod === ReqMethod.POST) {
+//             const body: ReqBody = this.getReqBody(proxy);
+//             if (!body.instance) {
+//                 throw new Error(
+//                     'Invalid request. instance is missing in [POST] ' +
+//                         `request body: ${proxy.request.body}`
+//                 );
+//             }
+//         } else {
+//             throw new Error(`Invalid request. Unsupported request method: [${reqMethod}]`);
+//         }
+//     }
+//     getReqMethod(
+//         proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
+//     ): ReqMethod {
+//         return mapHttpMethod(proxy.request.httpMethod);
+//     }
+//     getReqType(
+//         proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
+//     ): Promise<ReqType> {
+//         const reqMethod = this.getReqMethod(proxy);
+//         if (reqMethod === ReqMethod.GET) {
+//             return Promise.resolve(ReqType.BootstrapConfig);
+//         } else if (reqMethod === ReqMethod.POST) {
+//             const body = this.getReqBody(proxy);
+//             if (body.status) {
+//                 return Promise.resolve(ReqType.StatusMessage);
+//             } else if (body.instance) {
+//                 return Promise.resolve(ReqType.HeartbeatSync);
+//             } else {
+//                 throw new Error(
+//                     `Invalid request body: [instance: ${body.instance}],` +
+//                         ` [status: ${body.status}]`
+//                 );
+//             }
+//         } else {
+//             throw new Error(`Unsupported request method: ${reqMethod}`);
+//         }
+//     }
+//     getReqHeaders(
+//         proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
+//     ): ReqHeaders {
+//         const headers: ReqHeaders = { ...proxy.request.headers };
+//         return headers;
+//     }
+//     getReqBody(
+//         proxy: CloudFunctionProxy<APIGatewayProxyEvent, Context, APIGatewayProxyResult>
+//     ): ReqBody {
+//         let body: ReqBody;
+//         try {
+//             body = (proxy.request.body && JSON.parse(proxy.request.body)) || {};
+//         } catch (error) {}
+//         return body;
+//     }
+// }
+
+// export class AwsScheduleEventAdaptee extends AwsPlatform {
+//     checkReqIntegrity(
+//         proxy: CloudFunctionProxy<ScheduledEvent, Context, APIGatewayProxyResult>
+//     ): void {
+//         if (!(proxy.request.source && proxy.request['detail-type'])) {
+//             proxy.logAsError(
+//                 "Request isn't an AWS schedule event." + ` request content: ${proxy.request}`
+//             );
+//             throw new Error('Invalid request. Not an AWS schedule event type.');
+//         }
+//     }
+//     /**
+//      * This method is unsed in this implementation.
+//      * @returns {ReqMethod} will always return undefined
+//      */
+//     getReqMethod(): ReqMethod {
+//         return undefined;
+//     }
+//     getReqType(
+//         proxy: CloudFunctionProxy<ScheduledEvent, Context, APIGatewayProxyResult>
+//     ): Promise<ReqType> {
+//         if (proxy.request.source === 'aws.autoscaling') {
+//             if (proxy.request['detail-type'] === 'EC2 Instance-launch Lifecycle Action') {
+//                 return Promise.resolve(ReqType.LaunchingVm);
+//             } else if (proxy.request['detail-type'] === 'EC2 Instance Launch Successful') {
+//                 return Promise.resolve(ReqType.LaunchedVm);
+//             } else if (proxy.request['detail-type'] === 'EC2 Instance-terminate Lifecycle Action') {
+//                 return Promise.resolve(ReqType.TerminatingVm);
+//             } else if (proxy.request['detail-type'] === 'EC2 Instance Terminate Successful') {
+//                 return Promise.resolve(ReqType.TerminatedVm);
+//             } else {
+//                 throw new Error(
+//                     'Invalid request. ' +
+//                         `Unsupported request detail-type: [${proxy.request['detail-type']}]`
+//                 );
+//             }
+//         }
+//         throw new Error(`Unknown supported source: [${proxy.request.source}]`);
+//     }
+//     /**
+//      * This method is unsed in this implementation.
+//      * @returns {ReqHeaders} an empty object
+//      */
+//     getReqHeaders(): ReqHeaders {
+//         return {};
+//     }
+//     /**
+//      * This method is unsed in this implementation.
+//      * @returns {ReqBody} an empty object
+//      */
+//     getReqBody(): ReqBody {
+//         return {};
+//     }
+// }
 
 export class AwsPlatformAdapter implements PlatformAdapter {
-    adaptee: AwsPlatformAdaptee;
+    adaptee: AwsPlatform;
     proxy: CloudFunctionProxyAdapter;
     settings: Settings;
     readonly createTime: number;
     readonly awsOnlyConfigset = ['setuptgwvpn', 'internalelbwebserv'];
-    constructor(p: AwsPlatformAdaptee, proxy: CloudFunctionProxyAdapter, createTime?: number) {
+    constructor(p: AwsPlatform, proxy: CloudFunctionProxyAdapter, createTime?: number) {
         this.adaptee = p;
         this.proxy = proxy;
         this.createTime = createTime ? createTime : Date.now();
     }
-    checkRequestIntegrity(): Promise<void> {
-        const reqMethod = this.adaptee.getReqMethod(this.proxy);
-        const body = this.adaptee.getReqBody(this.proxy);
-        const headers = this.adaptee.getReqHeaders(this.proxy);
-        if (reqMethod === ReqMethod.GET && headers['Fos-instance-id'] === null) {
-            throw new Error('Invalid request. Fos-instance-id is missing in [GET] request header.');
-        } else if (reqMethod === ReqMethod.POST) {
-            if (!body.instance) {
-                throw new Error(
-                    'Invalid request. instance is missing in [POST] ' +
-                        `request body: ${JSON.stringify(body)}`
-                );
-            }
-        } else {
-            throw new Error(`Invalid request. Unsupported request method: [${reqMethod}]`);
-        }
-        return Promise.resolve();
-    }
+    // NOTE:
+    // checkRequestIntegrity(): Promise<void> {
+    //     const reqMethod = this.adaptee.getReqMethod(this.proxy);
+    //     const body = this.adaptee.getReqBody(this.proxy);
+    //     const headers = this.adaptee.getReqHeaders(this.proxy);
+    //     if (reqMethod === ReqMethod.GET && headers['Fos-instance-id'] === null) {
+    //         throw new Error('Invalid request. Fos-instance-id is missing in [GET] request header.');
+    //     } else if (reqMethod === ReqMethod.POST) {
+    //         if (!body.instance) {
+    //             throw new Error(
+    //                 'Invalid request. instance is missing in [POST] ' +
+    //                     `request body: ${JSON.stringify(body)}`
+    //             );
+    //         }
+    //     } else {
+    //         throw new Error(`Invalid request. Unsupported request method: [${reqMethod}]`);
+    //     }
+    //     return Promise.resolve();
+    // }
     getRequestType(): Promise<ReqType> {
-        return this.adaptee.getReqType(this.proxy);
+        if (this.proxy instanceof AwsApiGatewayEventProxy) {
+            const reqMethod = this.proxy.getReqMethod();
+            if (reqMethod === ReqMethod.GET) {
+                const headers = this.proxy.getReqHeaders();
+                if (headers['Fos-instance-id'] === null) {
+                    throw new Error(
+                        'Invalid request. Fos-instance-id is missing in [GET] request header.'
+                    );
+                } else {
+                    return Promise.resolve(ReqType.BootstrapConfig);
+                }
+            } else if (reqMethod === ReqMethod.POST) {
+                const body = this.proxy.getReqBody();
+                if (body.status) {
+                    return Promise.resolve(ReqType.StatusMessage);
+                } else if (body.instance) {
+                    return Promise.resolve(ReqType.HeartbeatSync);
+                } else {
+                    throw new Error(
+                        `Invalid request body: [instance: ${body.instance}],` +
+                            ` [status: ${body.status}]`
+                    );
+                }
+            } else {
+                throw new Error(`Unsupported request method: ${reqMethod}`);
+            }
+        } else if (this.proxy instanceof AwsScheduledEventProxy) {
+            const boby = this.proxy.getReqBody();
+            if (boby.source === 'aws.autoscaling') {
+                if (boby['detail-type'] === 'EC2 Instance-launch Lifecycle Action') {
+                    return Promise.resolve(ReqType.LaunchingVm);
+                } else if (boby['detail-type'] === 'EC2 Instance Launch Successful') {
+                    return Promise.resolve(ReqType.LaunchedVm);
+                } else if (boby['detail-type'] === 'EC2 Instance-terminate Lifecycle Action') {
+                    return Promise.resolve(ReqType.TerminatingVm);
+                } else if (boby['detail-type'] === 'EC2 Instance Terminate Successful') {
+                    return Promise.resolve(ReqType.TerminatedVm);
+                } else {
+                    throw new Error(
+                        'Invalid request. ' +
+                            `Unsupported request detail-type: [${boby['detail-type']}]`
+                    );
+                }
+            }
+            throw new Error(`Unknown supported source: [${boby.source}]`);
+        } else {
+            throw new Error('Unsupported CloudFunctionProxy.');
+        }
     }
     async init(): Promise<void> {
         this.settings = await this.adaptee.loadSettings();
         await this.validateSettings();
     }
     getReqVmId(): string {
-        const reqMethod = this.adaptee.getReqMethod(this.proxy);
-        if (reqMethod === ReqMethod.GET) {
-            const headers = this.adaptee.getReqHeaders(this.proxy);
-            return headers['Fos-instance-id'] as string;
-        } else if (reqMethod === ReqMethod.POST) {
-            const body = this.adaptee.getReqBody(this.proxy);
-            return body.instance as string;
+        if (this.proxy instanceof AwsApiGatewayEventProxy) {
+            const reqMethod = this.proxy.getReqMethod();
+            if (reqMethod === ReqMethod.GET) {
+                const headers = this.proxy.getReqHeaders();
+                return headers['Fos-instance-id'] as string;
+            } else if (reqMethod === ReqMethod.POST) {
+                const body = this.proxy.getReqBody();
+                return body.instance as string;
+            } else {
+                throw new Error(`Cannot get vm id in unknown request method: ${reqMethod}`);
+            }
+        } else if (this.proxy instanceof AwsScheduledEventProxy) {
+            const body = this.proxy.getReqBody();
+            if (body.source === 'aws.autoscaling') {
+                return body.detail.EC2InstanceId;
+            } else {
+                throw new Error(`Cannot get vm id in unknown request: ${JSON.stringify(body)}`);
+            }
         } else {
-            throw new Error(`Cannot get vm id in unknown request method: ${reqMethod}`);
+            throw new Error('Cannot get vm id in unknown request.');
         }
     }
     getReqHeartbeatInterval(): number {
-        const body = this.adaptee.getReqBody(this.proxy);
-        return (body.interval && Number(body.interval)) || NaN;
+        if (this.proxy instanceof AwsApiGatewayEventProxy) {
+            const body = this.proxy.getReqBody();
+            return (body.interval && Number(body.interval)) || NaN;
+        } else {
+            return NaN;
+        }
+    }
+    getReqAsString(): string {
+        if (this.proxy instanceof AwsApiGatewayEventProxy) {
+            return JSON.stringify(this.proxy.request);
+        } else if (this.proxy instanceof AwsApiGatewayEventProxy) {
+            return JSON.stringify(this.proxy.request);
+        } else {
+            throw new Error('Unknown request.');
+        }
     }
     getSettings(): Promise<Settings> {
         return Promise.resolve(this.settings);
@@ -1426,5 +1684,153 @@ export class AwsPlatformAdapter implements PlatformAdapter {
 
     getTgwVpnAttachmentRecord(id: string): Promise<{ [key: string]: any }> {
         throw new Error('Method not implemented.');
+    }
+
+    async updateVmSourceDestinationChecking(vmId: string, enable?: boolean): Promise<void> {
+        this.proxy.logAsInfo('calling updateVmSourceDestinationChecking');
+        await this.adaptee.updateInstanceSrcDestChecking(vmId, enable);
+        this.proxy.logAsInfo('called updateVmSourceDestinationChecking');
+    }
+    async loadBalancerAttachVm(elbId: string, vmIds: string[]): Promise<void> {
+        this.proxy.logAsInfo('calling loadBalancerAttachVm');
+        await this.adaptee.elbRegisterTargets(elbId, vmIds);
+        this.proxy.logAsInfo('called loadBalancerAttachVm');
+    }
+
+    async loadBalancerDetachVm(elbId: string, vmIds: string[]): Promise<void> {
+        this.proxy.logAsInfo('calling loadBalancerDetachVm');
+        await this.adaptee.elbDeregisterTargets(elbId, vmIds);
+        this.proxy.logAsInfo('called loadBalancerDetachVm');
+    }
+
+    extractLifecycleItemFromRequest(object: { [key: string]: unknown }): LifecycleItem {
+        const actionResultString: string =
+            (object.LifecycleActionResult && (object.LifecycleActionResult as string)) || undefined;
+        const [actionResult] = Object.entries(LifecycleActionResult)
+            .filter(([, value]) => {
+                return actionResultString === value;
+            })
+            .map(([, v]) => v);
+        const lifecycleItem: LifecycleItem = {
+            vmId: '',
+            scalingGroupName:
+                (object.AutoScalingGroupName && (object.AutoScalingGroupName as string)) ||
+                undefined,
+            actionResult: actionResult,
+            actionToken:
+                (object.LifecycleActionToken && (object.LifecycleActionToken as string)) ||
+                undefined,
+            hookName:
+                (object.LifecycleHookName && (object.LifecycleHookName as string)) || undefined,
+            state: undefined,
+            timestamp: Date.now()
+        };
+        return lifecycleItem;
+    }
+
+    async getLifecycleItem(vmId: string): Promise<LifecycleItem | null> {
+        this.proxy.logAsInfo('calling getLifecycleItem');
+        const table = new AwsDBDef.AwsLifecycleItem(process.env.RESOURCE_TAG_PREFIX || '');
+        const dbItem = table.convertRecord(
+            await this.adaptee.getItemFromDb(table, [
+                {
+                    key: table.primaryKey.name,
+                    value: vmId
+                }
+            ])
+        );
+        const [actionResult] = Object.entries(LifecycleActionResult)
+            .filter(([, value]) => {
+                return dbItem.actionResult === value;
+            })
+            .map(([, v]) => v);
+        const [state] = Object.entries(LifecyleState)
+            .filter(([, value]) => {
+                return dbItem.state === value;
+            })
+            .map(([, v]) => v);
+        const lifecycleItem: LifecycleItem = {
+            vmId: dbItem.vmId,
+            scalingGroupName: dbItem.scalingGroupName,
+            actionResult: actionResult,
+            actionToken: dbItem.actionToken,
+            hookName: dbItem.hookName,
+            state: state,
+            timestamp: dbItem.timestamp
+        };
+        this.proxy.logAsInfo('called getLifecycleItem');
+        return lifecycleItem;
+    }
+    async createLifecycleItem(item: LifecycleItem): Promise<void> {
+        this.proxy.logAsInfo('calling createLifecycleItem');
+        const table = new AwsDBDef.AwsLifecycleItem(process.env.RESOURCE_TAG_PREFIX || '');
+        // ASSERT: item is vliad
+        const dbItem: LifecycleItemDbItem = {
+            vmId: item.vmId,
+            scalingGroupName: item.scalingGroupName,
+            actionResult: item.actionResult,
+            actionToken: item.actionToken,
+            hookName: item.hookName,
+            state: item.state,
+            timestamp: item.timestamp
+        };
+        const conditionExp: AwsDdbOperations = {
+            Expression: '',
+            createOrUpdate: CreateOrUpdate.create
+        };
+        await this.adaptee.saveItemToDb(table, { ...dbItem }, conditionExp);
+        this.proxy.logAsInfo('called createLifecycleItem');
+    }
+    async updateLifecycleItem(item: LifecycleItem): Promise<void> {
+        this.proxy.logAsInfo('calling updateLifecycleItem');
+        const table = new AwsDBDef.AwsLifecycleItem(process.env.RESOURCE_TAG_PREFIX || '');
+        // ASSERT: item is vliad
+        const dbItem: LifecycleItemDbItem = {
+            vmId: item.vmId,
+            scalingGroupName: item.scalingGroupName,
+            actionResult: item.actionResult,
+            actionToken: item.actionToken,
+            hookName: item.hookName,
+            state: item.state,
+            timestamp: item.timestamp
+        };
+        const conditionExp: AwsDdbOperations = {
+            Expression: '',
+            createOrUpdate: CreateOrUpdate.update
+        };
+        await this.adaptee.saveItemToDb(table, { ...dbItem }, conditionExp);
+        this.proxy.logAsInfo('called updateLifecycleItem');
+    }
+    async deleteLifecycleItem(vmId: string): Promise<void> {
+        this.proxy.logAsInfo('calling deleteLifecycleItem');
+        const table = new AwsDBDef.AwsLifecycleItem(process.env.RESOURCE_TAG_PREFIX || '');
+        const item: LifecycleItemDbItem = {
+            vmId: vmId,
+            // the value of the properties below aren't used.
+            scalingGroupName: '',
+            actionResult: '',
+            actionToken: '',
+            hookName: '',
+            state: '',
+            timestamp: 0
+        };
+        await this.adaptee.deleteItemFromDb(table, { ...item });
+        this.proxy.logAsInfo('called deleteLifecycleItem');
+    }
+    async completeLifecycleAction(item: LifecycleItem, success?: boolean): Promise<void> {
+        this.proxy.logAsInfo('calling completeLifecycleAction');
+        // ASSERT: item is correctly constructed.
+        if (success) {
+            item.actionResult = LifecycleActionResult.Continue;
+        } else {
+            item.actionResult = LifecycleActionResult.Abandon;
+        }
+        await this.adaptee.completeLifecycleAction(
+            item.scalingGroupName,
+            item.actionResult,
+            item.actionToken,
+            item.hookName
+        );
+        this.proxy.logAsInfo('called completeLifecycleAction');
     }
 }

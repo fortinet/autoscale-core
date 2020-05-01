@@ -10,6 +10,7 @@ import {
 import { PlatformAdapter } from '../platform-adapter';
 import { CloudFunctionProxyAdapter, LogLevel } from '../cloud-function-proxy';
 import { VirtualMachine } from '../virtual-machine';
+import { waitFor, WaitForPromiseEmitter, WaitForConditionChecker } from '../autoscale-core';
 
 /**
  * To provide Autoscale basic logics
@@ -165,7 +166,13 @@ export interface HeartbeatSyncStrategy {
         proxy: CloudFunctionProxyAdapter,
         vm: VirtualMachine
     ): Promise<void>;
-    apply(): Promise<void>;
+    apply(): Promise<HealthCheckResult>;
+    /**
+     * Force the target vm to go into 'out-of-sync' state. Autoscale will stop accepting its
+     * heartbeat sync request.
+     * @returns {Promise} void
+     */
+    forceOutOfSync(): Promise<boolean>;
     readonly targetHealthCheckRecord: HealthCheckRecord | null;
     readonly result: HealthCheckResult;
     readonly targetVmFirstHeartbeat: boolean;
@@ -195,7 +202,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         return Promise.resolve();
     }
 
-    async apply(): Promise<void> {
+    async apply(): Promise<HealthCheckResult> {
         this.proxy.logAsInfo('applying ConstantIntervalHeartbeatSyncStrategy strategy.');
         let oldLossCount = 0;
         let newLossCount = 0;
@@ -299,6 +306,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 ` heartbeat loss count: ${oldLossCount}->${newLossCount}.`
         );
         this.proxy.logAsInfo('appled ConstantIntervalHeartbeatSyncStrategy strategy.');
+        return this.healthCheckResult;
     }
     get targetHealthCheckRecord(): HealthCheckRecord {
         return this._targetHealthCheckRecord;
@@ -307,6 +315,43 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
     result: HealthCheckResult;
     get targetVmFirstHeartbeat(): boolean {
         return this.firstHeartbeat;
+    }
+    async forceOutOfSync(): Promise<boolean> {
+        this.proxy.logAsInfo('calling ConstantIntervalHeartbeatSyncStrategy.forceOutOfSync.');
+        try {
+            // ASSERT: this.targetVm is valid
+            const healthcheckRecord: HealthCheckRecord = await this.platform.getHealthCheckRecord(
+                this.targetVm
+            );
+            // if its status is 'out-of-sync' already, don't need to update
+            if (healthcheckRecord.syncState === HeartbeatSyncState.OutOfSync) {
+                return true;
+            }
+            // update its state to be 'out-of-sync'
+            const emitter: WaitForPromiseEmitter<HealthCheckRecord> = () => {
+                return this.platform.getHealthCheckRecord(this.targetVm);
+            };
+            const checker: WaitForConditionChecker<HealthCheckRecord> = (record, callCount) => {
+                if (callCount > 3) {
+                    throw new Error(`maximum amount of attempts ${callCount} have been reached.`);
+                }
+                if (record.syncState === HeartbeatSyncState.OutOfSync) {
+                    return Promise.resolve(true);
+                } else {
+                    return Promise.resolve(false);
+                }
+            };
+            // commit update
+            await this.platform.updateHealthCheckRecord(healthcheckRecord);
+            // wait for state change
+            await waitFor(emitter, checker, 5000, this.proxy);
+            this.proxy.logAsInfo('called ConstantIntervalHeartbeatSyncStrategy.forceOutOfSync.');
+            return true;
+        } catch (error) {
+            this.proxy.logForError('error in forceOutOfSync()', error);
+            this.proxy.logAsInfo('called ConstantIntervalHeartbeatSyncStrategy.forceOutOfSync.');
+            return false;
+        }
     }
 }
 

@@ -96,11 +96,16 @@ export class AwsVpnAttachment extends VpnAttachment {
 
 export interface LifecycleItemDbItem {
     vmId: string;
-    actionName: string;
+    scalingGroupName: string;
+    actionResult: string;
+    actionToken: string;
+    hookName: string;
+    state: string;
+    timestamp: number;
 }
 
 // additional tables
-export class LifecycleItem extends Table<LifecycleItemDbItem> {
+export class AwsLifecycleItem extends Table<LifecycleItemDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'vmId',
@@ -109,17 +114,41 @@ export class LifecycleItem extends Table<LifecycleItemDbItem> {
             keyType: TypeRef.PrimaryKey
         },
         {
-            name: 'actionName',
+            name: 'scalingGroupName',
             attrType: TypeRef.StringType,
-            isKey: true,
-            keyType: TypeRef.SecondaryKey
+            isKey: false
+        },
+        {
+            name: 'actionResult',
+            attrType: TypeRef.StringType,
+            isKey: false
+        },
+        {
+            name: 'actionToken',
+            attrType: TypeRef.StringType,
+            isKey: false
+        },
+        {
+            name: 'hookName',
+            attrType: TypeRef.StringType,
+            isKey: false
+        },
+        {
+            name: 'state',
+            attrType: TypeRef.StringType,
+            isKey: false
+        },
+        {
+            name: 'timestamp',
+            attrType: TypeRef.NumberType,
+            isKey: false
         }
     ];
     constructor(namePrefix = '', nameSuffix = '') {
         super(namePrefix, nameSuffix);
         // Caution: don't forget to set a correct name.
         this.setName('LifecycleItem');
-        this.alterAttributes(LifecycleItem.__attributes);
+        this.alterAttributes(AwsLifecycleItem.__attributes);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
@@ -127,7 +156,12 @@ export class LifecycleItem extends Table<LifecycleItemDbItem> {
     convertRecord(record: Record): LifecycleItemDbItem {
         const item: LifecycleItemDbItem = {
             vmId: record.vmId as string,
-            actionName: record.actionName as string
+            scalingGroupName: record.scalingGroupName as string,
+            actionResult: record.actionResult as string,
+            actionToken: record.actionToken as string,
+            hookName: record.hookName as string,
+            state: record.done as string,
+            timestamp: record.timestamp as number
         };
         return item;
     }
