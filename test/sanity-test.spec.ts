@@ -10,8 +10,8 @@ import {
     MasterElection,
     HeartbeatSyncTiming
 } from '../master-election';
-import { VirtualMachine } from '../virtual-machine';
-import { PlatformAdapter, ReqType, VmDescriptor } from '../platform-adapter';
+import { VirtualMachine, NetworkInterface } from '../virtual-machine';
+import { PlatformAdapter, ReqType, VmDescriptor, ResourceTag } from '../platform-adapter';
 import {
     CloudFunctionProxyAdapter,
     CloudFunctionResponseBody,
@@ -65,6 +65,38 @@ const TEST_MASTER_ELECTION: MasterElection = {
 };
 
 class TestPlatformAdapter implements PlatformAdapter {
+    listNicAttachmentRecord(): Promise<import('..').NicAttachmentRecord[]> {
+        throw new Error('Method not implemented.');
+    }
+    updateNicAttachmentRecord(vmId: string, nicId: string, status: string): Promise<void> {
+        throw new Error('Method not implemented.');
+    }
+    deleteNicAttachmentRecord(vmId: string, nicId: string): Promise<void> {
+        throw new Error('Method not implemented.');
+    }
+    deleteNetworkInterface(nicId: string): Promise<void> {
+        throw new Error('Method not implemented.');
+    }
+    attachNetworkInterface(vmId: string, nicId: string, index?: number): Promise<void> {
+        throw new Error('Method not implemented.');
+    }
+    detachNetworkInterface(vmId: string, nicId: string): Promise<void> {
+        throw new Error('Method not implemented.');
+    }
+    listUnusedNetworkInterface(tags: ResourceTag[]): Promise<NetworkInterface[]> {
+        throw new Error('Method not implemented.');
+    }
+    tagNetworkInterface(nicId: string, tags: ResourceTag[]): Promise<void> {
+        throw new Error('Method not implemented.');
+    }
+    createNetworkInterface(
+        subnetId?: string,
+        description?: string,
+        securityGroups?: string[],
+        privateIpAddress?: string
+    ): Promise<NetworkInterface> {
+        throw new Error('Method not implemented.');
+    }
     validateSettings(): Promise<boolean> {
         return Promise.resolve(true);
     }

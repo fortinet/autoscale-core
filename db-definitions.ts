@@ -5,6 +5,11 @@ export interface Attribute {
     keyType?: TypeRef | string;
 }
 
+export interface KeyValue {
+    key: string;
+    value: string;
+}
+
 export interface SchemaElement {
     name: string;
     keyType: TypeRef | string;
@@ -17,6 +22,16 @@ export enum TypeRef {
     BooleanType = 'AutoscaleBooleanType',
     PrimaryKey = 'AutoscaleStringType',
     SecondaryKey = 'AutoscaleStringType'
+}
+
+export interface Record {
+    [key: string]: unknown;
+}
+
+export enum CreateOrUpdate {
+    unknown,
+    create,
+    update
 }
 
 export class Table {
@@ -155,7 +170,7 @@ export class Table {
 export class Autoscale extends Table {
     static __attributes: Attribute[] = [
         {
-            name: 'instanceId',
+            name: 'vmId',
             attrType: TypeRef.StringType,
             isKey: true,
             keyType: TypeRef.PrimaryKey
@@ -198,7 +213,16 @@ export class Autoscale extends Table {
         this.alterAttributes(Autoscale.__attributes);
     }
 }
-
+export interface MasterElectionDbItem {
+    scalingGroupName: string;
+    vmId: string;
+    id: string;
+    ip: string;
+    virtualNetworkId: string;
+    subnetId: string;
+    voteEndTime: string;
+    voteState: string;
+}
 export class MasterElection extends Table {
     static __attributes: Attribute[] = [
         {
@@ -208,7 +232,7 @@ export class MasterElection extends Table {
             keyType: TypeRef.PrimaryKey
         },
         {
-            name: 'instanceId',
+            name: 'vmId',
             attrType: TypeRef.StringType,
             isKey: true,
             keyType: TypeRef.PrimaryKey
@@ -224,7 +248,7 @@ export class MasterElection extends Table {
             isKey: false
         },
         {
-            name: 'vpcId',
+            name: 'virtualNetworkId',
             attrType: TypeRef.StringType,
             isKey: false
         },
@@ -255,7 +279,7 @@ export class MasterElection extends Table {
 export class FortiAnalyzer extends Table {
     static __attributes: Attribute[] = [
         {
-            name: 'instanceId',
+            name: 'vmId',
             attrType: TypeRef.StringType,
             isKey: true,
             keyType: TypeRef.PrimaryKey
@@ -320,10 +344,15 @@ export class Settings extends Table {
         this.alterAttributes(Settings.__attributes);
     }
 }
+export interface NicAttachmentDbItem {
+    vmId: string;
+    nicId: string;
+    attachmentState: string;
+}
 export class NicAttachment extends Table {
     static __attributes: Attribute[] = [
         {
-            name: 'instanceId',
+            name: 'vmId',
             attrType: TypeRef.StringType,
             isKey: true,
             keyType: TypeRef.PrimaryKey
@@ -356,7 +385,7 @@ export class VmInfoCache extends Table {
             keyType: TypeRef.PrimaryKey
         },
         {
-            name: 'instanceId',
+            name: 'vmId',
             attrType: TypeRef.StringType,
             isKey: false
         },
@@ -432,8 +461,7 @@ export class LicenseUsage extends Table {
         {
             name: 'checksum',
             attrType: TypeRef.StringType,
-            isKey: false,
-            keyType: TypeRef.PrimaryKey
+            isKey: false
         },
         {
             name: 'fileName',
@@ -451,7 +479,7 @@ export class LicenseUsage extends Table {
             isKey: false
         },
         {
-            name: 'instanceId',
+            name: 'vmId',
             attrType: TypeRef.StringType,
             isKey: false
         },
@@ -505,7 +533,7 @@ export class CustomLog extends Table {
 export class VpnAttachment extends Table {
     static __attributes: Attribute[] = [
         {
-            name: 'instanceId',
+            name: 'vmId',
             attrType: TypeRef.StringType,
             isKey: true,
             keyType: TypeRef.PrimaryKey

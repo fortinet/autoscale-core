@@ -1,5 +1,4 @@
 import * as HttpStatusCodes from 'http-status-codes';
-import { TransitGatewayContext } from './aws/aws-platform';
 import { HeartbeatSyncTiming } from '../master-election';
 
 import { FortiGateAutoscaleSetting } from './fortigate-autoscale-settings';
@@ -24,7 +23,6 @@ import {
     NicAttachmentContext,
     NicAttachmentStrategy
 } from '../context-strategy/nic-attachment-context';
-import { VpnAttachmentStrategy } from '../context-strategy/vpn-attachment-context';
 import { ScalingGroupStrategy } from '../context-strategy/scaling-group-context';
 
 export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationStrategy {
@@ -47,9 +45,17 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         this.settings = await this.platform.getSettings();
         return Promise.resolve();
     }
+    /**
+     * get the bootstrap configuration for a certain role determined by the apply()
+     * @returns {string} configuration
+     */
     getConfiguration(): string {
         return this.config;
     }
+    /**
+     * apply the strategy with parameter provided via prepare()
+     * @returns {Promise} BootstrapConfigStrategyResult
+     */
     async apply(): Promise<BootstrapConfigStrategyResult> {
         const config = await this.loadConfig();
         // target is the master? return config sets for active role
@@ -68,6 +74,10 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         }
         return BootstrapConfigStrategyResult.SUCCESS;
     }
+    /**
+     * load the base configset content
+     * @returns {Promise} configset content
+     */
     protected async loadBase(): Promise<string> {
         try {
             const config = await this.platform.loadConfigSet('baseconfig');
@@ -82,6 +92,10 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
             throw new Error('baseconfig is required but not found.');
         }
     }
+    /**
+     * load the configset content for setting up the secondary nic
+     * @returns {Promise} configset content
+     */
     protected async loadNic2(): Promise<string> {
         try {
             const config = await this.platform.loadConfigSet('port2config');
@@ -96,6 +110,10 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
             return '';
         }
     }
+    /**
+     * load the configset content for setting up an internal elb for web service cluster
+     * @returns {Promise} configset content
+     */
     protected async loadInternalElbWeb(): Promise<string> {
         try {
             const config = await this.platform.loadConfigSet('internalelbwebserv');
@@ -109,6 +127,10 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
             return '';
         }
     }
+    /**
+     * load the configset content for setting up the FAZ logging
+     * @returns {Promise} configset content
+     */
     protected async loadFazIntegration(): Promise<string> {
         try {
             const config = await this.platform.loadConfigSet('fazintegration');
@@ -122,6 +144,11 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
             return '';
         }
     }
+    /**
+     * load the configset content for user defined custom configset(s)
+     * @param {string} customList configset name(s) separated by comma
+     * @returns {Promise} configset content
+     */
     protected async loadCustom(customList: string): Promise<string> {
         const nameArray = customList.split(',');
         let customConfigSetContentArray = [];
@@ -133,6 +160,10 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         }
         return customConfigSetContentArray.join('');
     }
+    /**
+     * load all required configset(s) content and combine them into one string
+     * @returns {Promise} configset content
+     */
     protected async loadConfig(): Promise<string> {
         let baseConfig = '';
         // check if second nic is enabled, config for the second nic must be prepended to
@@ -230,9 +261,23 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
             return config;
         }
     }
+    /**
+     * get bootstrap configuration for a FGT vm which's role will be master (or HA active)
+     * @param  {string} config configset content
+     * @param  {VirtualMachine} targetVm the target vm which will consume this configuration
+     * @returns {Promise} configset content
+     */
     protected getActiveRoleConfig(config: string, targetVm: VirtualMachine): Promise<string> {
         return Promise.resolve(this.processConfigV2(config, { '@device': targetVm }));
     }
+    /**
+     * get bootstrap configuration for a FGT vm which's role will be slave (or HA passive)
+     * @param  {string} config configset content
+     * @param  {VirtualMachine} targetVm the target vm which will consume this configuration
+     * @param  {VirtualMachine} masterVm (optional) the target vm which will be the master (active)
+     * role in the HA cluster
+     * @returns {Promise} configset content
+     */
     protected getPassiveRoleConfig(
         config: string,
         targetVm: VirtualMachine,
@@ -247,27 +292,16 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
     }
 }
 
+/**
+ * FortiGate class with capabilities:
+ * cloud function handling,
+ * bootstrap configuration,
+ * secondary nic attachment
+ */
 export class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
-    implements
-        CloudFunctionHandler<TReq, TContext, TRes>,
-        BootstrapContext,
-        NicAttachmentContext,
-        TransitGatewayContext {
+    implements CloudFunctionHandler<TReq, TContext, TRes>, BootstrapContext, NicAttachmentContext {
     bootstrapConfigStrategy: BootstrapConfigurationStrategy;
-    vpnAttachmentStrategy: VpnAttachmentStrategy;
     nicAttachmentStrategy: NicAttachmentStrategy;
-    handleVpnAttachment(): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    handleVpnDetachment(): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    cleanupUnusedVpn(): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    setVpnAttachmentStrategy(strategy: VpnAttachmentStrategy): void {
-        this.vpnAttachmentStrategy = strategy;
-    }
     handleNicAttachment(): Promise<string> {
         throw new Error('Method not implemented.');
     }

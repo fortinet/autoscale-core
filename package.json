@@ -7,8 +7,8 @@
     "scripts": {
         "pre-commit": "npm run lint-check && npm audit && npm test && npm run build && exit 0",
         "tsc": "tsc -d",
-        "build": "rm -rf dist/{*,**/*}.d.ts; npm run tsc;",
-        "build-artifacts": "npm run build; node dist/scripts/make-dist.js;",
+        "build": "rm -rf dist/{*,**/*}.d.ts && npm run tsc;",
+        "build-artifacts": "npm run build && node dist/scripts/make-dist.js;",
         "test": "mocha -r ts-node/register test/*.spec.ts",
         "lint-check": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js c -fl  -F .eslintignore -L .eslintignore \"{*,**/*}{.js,.json,.ts}\"",
         "lint-fix": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js f -fl  -F .eslintignore -L .eslintignore \"**/*{.js,.json,.ts}\""
