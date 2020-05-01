@@ -20,7 +20,7 @@ export interface ScalingGroupStrategy {
     onTerminatedVm(): Promise<string>;
 }
 
-export class NoOpScalingGroupStrategy implements ScalingGroupStrategy {
+export class NoopScalingGroupStrategy implements ScalingGroupStrategy {
     platform: PlatformAdapter;
     proxy: CloudFunctionProxyAdapter;
     prepare(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter): Promise<void> {

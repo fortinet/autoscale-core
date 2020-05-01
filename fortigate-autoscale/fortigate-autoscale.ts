@@ -1,6 +1,4 @@
 import * as HttpStatusCodes from 'http-status-codes';
-import { HeartbeatSyncTiming } from '../master-election';
-
 import { FortiGateAutoscaleSetting } from './fortigate-autoscale-settings';
 import { PlatformAdapter, ReqType } from '../platform-adapter';
 import { CloudFunctionProxyAdapter, CloudFunctionProxy } from '../cloud-function-proxy';
@@ -298,7 +296,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
  * bootstrap configuration,
  * secondary nic attachment
  */
-export class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
+export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
     implements CloudFunctionHandler<TReq, TContext, TRes>, BootstrapContext, NicAttachmentContext {
     bootstrapConfigStrategy: BootstrapConfigurationStrategy;
     nicAttachmentStrategy: NicAttachmentStrategy;
@@ -325,8 +323,12 @@ export class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             this.platform = platform;
             this.env = env;
             this.proxy.logAsInfo('calling handleRequest.');
+            this.proxy.logAsInfo('request integrity check.');
+            // check whether all necessary request information are all there or not
+            await this.platform.checkRequestIntegrity();
+            // init the platform. this step is important
             await this.platform.init();
-            const requestType = this.platform.getRequestType();
+            const requestType = await this.platform.getRequestType();
             if (requestType === ReqType.LaunchingVm) {
                 responseBody = await this.handleLaunchedVm();
             } else if (requestType === ReqType.BootstrapConfig) {
@@ -344,7 +346,7 @@ export class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             this.proxy.logAsInfo('called handleRequest.');
             return proxy.formatResponse(HttpStatusCodes.OK, responseBody, {});
         } catch (error) {
-            // NOTE: assert that error is always an instance of Error
+            // ASSERT: error is always an instance of Error
             let httpError: HttpError;
             this.proxy.logForError('called handleRequest.', error);
             if (!(error instanceof HttpError)) {
@@ -416,12 +418,6 @@ export class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
         return bootstrapConfig;
     }
     handleHeartbeatSync(): Promise<string> {
-        throw new Error('Method not implemented.');
-    }
-    doTargetHealthCheck(): Promise<HeartbeatSyncTiming> {
-        throw new Error('Method not implemented.');
-    }
-    doMasterHealthCheck(): Promise<HeartbeatSyncTiming> {
         throw new Error('Method not implemented.');
     }
     setScalingGroupStrategy(strategy: ScalingGroupStrategy): void {

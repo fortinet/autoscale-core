@@ -33,9 +33,9 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
                 await this.platform.loadConfigSet('setuptgwvpn').catch(() => {
                     throw new Error("configset doesn't exist in the assets storage.");
                 }),
-                await this.platform.getTgwVpnAttachmentRecord(targetVm.instanceId).catch(() => {
+                await this.platform.getTgwVpnAttachmentRecord(targetVm.id).catch(() => {
                     throw new Error(
-                        `Vpn Attachment for instance (id: ${targetVm.instanceId})` + ' not found.'
+                        `Vpn Attachment for instance (id: ${targetVm.id})` + ' not found.'
                     );
                 })
             ]);

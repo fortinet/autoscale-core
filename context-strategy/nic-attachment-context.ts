@@ -41,7 +41,7 @@ export interface NicAttachmentStrategy {
     cleanUp(): Promise<void>;
 }
 
-export class NoOpNicAttachmentStrategy implements NicAttachmentStrategy {
+export class NoopNicAttachmentStrategy implements NicAttachmentStrategy {
     prepare(
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         platform: PlatformAdapter,

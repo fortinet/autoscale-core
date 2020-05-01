@@ -5,33 +5,35 @@ export enum HealthCheckSyncState {
     OutOfSync = 'out-of-sync'
 }
 export interface HealthCheckRecord {
-    instanceId: string;
+    vmId: string;
+    scalingGroupName: string;
     ip: string;
     masterIp: string;
     heartbeatInterval: number;
     heartbeatLossCount: number;
-    nextHeartbeatCheckTime: number;
+    nextHeartbeatTime: number;
     syncState: HealthCheckSyncState;
+    seq: number;
     healthy: boolean;
-    inSync: boolean;
+    upToDate: boolean;
 }
 
-export enum HeartbeatSyncTiming {
-    OnTime = 'OnTime',
-    Late = 'Late',
-    TooLate = 'TooLate',
-    Dropped = 'Dropped'
+export enum HealthCheckResult {
+    OnTime = 'on-time',
+    Late = 'late',
+    TooLate = 'too-late',
+    Dropped = 'dropped'
 }
 
 export enum MasterRecordVoteState {
     Pending = 'pending',
     Done = 'done',
-    Timeout = 'Timeout'
+    Timeout = 'timeout'
 }
 
 export interface MasterRecord {
     id: string;
-    instanceId: string;
+    vmId: string;
     ip: string;
     scalingGroupName: string;
     virtualNetworkId: string;
@@ -49,5 +51,5 @@ export interface MasterElection {
     candidateHealthCheck?: HealthCheckRecord;
     preferredScalingGroup?: string;
     electionDuration?: number;
-    signature: string; // to identify a single master election
+    signature: string; // to identify a master election
 }
