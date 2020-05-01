@@ -14,7 +14,6 @@ import { VirtualMachine, NetworkInterface } from '../virtual-machine';
 import {
     PlatformAdapter,
     ReqType,
-    VmDescriptor,
     ResourceTag,
     LicenseStockRecord,
     LicenseUsageRecord,
@@ -198,9 +197,6 @@ class TestPlatformAdapter implements PlatformAdapter {
         throw new Error('Method not implemented.');
     }
     equalToVm(vmA: VirtualMachine, vmB: VirtualMachine): boolean {
-        throw new Error('Method not implemented.');
-    }
-    describeVm(desc: VmDescriptor): Promise<VirtualMachine> {
         throw new Error('Method not implemented.');
     }
     deleteVm(vm: VirtualMachine): Promise<void> {
