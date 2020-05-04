@@ -306,7 +306,7 @@ export abstract class Autoscale extends Table<AutoscaleDbItem> {
         const item: AutoscaleDbItem = {
             vmId: this.typeConvert.valueToString(record.vmId),
             scalingGroupName: this.typeConvert.valueToString(record.scalingGroupName),
-            ip: this.typeConvert.valueToString(record.masterIp),
+            ip: this.typeConvert.valueToString(record.ip),
             masterIp: this.typeConvert.valueToString(record.masterIp),
             heartBeatLossCount: this.typeConvert.valueToNumber(record.heartBeatLossCount),
             heartBeatInterval: this.typeConvert.valueToNumber(record.heartBeatInterval),
@@ -526,7 +526,9 @@ export abstract class NicAttachment extends Table<NicAttachmentDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('NicAttachment');
-        this.alterAttributes(NicAttachment.__attributes);
+        NicAttachment.__attributes.forEach(def => {
+            this.addAttribute(def);
+        });
     }
     convertRecord(record: Record): NicAttachmentDbItem {
         const item: NicAttachmentDbItem = {
@@ -590,7 +592,9 @@ export abstract class VmInfoCache extends Table<VmInfoCacheDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('VmInfoCache');
-        this.alterAttributes(VmInfoCache.__attributes);
+        VmInfoCache.__attributes.forEach(def => {
+            this.addAttribute(def);
+        });
     }
     convertRecord(record: Record): VmInfoCacheDbItem {
         const item: VmInfoCacheDbItem = {
@@ -640,7 +644,9 @@ export abstract class LicenseStock extends Table<LicenseStockDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('LicenseStock');
-        this.alterAttributes(LicenseStock.__attributes);
+        LicenseStock.__attributes.forEach(def => {
+            this.addAttribute(def);
+        });
     }
     convertRecord(record: Record): LicenseStockDbItem {
         const item: LicenseStockDbItem = {
@@ -711,7 +717,9 @@ export abstract class LicenseUsage extends Table<LicenseUsageDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('LicenseUsage');
-        this.alterAttributes(LicenseUsage.__attributes);
+        LicenseUsage.__attributes.forEach(def => {
+            this.addAttribute(def);
+        });
     }
     convertRecord(record: Record): LicenseUsageDbItem {
         const item: LicenseUsageDbItem = {
@@ -757,7 +765,9 @@ export abstract class CustomLog extends Table<CustomLogDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('CustomLog');
-        this.alterAttributes(CustomLog.__attributes);
+        CustomLog.__attributes.forEach(def => {
+            this.addAttribute(def);
+        });
     }
     convertRecord(record: Record): CustomLogDbItem {
         const item: CustomLogDbItem = {
@@ -798,7 +808,9 @@ export abstract class VpnAttachment extends Table<VpnAttachmentDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('VpnAttachment');
-        this.alterAttributes(VpnAttachment.__attributes);
+        VpnAttachment.__attributes.forEach(def => {
+            this.addAttribute(def);
+        });
     }
     convertRecord(record: Record): VpnAttachmentDbItem {
         const item: VpnAttachmentDbItem = {

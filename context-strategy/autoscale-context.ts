@@ -148,14 +148,27 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
                 this.res.newMaster = this.env.candidate;
                 // update the new master record
                 this.res.newMasterRecord = masterRecord;
-                return MasterElectionStrategyResult.ShouldContinue;
             } catch (error) {
-                this.proxy.logForError(
-                    'Error in running PreferredGroupMasterElection strategy.',
-                    error
-                );
-                return MasterElectionStrategyResult.ShouldStop;
+                // if error occurred within creating the master record, check if a new master was
+                // elected somewhere else at the same time.
+                const newMaster = await this.platform.getMasterVm();
+                // if another master was elected. use that elected master.
+                if (newMaster) {
+                    this.res.newMaster = newMaster;
+                    // update the new master record
+                    this.res.newMasterRecord = await this.platform.getMasterRecord();
+                }
+                // if no master elected, there must be an unexpected error, log and stop.
+                else {
+                    this.proxy.logForError(
+                        'Error in running PreferredGroupMasterElection strategy.',
+                        error
+                    );
+                    return MasterElectionStrategyResult.ShouldStop;
+                }
             }
+            // ASSERT: new master and master record are ready.
+            return MasterElectionStrategyResult.ShouldContinue;
         }
     }
 }
@@ -213,7 +226,8 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         let oldSeq = 0;
         const settings = await this.platform.getSettings();
         // number in second the max amount of delay allowed to offset the network latency
-        const delayAllowance = Number(settings.get(AutoscaleSetting.HeartbeatDelayAllowance).value);
+        const delayAllowance =
+            Number(settings.get(AutoscaleSetting.HeartbeatDelayAllowance).value) * 1000;
         // max amount of heartbeat loss count allowed before deeming a device unhealthy
         const maxLossCount = Number(settings.get(AutoscaleSetting.HeartbeatLossCount).value);
         const nextHeartbeatTime: number = heartbeatArriveTime + newInterval;
@@ -222,7 +236,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         let targetHealthCheckRecord = await this.platform.getHealthCheckRecord(this.targetVm.id);
         // if there's no health check record for this vm,
         // can deem it the first time for health check
-        if (targetHealthCheckRecord === null) {
+        if (!targetHealthCheckRecord) {
             this.firstHeartbeat = true;
             this.result = HealthCheckResult.OnTime;
             targetHealthCheckRecord = {

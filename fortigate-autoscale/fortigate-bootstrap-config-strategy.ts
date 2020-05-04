@@ -44,7 +44,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
     async apply(): Promise<BootstrapConfigStrategyResult> {
         const config = await this.loadConfig();
         // target is the master? return config sets for active role
-        if (this.platform.vmEqualTo(this.env.targetVm, this.env.masterVm)) {
+        if (this.platform.vmEquals(this.env.targetVm, this.env.masterVm)) {
             this.config = await this.getActiveRoleConfig(config, this.env.targetVm);
             this.proxy.logAsInfo('loaded configuration for active role.');
         }

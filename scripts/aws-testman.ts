@@ -708,9 +708,7 @@ export class MockDocClient extends TestFixture {
             const data = await readFileAsJson(filePath);
             const items = (data.Items as Array<any>).map(entry => {
                 const o = {};
-                for (const prop in entry) {
-                    o[prop] = entry[prop].S as string;
-                }
+                Object.assign(o, entry);
                 return o;
             });
             data.Items = items;
@@ -734,14 +732,6 @@ export class MockDocClient extends TestFixture {
                     .join('-')
             );
             const data = await readFileAsJson(filePath);
-            let item: {} = null;
-            for (const prop in data.Item as {}) {
-                if (!item) {
-                    item = {};
-                }
-                item[prop] = Object.values(data.Item[prop])[0];
-            }
-            data.Item = item;
             this.clearRedir();
             return data;
         });

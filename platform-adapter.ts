@@ -73,7 +73,7 @@ export interface PlatformAdapter {
     ): Promise<VirtualMachine[] | null>;
     getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord | null>;
     getMasterRecord(filters?: KeyValue[]): Promise<MasterRecord | null>;
-    vmEqualTo(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean;
+    vmEquals(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean;
     createHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
     updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
     /**

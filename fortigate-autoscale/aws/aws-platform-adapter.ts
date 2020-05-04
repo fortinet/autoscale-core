@@ -136,15 +136,21 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy = proxy;
         this.createTime = createTime ? createTime : Date.now();
     }
-    vmEqualTo(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean {
+    vmEquals(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean {
         if (!vmA || !vmB) {
             return false;
         } else {
-            return (
-                Object.keys(vmA).filter(prop => {
-                    return vmA[prop] !== vmB[prop];
-                }).length === 0
-            );
+            const equals = (objA: object, objB: object): boolean => {
+                const t = Object.keys(objA).filter(prop => {
+                    if (objA[prop] instanceof Object && objB[prop] instanceof Object) {
+                        return !equals(objA[prop], objB[prop]);
+                    } else {
+                        return objA[prop] !== objB[prop];
+                    }
+                });
+                return t.length === 0;
+            };
+            return equals(vmA, vmB);
         }
     }
     async deleteVmFromScalingGroup(vmId: string): Promise<void> {
@@ -423,11 +429,22 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     this.settings.get(AwsFortiGateAutoscaleSetting.HeartbeatDelayAllowance).value
                 );
 
+            const maxHeartbeatLossCount = Number(
+                this.settings.get(AwsFortiGateAutoscaleSetting.HeartbeatLossCount).value
+            );
+
             const [syncState] = Object.entries(HealthCheckSyncState)
                 .filter(([, value]) => {
                     return dbItem.syncState === value;
                 })
                 .map(([, v]) => v);
+
+            const nextHeartbeatLossCount =
+                dbItem.heartBeatLossCount + ((heartbeatDelay > 0 && 1) || 0);
+
+            // healthy reason: next heartbeat loss count is smaller than max allowed value.
+            const isHealthy = nextHeartbeatLossCount < maxHeartbeatLossCount;
+
             record = {
                 vmId: vmId,
                 scalingGroupName: dbItem.scalingGroupName,
@@ -438,7 +455,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 nextHeartbeatTime: dbItem.nextHeartBeatTime,
                 syncState: syncState,
                 seq: dbItem.seq,
-                healthy: heartbeatDelay <= 0,
+                healthy: isHealthy,
                 upToDate: true
             };
         }
@@ -463,6 +480,8 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     return record.voteState === value;
                 })
                 .map(([, v]) => v);
+            const voteTimedOut =
+                voteState !== MasterRecordVoteState.Done && Number(record.voteEndTime) < Date.now();
             masterRecord = {
                 id: record.id,
                 vmId: record.vmId,
@@ -471,7 +490,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 virtualNetworkId: record.virtualNetworkId,
                 subnetId: record.subnetId,
                 voteEndTime: Number(record.voteEndTime),
-                voteState: voteState
+                voteState: (voteTimedOut && MasterRecordVoteState.Timeout) || voteState
             };
         }
 
@@ -554,7 +573,8 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             // save record only if record for a certain scaling group name not exists, or
             // if it exists but timeout
             const conditionExp: AwsDdbOperations = {
-                Expression: 'attribute_not_exists(scalingGroupName)'
+                Expression: 'attribute_not_exists(scalingGroupName)',
+                type: CreateOrUpdate.CreateOrReplace
             };
             if (oldRec) {
                 conditionExp.Expression =

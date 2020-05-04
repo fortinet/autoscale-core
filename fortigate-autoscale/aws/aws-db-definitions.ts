@@ -162,7 +162,9 @@ export class AwsLifecycleItem extends Table<LifecycleItemDbItem> {
         super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // Caution: don't forget to set a correct name.
         this.setName('LifecycleItem');
-        this.alterAttributes(AwsLifecycleItem.__attributes);
+        AwsLifecycleItem.__attributes.forEach(def => {
+            this.addAttribute(def);
+        });
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
@@ -174,7 +176,7 @@ export class AwsLifecycleItem extends Table<LifecycleItemDbItem> {
             actionResult: record.actionResult as string,
             actionToken: record.actionToken as string,
             hookName: record.hookName as string,
-            state: record.done as string,
+            state: record.state as string,
             timestamp: record.timestamp as number
         };
         return item;

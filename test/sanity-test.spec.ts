@@ -91,7 +91,7 @@ class TestPlatformAdapter implements PlatformAdapter {
     listAutoscaleVm(identifyScalingGroup?: boolean, listNic?: boolean): Promise<VirtualMachine[]> {
         throw new Error('Method not implemented.');
     }
-    vmEqualTo(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean {
+    vmEquals(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean {
         throw new Error('Method not implemented.');
     }
     deleteVmFromScalingGroup(vmId: string): Promise<void> {
@@ -343,9 +343,9 @@ describe('sanity test', () => {
             Sinon.assert.match(await stub2.returnValues[0], s);
             Sinon.assert.match(stub3.called, true);
             Sinon.assert.match(stub4.notCalled, true);
-            Sinon.assert.match(stub5.called, true);
+            Sinon.assert.match(stub5.called, false);
             Sinon.assert.match(stub6.called, false);
-            Sinon.assert.match(!!result.newMaster, true);
+            Sinon.assert.match(!result.newMaster, true);
         } catch (error) {
             console.log(error);
             Sinon.assert.fail('should not throw errors.');

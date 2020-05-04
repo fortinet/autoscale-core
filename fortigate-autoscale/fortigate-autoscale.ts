@@ -127,7 +127,7 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             newVm: true, // ASSERT: vm in boostraping is a new vm
             newMasterRole:
                 (masterElection.newMaster &&
-                    this.platform.vmEqualTo(this.env.targetVm, this.env.masterVm)) ||
+                    this.platform.vmEquals(this.env.targetVm, this.env.masterVm)) ||
                 false
         };
         await this.handleTaggingAutoscaleVm([vmTagging]);
