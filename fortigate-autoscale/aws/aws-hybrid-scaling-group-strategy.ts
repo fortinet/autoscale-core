@@ -1,7 +1,8 @@
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import { ScalingGroupStrategy } from '../../context-strategy/scaling-group-context';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsPlatformAdapter, LifecyleState } from './aws-platform-adapter';
+import { AwsPlatformAdapter, LifecyleState, LifecycleActionResult } from './aws-platform-adapter';
+import { JSONable } from 'jsonable';
 
 export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
     platform: AwsPlatformAdapter;
@@ -15,9 +16,14 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         this.proxy.logAsInfo('calling AwsHybridScalingGroupStrategy.onLaunchingVm');
         const settings = await this.platform.getSettings();
         const targetVm = await this.platform.getTargetVm();
-        let reqDetail: { [key: string]: string };
+        let reqDetail: JSONable;
         try {
-            reqDetail = JSON.parse(this.platform.getReqAsString());
+            const req = JSON.parse(this.platform.getReqAsString());
+            if (!req.detail) {
+                this.proxy.logAsError(`Request content: ${JSON.stringify(req)}`);
+                throw new Error("'detail' property not found on the request.");
+            }
+            reqDetail = req.detail as JSONable;
         } catch (error) {
             this.proxy.logForError('Unable to convert request detail to JSON object.', error);
             throw new Error('Malformed request.');
@@ -130,10 +136,20 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
             await this.platform.loadBalancerDetachVm(targetGroupArn, [targetVm.id]);
             // NOTE: TODO: REVIEW: is it possible to enter a terminating state while it is in
             // another transitioning state such as launching?
-            // NOTE: TODO: REVIEW: what if a vm is manually deleted externally, ie. termination
-            // not triggered by the scaling group? will the terminating hook be triggered as well?
-            // create lifecycle hook
-            await this.platform.createLifecycleItem(lifecycleItem);
+
+            // check if any existing lifecycle item for the target vm (such as in launching)
+            // then change to abandon it later.
+            const existingLifecycleItem = await this.platform.getLifecycleItem(targetVm.id);
+            if (existingLifecycleItem) {
+                Object.assign(lifecycleItem, existingLifecycleItem);
+                lifecycleItem.actionResult = LifecycleActionResult.Abandon;
+                await this.platform.updateLifecycleItem(lifecycleItem);
+            } else {
+                // NOTE: TODO: REVIEW: what if a vm is manually deleted externally, ie. termination
+                // not triggered by the scaling group? will the terminating hook be triggered as well?
+                // create lifecycle hook
+                await this.platform.createLifecycleItem(lifecycleItem);
+            }
             this.proxy.logAsInfo('called AwsHybridScalingGroupStrategy.onTerminatingVm');
             return Promise.resolve('');
         } catch (error) {

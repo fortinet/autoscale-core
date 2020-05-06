@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
+import { APIGatewayProxyEvent, APIGatewayProxyResult, Context, ScheduledEvent } from 'aws-lambda';
 import { AutoScaling, EC2, ELBv2, Lambda, S3 } from 'aws-sdk';
 import * as commentJson from 'comment-json';
 import fs from 'fs';
@@ -64,8 +64,11 @@ export class AwsTestMan {
         );
     }
 
-    async fakeLaunchingVmRequest(): Promise<JSONable> {
-        return await this.readFileAsJson(path.resolve(this.rootDir, 'launching-vm'));
+    async fakeLaunchingVmRequest(filePath: string): Promise<ScheduledEvent> {
+        const e = await this.readFileAsJson(path.resolve(this.rootDir, filePath));
+        const event = {} as ScheduledEvent;
+        Object.assign(event, e);
+        return event;
     }
 
     async fakeApiGatewayRequest(filePath: string): Promise<APIGatewayProxyEvent> {
@@ -113,21 +116,133 @@ export class AwsTestMan {
     }
 }
 
+export type FakeCall = (...args: any[]) => any;
+export type Hook = (...args: any[]) => any;
+interface SubCall {
+    subPath: string;
+    callOnce: boolean;
+}
+export interface StubStack {
+    stub: SinonStub;
+    fakeCall: FakeCall;
+    sequentialCall: boolean;
+    subCalls: Map<number, SubCall>;
+    hooks: Hook[];
+}
+
 export abstract class TestFixture {
-    redirName: string;
-    readonly stubs: Map<string, SinonStub> = new Map();
+    subCall: SubCall;
+    subCallOwner: string;
+    subCallNth: number;
+    readonly stubs: Map<string, StubStack> = new Map();
     abstract init(): void;
     restoreAll(): void {
-        this.stubs.forEach(stub => {
-            stub.restore();
+        this.stubs.forEach(stack => {
+            stack.stub.restore();
         });
     }
-    redir(filePath: string): void {
-        this.redirName = filePath;
+
+    clearAll(): void {
+        this.stubs.forEach(stack => {
+            stack.stub.restore();
+            stack.fakeCall = null;
+            stack.subCalls = new Map();
+        });
     }
 
-    clearRedir(): void {
-        this.redirName = '';
+    setStub(stubKey: string, stub: SinonStub): TestFixture {
+        const stubStack: StubStack = {
+            stub: stub,
+            fakeCall: null,
+            sequentialCall: false,
+            subCalls: new Map(),
+            hooks: []
+        };
+        this.stubs.set(stubKey, stubStack);
+        return this;
+    }
+
+    getStub(stubkey: string): SinonStub {
+        return this.stubs.get(stubkey).stub;
+    }
+
+    setFakeCall(stubKey: string, func: FakeCall): TestFixture {
+        this.stubs.get(stubKey).fakeCall = func;
+        this.stubs.get(stubKey).stub.callsFake(args => {
+            const stubStack = this.stubs.get(stubKey);
+            const callCount = this.stubs.get(stubKey).stub.callCount;
+            if (stubStack.subCalls.has(-1)) {
+                this.setSubCall(stubKey, callCount + 1, stubStack.subCalls.get(-1));
+            } else if (callCount > 0 && stubStack.sequentialCall) {
+                this.setSubCall(stubKey, callCount + 1, {
+                    subPath: `seq-${callCount + 1}`,
+                    callOnce: false
+                });
+            } else if (stubStack.subCalls.has(callCount + 1)) {
+                this.setSubCall(stubKey, callCount + 1, stubStack.subCalls.get(callCount + 1));
+                if (!stubStack.subCalls.get(callCount + 1).callOnce) {
+                    stubStack.subCalls.set(-1, stubStack.subCalls.get(callCount + 1));
+                }
+            } else {
+                this.setSubCall(stubKey, callCount + 1, {
+                    subPath: '',
+                    callOnce: true
+                });
+            }
+            stubStack.hooks.forEach(hook => {
+                hook.call(this);
+            });
+            return stubStack.fakeCall.apply(this, [args]);
+        });
+        return this;
+    }
+
+    callSubOnNthFake(stubKey: string, nth: number, subPath: string, callOnce = true): TestFixture {
+        this.stubs.get(stubKey).subCalls.set(nth, {
+            subPath: subPath,
+            callOnce: callOnce
+        });
+        return this;
+    }
+
+    callSubOnNextFake(stubKey: string, subPath: string): TestFixture {
+        const callCount = this.stubs.get(stubKey).stub.callCount;
+        return this.callSubOnNthFake(stubKey, callCount + 1, subPath);
+    }
+
+    clearSub(stubKey: string): TestFixture {
+        this.stubs.get(stubKey).subCalls.clear();
+        return this;
+    }
+
+    hookOnStub(stubKey: string, hook: Hook): TestFixture {
+        this.stubs.get(stubKey).hooks.push(hook);
+        return this;
+    }
+
+    enableSequentialFakeCall(stubKey: string): TestFixture {
+        this.stubs.get(stubKey).sequentialCall = true;
+        return this;
+    }
+
+    disableSequentialFakeCall(stubKey: string): TestFixture {
+        this.stubs.get(stubKey).sequentialCall = false;
+        return this;
+    }
+
+    setSubCall(owner: string, nth: number, subCall: SubCall): void {
+        this.subCall = subCall;
+        this.subCallOwner = owner;
+        this.subCallNth = nth;
+    }
+
+    clearSubPath(): void {
+        if (this.subCall.callOnce) {
+            this.stubs.get(this.subCallOwner).subCalls.delete(this.subCallNth);
+        }
+        this.subCall = null;
+        this.subCallOwner = null;
+        this.subCallNth = NaN;
     }
 }
 
@@ -143,13 +258,13 @@ export class MockS3 extends TestFixture {
 
     init(): void {
         // NOTE: stub
-        this.stubs.set('listObjectsV2', Sinon.stub(this.s3, 'listObjectsV2'));
-        this.stubs.get('listObjectsV2').callsFake(args => {
+        this.setStub('listObjectsV2', Sinon.stub(this.s3, 'listObjectsV2'));
+        this.setFakeCall('listObjectsV2', args => {
             return this.listObjectsV2(args);
         });
         // NOTE: stub
-        this.stubs.set('getObject', Sinon.stub(this.s3, 'getObject'));
-        this.stubs.get('getObject').callsFake(args => {
+        this.setStub('getObject', Sinon.stub(this.s3, 'getObject'));
+        this.setFakeCall('getObject', args => {
             return this.getObject(args);
         });
     }
@@ -159,12 +274,12 @@ export class MockS3 extends TestFixture {
             const filePath = path.resolve(
                 this.rootDir,
                 's3',
-                [request.Bucket, ...request.Prefix.split('/'), this.redirName]
+                [request.Bucket, ...request.Prefix.split('/'), this.subCall.subPath]
                     .filter(v => v)
                     .join('/')
             );
             const files = await fs.readdirSync(filePath);
-            this.clearRedir();
+            this.clearSubPath();
             return {
                 Contents: files.map(fname => {
                     return {
@@ -180,10 +295,12 @@ export class MockS3 extends TestFixture {
             const filePath = path.resolve(
                 this.rootDir,
                 's3',
-                [request.Bucket, ...request.Key.split('/'), this.redirName].filter(v => v).join('/')
+                [request.Bucket, ...request.Key.split('/'), this.subCall.subPath]
+                    .filter(v => v)
+                    .join('/')
             );
             const data = fs.readFileSync(filePath);
-            this.clearRedir();
+            this.clearSubPath();
             return {
                 Body: data.toString()
             };
@@ -203,95 +320,95 @@ export class MockEC2 extends TestFixture {
 
     init(): void {
         // NOTE: stub
-        this.stubs.set('describeInstances', Sinon.stub(this.ec2, 'describeInstances'));
-        this.stubs.get('describeInstances').callsFake(args => {
+        this.setStub('describeInstances', Sinon.stub(this.ec2, 'describeInstances'));
+        this.setFakeCall('describeInstances', args => {
             return this.describeInstances(args);
         });
         // NOTE: stub
-        this.stubs.set('createNetworkInterface', Sinon.stub(this.ec2, 'createNetworkInterface'));
-        this.stubs.get('createNetworkInterface').callsFake(args => {
+        this.setStub('createNetworkInterface', Sinon.stub(this.ec2, 'createNetworkInterface'));
+        this.setFakeCall('createNetworkInterface', args => {
             return this.createNetworkInterface(args);
         });
         // NOTE: stub
-        this.stubs.set('deleteNetworkInterface', Sinon.stub(this.ec2, 'deleteNetworkInterface'));
-        this.stubs.get('deleteNetworkInterface').callsFake(args => {
+        this.setStub('deleteNetworkInterface', Sinon.stub(this.ec2, 'deleteNetworkInterface'));
+        this.setFakeCall('deleteNetworkInterface', args => {
             return this.deleteNetworkInterface(args);
         });
         // NOTE: stub
-        this.stubs.set(
+        this.setStub(
             'describeNetworkInterfaces',
             Sinon.stub(this.ec2, 'describeNetworkInterfaces')
         );
-        this.stubs.get('describeNetworkInterfaces').callsFake(args => {
+        this.setFakeCall('describeNetworkInterfaces', args => {
             return this.describeNetworkInterfaces(args);
         });
         // NOTE: stub
-        this.stubs.set('attachNetworkInterface', Sinon.stub(this.ec2, 'attachNetworkInterface'));
-        this.stubs.get('attachNetworkInterface').callsFake(args => {
+        this.setStub('attachNetworkInterface', Sinon.stub(this.ec2, 'attachNetworkInterface'));
+        this.setFakeCall('attachNetworkInterface', args => {
             return this.attachNetworkInterface(args);
         });
         // NOTE: stub
-        this.stubs.set('detachNetworkInterface', Sinon.stub(this.ec2, 'detachNetworkInterface'));
-        this.stubs.get('detachNetworkInterface').callsFake(nicId => {
+        this.setStub('detachNetworkInterface', Sinon.stub(this.ec2, 'detachNetworkInterface'));
+        this.setFakeCall('detachNetworkInterface', nicId => {
             return this.detachNetworkInterface(nicId);
         });
         // NOTE: stub
-        this.stubs.set('createTags', Sinon.stub(this.ec2, 'createTags'));
-        this.stubs.get('createTags').callsFake(args => {
+        this.setStub('createTags', Sinon.stub(this.ec2, 'createTags'));
+        this.setFakeCall('createTags', args => {
             return this.createTags(args);
         });
         // NOTE: stub
-        this.stubs.set('deleteTags', Sinon.stub(this.ec2, 'deleteTags'));
-        this.stubs.get('deleteTags').callsFake(args => {
+        this.setStub('deleteTags', Sinon.stub(this.ec2, 'deleteTags'));
+        this.setFakeCall('deleteTags', args => {
             return this.deleteTags(args);
         });
         // NOTE: stub
-        this.stubs.set('modifyInstanceAttribute', Sinon.stub(this.ec2, 'modifyInstanceAttribute'));
-        this.stubs.get('modifyInstanceAttribute').callsFake(args => {
+        this.setStub('modifyInstanceAttribute', Sinon.stub(this.ec2, 'modifyInstanceAttribute'));
+        this.setFakeCall('modifyInstanceAttribute', args => {
             return this.modifyInstanceAttribute(args);
         });
         // NOTE: stub
-        this.stubs.set('createCustomerGateway', Sinon.stub(this.ec2, 'createCustomerGateway'));
-        this.stubs.get('createCustomerGateway').callsFake(args => {
+        this.setStub('createCustomerGateway', Sinon.stub(this.ec2, 'createCustomerGateway'));
+        this.setFakeCall('createCustomerGateway', args => {
             return this.createCustomerGateway(args);
         });
         // NOTE: stub
-        this.stubs.set('deleteCustomerGateway', Sinon.stub(this.ec2, 'deleteCustomerGateway'));
-        this.stubs.get('deleteCustomerGateway').callsFake(args => {
+        this.setStub('deleteCustomerGateway', Sinon.stub(this.ec2, 'deleteCustomerGateway'));
+        this.setFakeCall('deleteCustomerGateway', args => {
             return this.deleteCustomerGateway(args);
         });
         // NOTE: stub
-        this.stubs.set('createVpnConnection', Sinon.stub(this.ec2, 'createVpnConnection'));
-        this.stubs.get('createVpnConnection').callsFake(args => {
+        this.setStub('createVpnConnection', Sinon.stub(this.ec2, 'createVpnConnection'));
+        this.setFakeCall('createVpnConnection', args => {
             return this.createVpnConnection(args);
         });
         // NOTE: stub
-        this.stubs.set('deleteVpnConnection', Sinon.stub(this.ec2, 'deleteVpnConnection'));
-        this.stubs.get('deleteVpnConnection').callsFake(args => {
+        this.setStub('deleteVpnConnection', Sinon.stub(this.ec2, 'deleteVpnConnection'));
+        this.setFakeCall('deleteVpnConnection', args => {
             return this.deleteVpnConnection(args);
         });
         // NOTE: stub
-        this.stubs.set(
+        this.setStub(
             'describeTransitGatewayAttachments',
             Sinon.stub(this.ec2, 'describeTransitGatewayAttachments')
         );
-        this.stubs.get('describeTransitGatewayAttachments').callsFake(args => {
+        this.setFakeCall('describeTransitGatewayAttachments', args => {
             return this.describeTransitGatewayAttachments(args);
         });
         // NOTE: stub
-        this.stubs.set(
+        this.setStub(
             'enableTransitGatewayRouteTablePropagation',
             Sinon.stub(this.ec2, 'enableTransitGatewayRouteTablePropagation')
         );
-        this.stubs.get('enableTransitGatewayRouteTablePropagation').callsFake(args => {
+        this.setFakeCall('enableTransitGatewayRouteTablePropagation', args => {
             return this.enableTransitGatewayRouteTablePropagation(args);
         });
         // NOTE: stub
-        this.stubs.set(
+        this.setStub(
             'associateTransitGatewayRouteTable',
             Sinon.stub(this.ec2, 'associateTransitGatewayRouteTable')
         );
-        this.stubs.get('associateTransitGatewayRouteTable').callsFake(args => {
+        this.setFakeCall('associateTransitGatewayRouteTable', args => {
             return this.associateTransitGatewayRouteTable(args);
         });
     }
@@ -309,10 +426,10 @@ export class MockEC2 extends TestFixture {
             const filePath = path.resolve(
                 this.rootDir,
                 'ec2',
-                ['describe-instances', sampleName || this.redirName].filter(v => v).join('-')
+                ['describe-instances', sampleName || this.subCall.subPath].filter(v => v).join('-')
             );
             const data = await readFileAsJson(filePath);
-            this.clearRedir();
+            this.clearSubPath();
             return data;
         });
     }
@@ -322,15 +439,16 @@ export class MockEC2 extends TestFixture {
             const filePath = path.resolve(
                 this.rootDir,
                 'ec2',
-                ['create-network-interface', this.redirName].filter(v => v).join('-')
+                ['create-network-interface', this.subCall.subPath].filter(v => v).join('-')
             );
             const data = await readFileAsJson(filePath);
-            data.SubnetId = request.SubnetId;
-            data.Description = request.Description;
-            data.Groups = request.Groups;
-            data.PrivateIpAddress = request.PrivateIpAddress;
-            this.clearRedir();
-            return data;
+            const nic: JSONable = data.NetworkInterface as JSONable;
+            nic.SubnetId = request.SubnetId;
+            nic.Description = request.Description;
+            nic.Groups = request.Groups;
+            nic.PrivateIpAddress = request.PrivateIpAddress;
+            this.clearSubPath();
+            return { NetworkInterface: nic };
         });
     }
 
@@ -345,10 +463,10 @@ export class MockEC2 extends TestFixture {
             const filePath = path.resolve(
                 this.rootDir,
                 'ec2',
-                ['describe-network-interfaces', this.redirName].filter(v => v).join('-')
+                ['describe-network-interfaces', this.subCall.subPath].filter(v => v).join('-')
             );
             const data = await readFileAsJson(filePath);
-            this.clearRedir();
+            this.clearSubPath();
             return data;
         });
     }
@@ -368,7 +486,7 @@ export class MockEC2 extends TestFixture {
                     .join('-')
             );
             const data = await readFileAsJson(filePath);
-            this.clearRedir();
+            this.clearSubPath();
             return data;
         });
     }
@@ -381,7 +499,7 @@ export class MockEC2 extends TestFixture {
                 ['detach-network-interface', request.AttachmentId].filter(v => v).join('-')
             );
             const data = await readFileAsJson(filePath);
-            this.clearRedir();
+            this.clearSubPath();
             return data;
         });
     }
@@ -405,10 +523,10 @@ export class MockEC2 extends TestFixture {
             const filePath = path.resolve(
                 this.rootDir,
                 'ec2',
-                ['create-customer-gateway', this.redirName].filter(v => v).join('-')
+                ['create-customer-gateway', this.subCall.subPath].filter(v => v).join('-')
             );
             const data = await readFileAsJson(filePath);
-            this.clearRedir();
+            this.clearSubPath();
             return data;
         });
     }
@@ -426,13 +544,13 @@ export class MockEC2 extends TestFixture {
                     'create-vpn-connection',
                     request.CustomerGatewayId,
                     request.TransitGatewayId,
-                    this.redirName
+                    this.subCall.subPath
                 ]
                     .filter(v => v)
                     .join('-')
             );
             const data = await readFileAsJson(filePath);
-            this.clearRedir();
+            this.clearSubPath();
             return data;
         });
     }
@@ -461,13 +579,13 @@ export class MockEC2 extends TestFixture {
                     'describe-transit-gateway-attachments',
                     transitGatewayId,
                     resourceId,
-                    this.redirName
+                    this.subCall.subPath
                 ]
                     .filter(v => v)
                     .join('-')
             );
             const data = await readFileAsJson(filePath);
-            this.clearRedir();
+            this.clearSubPath();
             return data;
         });
     }
@@ -482,13 +600,13 @@ export class MockEC2 extends TestFixture {
                     'enable-transit-gateway-route-table-propagation',
                     request.TransitGatewayAttachmentId,
                     request.TransitGatewayRouteTableId,
-                    this.redirName
+                    this.subCall.subPath
                 ]
                     .filter(v => v)
                     .join('-')
             );
             const data = await readFileAsJson(filePath);
-            this.clearRedir();
+            this.clearSubPath();
             return data;
         });
     }
@@ -503,13 +621,13 @@ export class MockEC2 extends TestFixture {
                     'associate-transit-gateway-route-table',
                     request.TransitGatewayAttachmentId,
                     request.TransitGatewayRouteTableId,
-                    this.redirName
+                    this.subCall.subPath
                 ]
                     .filter(v => v)
                     .join('-')
             );
             const data = await readFileAsJson(filePath);
-            this.clearRedir();
+            this.clearSubPath();
             return data;
         });
     }
@@ -527,27 +645,27 @@ export class MockAutoScaling extends TestFixture {
 
     init(): void {
         // NOTE: stub
-        this.stubs.set(
+        this.setStub(
             'describeAutoScalingGroups',
             Sinon.stub(this.autoscaling, 'describeAutoScalingGroups')
         );
-        this.stubs.get('describeAutoScalingGroups').callsFake(args => {
+        this.setFakeCall('describeAutoScalingGroups', args => {
             return this.describeAutoScalingGroups(args);
         });
         // NOTE: stub
-        this.stubs.set(
+        this.setStub(
             'completeLifecycleAction',
             Sinon.stub(this.autoscaling, 'completeLifecycleAction')
         );
-        this.stubs.get('completeLifecycleAction').callsFake(args => {
+        this.setFakeCall('completeLifecycleAction', args => {
             return this.completeLifecycleAction(args);
         });
         // NOTE: stub
-        this.stubs.set(
+        this.setStub(
             'terminateInstanceInAutoScalingGroup',
             Sinon.stub(this.autoscaling, 'terminateInstanceInAutoScalingGroup')
         );
-        this.stubs.get('terminateInstanceInAutoScalingGroup').callsFake(args => {
+        this.setFakeCall('terminateInstanceInAutoScalingGroup', args => {
             return this.terminateInstanceInAutoScalingGroup(args);
         });
     }
@@ -559,14 +677,14 @@ export class MockAutoScaling extends TestFixture {
                     const filePath = path.resolve(
                         this.rootDir,
                         'autoscaling',
-                        ['describe-auto-scaling-groups', name, this.redirName]
+                        ['describe-auto-scaling-groups', name, this.subCall.subPath]
                             .filter(v => v)
                             .join('-')
                     );
                     return readFileAsJson(filePath);
                 })
             );
-            this.clearRedir();
+            this.clearSubPath();
             let groups = [];
             data.forEach(d => {
                 groups = [...groups, ...(d.AutoScalingGroups as Array<any>)];
@@ -604,13 +722,13 @@ export class MockElbv2 extends TestFixture {
 
     init(): void {
         // NOTE: stub
-        this.stubs.set('registerTargets', Sinon.stub(this.elbv2, 'registerTargets'));
-        this.stubs.get('registerTargets').callsFake(args => {
+        this.setStub('registerTargets', Sinon.stub(this.elbv2, 'registerTargets'));
+        this.setFakeCall('registerTargets', args => {
             return this.registerTargets(args);
         });
         // NOTE: stub
-        this.stubs.set('deregisterTargets', Sinon.stub(this.elbv2, 'deregisterTargets'));
-        this.stubs.get('deregisterTargets').callsFake(args => {
+        this.setStub('deregisterTargets', Sinon.stub(this.elbv2, 'deregisterTargets'));
+        this.setFakeCall('deregisterTargets', args => {
             return this.deregisterTargets(args);
         });
     }
@@ -640,8 +758,8 @@ export class MockLambda extends TestFixture {
 
     init(): void {
         // NOTE: stub
-        this.stubs.set('invoke', Sinon.stub(this.lambda, 'invoke'));
-        this.stubs.get('invoke').callsFake(args => {
+        this.setStub('invoke', Sinon.stub(this.lambda, 'invoke'));
+        this.setFakeCall('invoke', args => {
             return this.invoke(args);
         });
     }
@@ -651,10 +769,10 @@ export class MockLambda extends TestFixture {
             const filePath = path.resolve(
                 this.rootDir,
                 'lambda',
-                ['invoke', request.FunctionName, this.redirName].filter(v => v).join('-')
+                ['invoke', request.FunctionName, this.subCall.subPath].filter(v => v).join('-')
             );
             const data = await readFileAsJson(filePath);
-            this.clearRedir();
+            this.clearSubPath();
             return data;
         });
     }
@@ -672,28 +790,28 @@ export class MockDocClient extends TestFixture {
 
     init(): void {
         // NOTE: stub
-        this.stubs.set('scan', Sinon.stub(this.docClient, 'scan'));
-        this.stubs.get('scan').callsFake(args => {
+        this.setStub('scan', Sinon.stub(this.docClient, 'scan'));
+        this.setFakeCall('scan', args => {
             return this.scan(args);
         });
         // NOTE: stub
-        this.stubs.set('get', Sinon.stub(this.docClient, 'get'));
-        this.stubs.get('get').callsFake(args => {
+        this.setStub('get', Sinon.stub(this.docClient, 'get'));
+        this.setFakeCall('get', args => {
             return this.get(args);
         });
         // NOTE: stub
-        this.stubs.set('put', Sinon.stub(this.docClient, 'put'));
-        this.stubs.get('put').callsFake(args => {
+        this.setStub('put', Sinon.stub(this.docClient, 'put'));
+        this.setFakeCall('put', args => {
             return this.put(args);
         });
         // NOTE: stub
-        this.stubs.set('update', Sinon.stub(this.docClient, 'update'));
-        this.stubs.get('update').callsFake(args => {
+        this.setStub('update', Sinon.stub(this.docClient, 'update'));
+        this.setFakeCall('update', args => {
             return this.update(args);
         });
         // NOTE: stub
-        this.stubs.set('delete', Sinon.stub(this.docClient, 'delete'));
-        this.stubs.get('delete').callsFake(args => {
+        this.setStub('delete', Sinon.stub(this.docClient, 'delete'));
+        this.setFakeCall('delete', args => {
             return this.delete(args);
         });
     }
@@ -703,16 +821,17 @@ export class MockDocClient extends TestFixture {
             const filePath = path.resolve(
                 this.rootDir,
                 'docclient',
-                ['scan', request.TableName.toLowerCase(), this.redirName].filter(v => v).join('-')
+                ['scan', request.TableName.toLowerCase(), this.subCall.subPath]
+                    .filter(v => v)
+                    .join('-')
             );
             const data = await readFileAsJson(filePath);
             const items = (data.Items as Array<any>).map(entry => {
-                const o = {};
-                Object.assign(o, entry);
+                const o = { ...entry };
                 return o;
             });
             data.Items = items;
-            this.clearRedir();
+            this.clearSubPath();
             return data;
         });
     }
@@ -726,13 +845,13 @@ export class MockDocClient extends TestFixture {
                     'get',
                     request.TableName.toLowerCase(),
                     ...Object.values(request.Key),
-                    this.redirName
+                    this.subCall.subPath
                 ]
                     .filter(v => v)
                     .join('-')
             );
             const data = await readFileAsJson(filePath);
-            this.clearRedir();
+            this.clearSubPath();
             return data;
         });
     }

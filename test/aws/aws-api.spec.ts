@@ -142,7 +142,7 @@ describe('AWS api test', () => {
         json = await readFileAsJson(
             path.resolve(mockAwsApiDir, 'ec2', `describe-instances-${instanceId}`)
         );
-        mockEC2.redir('master');
+
         instance = await awsPlatformAdaptee.describeInstance(instanceId);
         Sinon.assert.match(compare(instance).isEqualTo(json.Reservations[0].Instances[0]), true);
 
@@ -233,17 +233,17 @@ describe('AWS api test', () => {
         Sinon.assert.match(result, undefined);
 
         // NOTE: test
-        callCount = mockEC2.stubs.get('createTags').callCount;
+        callCount = mockEC2.getStub('createTags').callCount;
         await awsPlatformAdaptee.tagResource([], []);
         // ASSERT: createTags being called
-        Sinon.assert.match(mockEC2.stubs.get('createTags').callCount - callCount > 0, true);
+        Sinon.assert.match(mockEC2.getStub('createTags').callCount - callCount > 0, true);
 
         // NOTE: test
-        callCount = mockEC2.stubs.get('modifyInstanceAttribute').callCount;
+        callCount = mockEC2.getStub('modifyInstanceAttribute').callCount;
         await awsPlatformAdaptee.updateInstanceSrcDestChecking(instanceId, true);
         // ASSERT: createTags being called
         Sinon.assert.match(
-            mockEC2.stubs.get('modifyInstanceAttribute').callCount - callCount > 0,
+            mockEC2.getStub('modifyInstanceAttribute').callCount - callCount > 0,
             true
         );
 
@@ -253,11 +253,11 @@ describe('AWS api test', () => {
         Sinon.assert.match(compare(result).isEqualTo(json.CustomerGateway), true);
 
         // NOTE: test
-        callCount = mockEC2.stubs.get('deleteCustomerGateway').callCount;
+        callCount = mockEC2.getStub('deleteCustomerGateway').callCount;
         await awsPlatformAdaptee.deleteCustomerGateway(customerGatewayId);
         // ASSERT: createTags being called
         Sinon.assert.match(
-            mockEC2.stubs.get('deleteCustomerGateway').callCount - callCount > 0,
+            mockEC2.getStub('deleteCustomerGateway').callCount - callCount > 0,
             true
         );
 
@@ -280,13 +280,10 @@ describe('AWS api test', () => {
         Sinon.assert.match(compare(result).isEqualTo(json.VpnConnection), true);
 
         // NOTE: test
-        callCount = mockEC2.stubs.get('deleteVpnConnection').callCount;
+        callCount = mockEC2.getStub('deleteVpnConnection').callCount;
         await awsPlatformAdaptee.deleteVpnConnection(vpnConnectionId);
         // ASSERT: createTags being called
-        Sinon.assert.match(
-            mockEC2.stubs.get('deleteVpnConnection').callCount - callCount > 0,
-            true
-        );
+        Sinon.assert.match(mockEC2.getStub('deleteVpnConnection').callCount - callCount > 0, true);
 
         // NOTE: test
         json = await readFileAsJson(
@@ -364,19 +361,19 @@ describe('AWS api test', () => {
         const instanceId = 'i-0c6cb881aad1a8d79';
         let callCount: number;
         // NOTE: test
-        callCount = mockAutoscaling.stubs.get('describeAutoScalingGroups').callCount;
+        callCount = mockAutoscaling.getStub('describeAutoScalingGroups').callCount;
         const stub0 = Sinon.stub(awsPlatformAdapter, 'getReqVmId').callsFake(() => {
             return instanceId;
         });
         await awsPlatformAdapter.getTargetVm();
         Sinon.assert.match(
-            mockAutoscaling.stubs.get('describeAutoScalingGroups').callCount - callCount > 0,
+            mockAutoscaling.getStub('describeAutoScalingGroups').callCount - callCount > 0,
             true
         );
         stub0.restore();
 
         // NOTE: test
-        callCount = mockAutoscaling.stubs.get('completeLifecycleAction').callCount;
+        callCount = mockAutoscaling.getStub('completeLifecycleAction').callCount;
         await awsPlatformAdaptee.completeLifecycleAction(
             settings.get(AwsFortiGateAutoscaleSetting.ByolScalingGroupName).value,
             '',
@@ -384,15 +381,15 @@ describe('AWS api test', () => {
             ''
         );
         Sinon.assert.match(
-            mockAutoscaling.stubs.get('completeLifecycleAction').callCount - callCount > 0,
+            mockAutoscaling.getStub('completeLifecycleAction').callCount - callCount > 0,
             true
         );
 
         // NOTE: test
-        callCount = mockAutoscaling.stubs.get('terminateInstanceInAutoScalingGroup').callCount;
+        callCount = mockAutoscaling.getStub('terminateInstanceInAutoScalingGroup').callCount;
         await awsPlatformAdaptee.terminateInstanceInAutoScalingGroup(instanceId);
         Sinon.assert.match(
-            mockAutoscaling.stubs.get('terminateInstanceInAutoScalingGroup').callCount - callCount >
+            mockAutoscaling.getStub('terminateInstanceInAutoScalingGroup').callCount - callCount >
                 0,
             true
         );
@@ -405,16 +402,13 @@ describe('AWS api test', () => {
             AwsFortiGateAutoscaleSetting.AwsLoadBalancerTargetGroupArn
         ).value;
         // NOTE: test
-        callCount = mockElbv2.stubs.get('registerTargets').callCount;
+        callCount = mockElbv2.getStub('registerTargets').callCount;
         await awsPlatformAdaptee.elbRegisterTargets(targetGroupArn, [instanceId]);
-        Sinon.assert.match(mockElbv2.stubs.get('registerTargets').callCount - callCount > 0, true);
+        Sinon.assert.match(mockElbv2.getStub('registerTargets').callCount - callCount > 0, true);
         // NOTE: test
-        callCount = mockElbv2.stubs.get('deregisterTargets').callCount;
+        callCount = mockElbv2.getStub('deregisterTargets').callCount;
         await awsPlatformAdaptee.elbDeregisterTargets(targetGroupArn, [instanceId]);
-        Sinon.assert.match(
-            mockElbv2.stubs.get('deregisterTargets').callCount - callCount > 0,
-            true
-        );
+        Sinon.assert.match(mockElbv2.getStub('deregisterTargets').callCount - callCount > 0, true);
     });
 
     it('Lambda APIs', async () => {
@@ -425,8 +419,8 @@ describe('AWS api test', () => {
             paramKey2: 'paramValue2'
         };
         // NOTE: test
-        callCount = mockLambda.stubs.get('invoke').callCount;
+        callCount = mockLambda.getStub('invoke').callCount;
         await awsPlatformAdapter.invokeAutoscaleFunction(lambdaName, payload);
-        Sinon.assert.match(mockLambda.stubs.get('invoke').callCount - callCount > 0, true);
+        Sinon.assert.match(mockLambda.getStub('invoke').callCount - callCount > 0, true);
     });
 });

@@ -112,7 +112,13 @@ export abstract class Table<T> {
      * Table name (with prefix and suffix if provided)
      */
     get name(): string {
-        return this.namePrefix + this._name + this.nameSuffix;
+        return (
+            this.namePrefix +
+            (this.namePrefix ? '-' : '') +
+            this._name +
+            (this.nameSuffix ? '-' : '') +
+            this.nameSuffix
+        );
     }
     /**
      * Table schema

@@ -61,13 +61,13 @@ export async function waitFor<TResult>(
         interval = 5000; // soft default to 5 seconds
     }
     try {
-        const result = await promiseEmitter();
-
+        let result: TResult;
         let complete = false;
         do {
             if (proxy) {
                 proxy.logAsInfo('Await condition check result.');
             }
+            result = await promiseEmitter();
             complete = await conditionChecker(result, ++count, proxy || undefined);
             if (!complete) {
                 if (count >= maxCount) {
