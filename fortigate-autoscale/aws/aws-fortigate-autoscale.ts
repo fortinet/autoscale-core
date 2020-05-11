@@ -11,8 +11,7 @@ import {
 } from '../../context-strategy/nic-attachment-context';
 import {
     VpnAttachmentStrategy,
-    VpnAttachmentStrategyResult,
-    NoopVpnAttachmentStrategy
+    VpnAttachmentStrategyResult
 } from '../../context-strategy/vpn-attachment-context';
 import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../../helper-function';
 import { FortiGateAutoscale } from '../fortigate-autoscale';
@@ -58,7 +57,7 @@ export class AwsFortiGateAutoscale<TReq, Tcontext, TRes>
         // during launching
         this.setNicAttachmentStrategy(new AwsNicAttachmentStrategy());
         // use Noop vpn attachment strategy
-        this.setVpnAttachmentStrategy(new NoopVpnAttachmentStrategy());
+        this.setVpnAttachmentStrategy(new AwsTgwVpnAttachmentStrategy());
     }
     setNicAttachmentStrategy(strategy: NicAttachmentStrategy): void {
         this.nicAttachmentStrategy = strategy;
@@ -170,7 +169,15 @@ export class AwsFortiGateAutoscale<TReq, Tcontext, TRes>
         }
         // handle transit gateway vpn attachment
         if (settings.get(AwsFortiGateAutoscaleSetting.AwsEnableTransitGatewayVpn).truthValue) {
-            await this.handleVpnAttachment();
+            const vpnAttachmentResult = await this.handleVpnAttachment();
+            if (vpnAttachmentResult === VpnAttachmentStrategyResult.ShouldTerminateVm) {
+                // should abandon this lifecycle
+                // REVIEW: does abandonning the lifecycle hook trigger a terminating event fom the
+                // auto scaling group? so that it can go into the terminatingvm() workflow afterwards
+                const lifecycleItem = await this.platform.getLifecycleItem(this.env.targetVm.id);
+                await this.platform.completeLifecycleAction(lifecycleItem, false);
+                return '';
+            }
         }
         return '';
     }

@@ -2,7 +2,6 @@ import { ExpressionAttributeValueMap } from 'aws-sdk/clients/dynamodb';
 import EC2 from 'aws-sdk/clients/ec2';
 import path from 'path';
 import process from 'process';
-import { parseStringPromise as xml2jsParserPromise } from 'xml2js';
 
 import { Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
@@ -30,7 +29,6 @@ import {
     WaitForConditionChecker,
     WaitForPromiseEmitter
 } from '../../helper-function';
-import { JSONable } from '../../jsonable';
 import {
     HealthCheckRecord,
     HealthCheckSyncState,
@@ -51,6 +49,7 @@ import { LifecycleItemDbItem } from './aws-db-definitions';
 import * as AwsDBDef from './aws-db-definitions';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsPlatformAdaptee } from './aws-platform-adaptee';
+import { JSONable } from 'jsonable';
 
 export const TAG_KEY_RESOURCE_GROUP = 'tag:ResourceGroup';
 export const TAG_KEY_AUTOSCALE_ROLE = 'AutoscaleRole';
@@ -92,7 +91,6 @@ export interface AwsVpnConnection {
     ip: string;
     vpnConnectionId: string;
     customerGatewayId: string;
-    vpnConnection: JSONable;
     transitGatewayId?: string;
     transitGatewayAttachmentId?: string;
 }
@@ -1219,13 +1217,6 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             null,
             transitGatewayId
         );
-        // convert the xml format CustomerGatewayConfiguration to JSON format
-        const connectionJSON: JSONable = await xml2jsParserPromise(
-            vpnConnection.CustomerGatewayConfiguration,
-            {
-                trim: true
-            }
-        );
         // describe the tgw attachment and wait for it to become available
         const emitter: WaitForPromiseEmitter<EC2.TransitGatewayAttachment | null> = () => {
             return this.adaptee.describeTransitGatewayAttachment(
@@ -1258,7 +1249,6 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             ip: publicIpv4,
             vpnConnectionId: vpnConnection.VpnConnectionId,
             customerGatewayId: vpnConnection.CustomerGatewayId,
-            vpnConnection: connectionJSON,
             transitGatewayId: tgwAttachment.TransitGatewayId,
             transitGatewayAttachmentId: tgwAttachment.TransitGatewayAttachmentId
         } as AwsVpnConnection;
@@ -1270,57 +1260,42 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called deleteAwsVpnConnection.');
     }
 
-    async listVpnAttachmentRecord(vmId: string): Promise<TgwVpnAttachmentRecord[]> {
-        this.proxy.logAsInfo('calling listVpnAttachmentRecord');
-        const table = new AwsDBDef.AwsVpnAttachment(process.env.RESOURCE_TAG_PREFIX || '');
-
-        const records = await (await this.adaptee.listItemFromDb<VpnAttachmentDbItem>(table))
-            .filter(item => {
-                return item.vmId === vmId;
-            })
-            .map(item => {
-                let vpnConnection: JSONable;
-                try {
-                    vpnConnection = JSON.parse(item.vpnConnection);
-                } catch (error) {
-                    this.proxy.logForError(
-                        'Failed to de-serialize the vpn configuration' +
-                            ` of vpn attachment record (vmId: ${item.vmId}, ip: ${item.ip}`,
-                        error
-                    );
-                    vpnConnection = {};
-                }
-                const record: TgwVpnAttachmentRecord = {
-                    vmId: item.vmId,
-                    ip: item.ip,
-                    vpnConnectionId: vpnConnection.vpnConnectionId as string,
-                    attachmentId: vpnConnection.attachmentId as string,
-                    customerGatewayId: vpnConnection.customerGatewayId as string,
-                    vpnConnection: vpnConnection
-                };
-                return record;
-            });
-        this.proxy.logAsInfo('calling listVpnAttachmentRecord');
-        return records;
-    }
-
     async getTgwVpnAttachmentRecord(vmId: string, ip: string): Promise<TgwVpnAttachmentRecord> {
-        this.proxy.logAsInfo('calling listVpnAttachmentRecord');
-        const [record] = (await this.listVpnAttachmentRecord(vmId))
-            .filter(rec => rec.ip === ip)
-            // ASSERT: there's only 1 vpn attachment per vm
-            .slice(0, 1);
+        this.proxy.logAsInfo('calling getTgwVpnAttachmentRecord');
+        const table = new AwsDBDef.AwsVpnAttachment(process.env.RESOURCE_TAG_PREFIX || '');
+        const [record] = await (
+            await this.adaptee.listItemFromDb<VpnAttachmentDbItem>(table)
+        ).filter(item => {
+            return item.vmId === vmId && item.ip === ip;
+        });
         if (!record) {
             throw new Error(`No vpn attachment found for vm (id: ${vmId}, ip: ${ip})`);
         }
-        this.proxy.logAsInfo('called listVpnAttachmentRecord');
-        return record;
+        this.proxy.logAsInfo('called getTgwVpnAttachmentRecord');
+        // get the vpnconnection detail
+        const vpnConnection = await this.adaptee.describeVpnConnection(record.vpnConnectionId);
+        // get the transit gateway attachment detail
+        const tgwAttachment = await this.adaptee.describeTransitGatewayAttachment(
+            vpnConnection.TransitGatewayId as string,
+            vpnConnection.VpnConnectionId
+        );
+        const vpnConnectionJSON: JSONable = {};
+        Object.assign(vpnConnectionJSON, vpnConnection);
+        return {
+            vmId: record.vmId,
+            ip: record.ip,
+            vpnConnectionId: vpnConnection.VpnConnectionId as string,
+            transitGatewayId: vpnConnection.TransitGatewayId as string,
+            transitGatewayAttachmentId: tgwAttachment.TransitGatewayAttachmentId,
+            customerGatewayId: vpnConnection.CustomerGatewayId as string,
+            vpnConnection: vpnConnectionJSON
+        } as TgwVpnAttachmentRecord;
     }
 
     async saveAwsTgwVpnAttachmentRecord(
         vmId: string,
         ip: string,
-        vpnConnection: JSONable
+        vpnConnectionId: string
     ): Promise<void> {
         this.proxy.logAsInfo('calling saveTgwVpnAttachmentRecord');
         const table = new AwsDBDef.AwsVpnAttachment(process.env.RESOURCE_TAG_PREFIX || '');
@@ -1328,7 +1303,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const dbItem: VpnAttachmentDbItem = {
             vmId: vmId,
             ip: ip,
-            vpnConnection: JSON.stringify(vpnConnection)
+            vpnConnectionId: vpnConnectionId
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
@@ -1344,7 +1319,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const item: VpnAttachmentDbItem = {
             vmId: vmId,
             ip: ip,
-            vpnConnection: undefined // non key attribute can set to undefined
+            vpnConnectionId: undefined // non key attribute can set to undefined
         };
         await this.adaptee.deleteItemFromDb<VpnAttachmentDbItem>(table, item);
 

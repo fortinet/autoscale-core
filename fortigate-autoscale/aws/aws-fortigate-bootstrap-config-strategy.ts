@@ -4,6 +4,8 @@ import { AutoscaleEnvironment } from '../../autoscale-environment';
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import { VirtualMachine } from '../../virtual-machine';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
+import { parseStringPromise as xml2jsParserPromise } from 'xml2js';
+import { JSONable } from '../../jsonable';
 export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigStrategy {
     prepare(
         platform: AwsPlatformAdapter,
@@ -37,13 +39,19 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
                     })
             ]);
             this.alreadyLoaded.push('setuptgwvpn');
-            const vpnConfiguration =
-                (vpnAttachmentRecord.vpnConnection &&
-                    vpnAttachmentRecord.vpnConnection.customerGatewayConfiguration) ||
+            // convert the xml format CustomerGatewayConfiguration to JSON format
+            const customerGatewayConfiguration: JSONable =
+                (vpnAttachmentRecord.vpnConnection.CustomerGatewayConfiguration &&
+                    (await xml2jsParserPromise(
+                        vpnAttachmentRecord.vpnConnection.CustomerGatewayConfiguration,
+                        {
+                            trim: true
+                        }
+                    ))) ||
                 {};
             return await this.processConfig(config, {
                 '@device': targetVm,
-                '@vpn_connection': vpnConfiguration
+                '@vpn_connection': customerGatewayConfiguration
             });
         } catch (error) {
             this.proxy.logForError('Configset Not loaded.', error);

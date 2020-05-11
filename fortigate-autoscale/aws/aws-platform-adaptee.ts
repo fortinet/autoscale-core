@@ -563,6 +563,15 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         await this.ec2.deleteVpnConnection(request).promise();
     }
 
+    async describeVpnConnection(vpnConnectionId: string): Promise<EC2.VpnConnection> {
+        const request: EC2.DescribeVpnConnectionsRequest = {
+            VpnConnectionIds: [vpnConnectionId]
+        };
+        const result = await this.ec2.describeVpnConnections(request).promise();
+        const [connection] = result.VpnConnections;
+        return connection;
+    }
+
     async describeTransitGatewayAttachment(
         transitGatewayId: string,
         resourceId: string

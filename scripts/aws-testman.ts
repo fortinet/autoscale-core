@@ -171,20 +171,25 @@ export abstract class TestFixture {
         this.stubs.get(stubKey).stub.callsFake(args => {
             const stubStack = this.stubs.get(stubKey);
             const callCount = this.stubs.get(stubKey).stub.callCount;
+            // -1 is the position for a permanent call sub
             if (stubStack.subCalls.has(-1)) {
                 this.setSubCall(stubKey, callCount + 1, stubStack.subCalls.get(-1));
-            } else if (callCount > 0 && stubStack.sequentialCall) {
-                this.setSubCall(stubKey, callCount + 1, {
-                    subPath: `seq-${callCount + 1}`,
+            }
+            // this callfake is a sequential call. call sub with seq-{nth} pattern
+            else if (callCount > 0 && stubStack.sequentialCall) {
+                this.setSubCall(stubKey, callCount, {
+                    subPath: `seq-${callCount}`,
                     callOnce: false
                 });
-            } else if (stubStack.subCalls.has(callCount + 1)) {
-                this.setSubCall(stubKey, callCount + 1, stubStack.subCalls.get(callCount + 1));
-                if (!stubStack.subCalls.get(callCount + 1).callOnce) {
-                    stubStack.subCalls.set(-1, stubStack.subCalls.get(callCount + 1));
+            }
+            // there's a call sub for current call. use call sub on current call instead
+            else if (stubStack.subCalls.has(callCount)) {
+                this.setSubCall(stubKey, callCount, stubStack.subCalls.get(callCount));
+                if (!stubStack.subCalls.get(callCount).callOnce) {
+                    stubStack.subCalls.set(-1, stubStack.subCalls.get(callCount));
                 }
             } else {
-                this.setSubCall(stubKey, callCount + 1, {
+                this.setSubCall(stubKey, callCount, {
                     subPath: '',
                     callOnce: true
                 });
@@ -388,6 +393,11 @@ export class MockEC2 extends TestFixture {
             return this.deleteVpnConnection(args);
         });
         // NOTE: stub
+        this.setStub('describeVpnConnection', Sinon.stub(this.ec2, 'describeVpnConnections'));
+        this.setFakeCall('describeVpnConnection', args => {
+            return this.describeVpnConnection(args);
+        });
+        // NOTE: stub
         this.setStub(
             'describeTransitGatewayAttachments',
             Sinon.stub(this.ec2, 'describeTransitGatewayAttachments')
@@ -523,7 +533,9 @@ export class MockEC2 extends TestFixture {
             const filePath = path.resolve(
                 this.rootDir,
                 'ec2',
-                ['create-customer-gateway', this.subCall.subPath].filter(v => v).join('-')
+                ['create-customer-gateway', request.PublicIp, request.BgpAsn, this.subCall.subPath]
+                    .filter(v => v)
+                    .join('-')
             );
             const data = await readFileAsJson(filePath);
             this.clearSubPath();
@@ -557,6 +569,21 @@ export class MockEC2 extends TestFixture {
     deleteVpnConnection(request: EC2.DeleteVpnConnectionRequest): ApiResult {
         return CreateApiResult(() => {
             return;
+        });
+    }
+    describeVpnConnection(request: EC2.DescribeVpnConnectionsRequest): ApiResult {
+        return CreateApiResult(async () => {
+            const vpnconnectionId: string = request.VpnConnectionIds[0];
+            const filePath = path.resolve(
+                this.rootDir,
+                'ec2',
+                ['describe-vpn-connections', vpnconnectionId, this.subCall.subPath]
+                    .filter(v => v)
+                    .join('-')
+            );
+            const data = await readFileAsJson(filePath);
+            this.clearSubPath();
+            return data;
         });
     }
     describeTransitGatewayAttachments(
