@@ -33,8 +33,7 @@ export class DynamoDBTypeConverter extends TypeConverter {
         return Number(value as string);
     }
     valueToBoolean(value: unknown): boolean {
-        // see: https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBMapper.DataTypes.html
-        return (value as number) === 1;
+        return value as boolean;
     }
 }
 export class AwsAutoscale extends Autoscale {

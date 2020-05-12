@@ -251,7 +251,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     getReqAsString(): string {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {
             return JSON.stringify(this.proxy.request);
-        } else if (this.proxy instanceof AwsApiGatewayEventProxy) {
+        } else if (this.proxy instanceof AwsScheduledEventProxy) {
             return JSON.stringify(this.proxy.request);
         } else {
             throw new Error('Unknown request.');
@@ -338,7 +338,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 );
             })
             .map(group => group.AutoScalingGroupName);
-        const vm = this.instanceToVm(instance, scalingGroupName);
+        const vm = this.instanceToVm(instance, scalingGroupName, instance.NetworkInterfaces);
         this.proxy.logAsInfo('called getTargetVm');
         return vm;
     }
@@ -349,7 +349,11 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             return null;
         }
         const instance = await this.adaptee.describeInstance(masterRecord.vmId);
-        const vm = this.instanceToVm(instance, masterRecord.scalingGroupName);
+        const vm = this.instanceToVm(
+            instance,
+            masterRecord.scalingGroupName,
+            instance.NetworkInterfaces
+        );
         this.proxy.logAsInfo('called getMasterVm');
         return vm;
     }
@@ -825,13 +829,14 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
         );
         const records = await this.adaptee.listItemFromDb<NicAttachmentDbItem>(table);
-        const nicRecords: NicAttachmentRecord[] = records.map(record => {
-            return {
-                vmId: record.vmId,
-                nicId: record.nicId,
-                attachmentState: record.attachmentState
-            } as NicAttachmentRecord;
-        });
+        const nicRecords: NicAttachmentRecord[] =
+            records.map(record => {
+                return {
+                    vmId: record.vmId,
+                    nicId: record.nicId,
+                    attachmentState: record.attachmentState
+                } as NicAttachmentRecord;
+            }) || [];
         this.proxy.logAsInfo(`listed ${nicRecords.length} records.`);
         this.proxy.logAsInfo('called listNicAttachmentRecord');
         return nicRecords;
@@ -928,7 +933,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         // attach nic
         const eni = await this.adaptee.describeNetworkInterface(nicId);
         // eni is able to attach
-        if (eni.Status === 'available' || eni.Status === 'attaching') {
+        if (eni.Status === 'available' || eni.Status === 'attaching' || eni.Status === 'pending') {
             // not attaching yet? attach it.
             if (eni.Status === 'available') {
                 await this.adaptee.attachNetworkInterface(

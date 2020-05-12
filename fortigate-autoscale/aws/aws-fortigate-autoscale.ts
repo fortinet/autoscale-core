@@ -158,7 +158,15 @@ export class AwsFortiGateAutoscale<TReq, Tcontext, TRes>
         const settings = await this.platform.getSettings();
         // handle nic attachment
         if (settings.get(AwsFortiGateAutoscaleSetting.EnableNic2).truthValue) {
-            await this.handleNicAttachment();
+            const nicAttachmentResult = await this.handleNicAttachment();
+            if (nicAttachmentResult === NicAttachmentStrategyResult.ShouldTerminateVm) {
+                // should abandon this lifecycle
+                // REVIEW: does abandonning the lifecycle hook trigger a terminating event fom the
+                // auto scaling group? so that it can go into the terminatingvm() workflow afterwards
+                const lifecycleItem = await this.platform.getLifecycleItem(this.env.targetVm.id);
+                await this.platform.completeLifecycleAction(lifecycleItem, false);
+                return '';
+            }
         }
         // handle transit gateway vpn attachment
         if (settings.get(AwsFortiGateAutoscaleSetting.AwsEnableTransitGatewayVpn).truthValue) {
@@ -171,7 +179,6 @@ export class AwsFortiGateAutoscale<TReq, Tcontext, TRes>
      * @override FortiGateAutoscale
      */
     async handleTerminatingVm(): Promise<string> {
-        await super.handleTerminatingVm();
         this.env.targetVm = await this.platform.getTargetVm();
         const settings = await this.platform.getSettings();
         // handle nic detachment
@@ -182,6 +189,7 @@ export class AwsFortiGateAutoscale<TReq, Tcontext, TRes>
         if (settings.get(AwsFortiGateAutoscaleSetting.AwsEnableTransitGatewayVpn).truthValue) {
             await this.handleVpnDetachment();
         }
+        await super.handleTerminatingVm();
         return '';
     }
 }
