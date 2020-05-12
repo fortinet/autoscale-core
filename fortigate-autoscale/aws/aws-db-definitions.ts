@@ -33,7 +33,7 @@ export class DynamoDBTypeConverter extends TypeConverter {
         return Number(value as string);
     }
     valueToBoolean(value: unknown): boolean {
-        return value as boolean;
+        return !!value;
     }
 }
 export class AwsAutoscale extends Autoscale {

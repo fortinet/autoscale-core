@@ -23,6 +23,7 @@ import { AwsNicAttachmentStrategy } from './aws-nic-attachment-strategy';
 import { AwsTgwVpnAttachmentStrategy } from './aws-tgw-vpn-attachment-strategy';
 import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strategy';
 import { AwsTaggingAutoscaleVmStrategy } from './aws-tagging-autoscale-vm-strategy';
+import { AwsFortiGateBootstrapTgwStrategy } from './aws-fortigate-bootstrap-config-strategy';
 
 /**
  * AWS FortiGate Autoscale - class, with capabilities:
@@ -170,7 +171,15 @@ export class AwsFortiGateAutoscale<TReq, Tcontext, TRes>
         }
         // handle transit gateway vpn attachment
         if (settings.get(AwsFortiGateAutoscaleSetting.AwsEnableTransitGatewayVpn).truthValue) {
-            await this.handleVpnAttachment();
+            const vpnAttachmentResult = await this.handleVpnAttachment();
+            if (vpnAttachmentResult === VpnAttachmentStrategyResult.ShouldTerminateVm) {
+                // should abandon this lifecycle
+                // REVIEW: does abandonning the lifecycle hook trigger a terminating event fom the
+                // auto scaling group? so that it can go into the terminatingvm() workflow afterwards
+                const lifecycleItem = await this.platform.getLifecycleItem(this.env.targetVm.id);
+                await this.platform.completeLifecycleAction(lifecycleItem, false);
+                return '';
+            }
         }
         return '';
     }
@@ -209,6 +218,8 @@ export class AwsFortiGateAutoscaleTgw<TReq, Tcontext, TRes> extends AwsFortiGate
 > {
     constructor(p: AwsPlatformAdapter, e: AutoscaleEnvironment, x: CloudFunctionProxyAdapter) {
         super(p, e, x);
+        // use FortiGate bootstrap configuration strategy
+        this.setBootstrapConfigurationStrategy(new AwsFortiGateBootstrapTgwStrategy());
         // use AWS Transit Gateway VPN attachment strategy
         this.setVpnAttachmentStrategy(new AwsTgwVpnAttachmentStrategy());
     }

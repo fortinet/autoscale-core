@@ -40,9 +40,10 @@ export interface TgwVpnAttachmentRecord {
     vmId: string;
     ip: string;
     vpnConnectionId: string;
-    attachmentId?: string;
-    customerGatewayId?: string;
-    vpnConnection?: JSONable;
+    transitGatewayId: string;
+    transitGatewayAttachmentId: string;
+    customerGatewayId: string;
+    vpnConnection: JSONable;
 }
 
 export interface PlatformAdapter {

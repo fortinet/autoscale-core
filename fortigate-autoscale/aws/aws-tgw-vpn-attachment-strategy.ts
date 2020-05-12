@@ -34,35 +34,42 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
     async attach(): Promise<VpnAttachmentStrategyResult> {
         this.proxy.logAsDebug('calling AwsTgwVpnAttachmentStrategy.attach');
         // ASSERT: only allow 1 TGW VPN attachment per vm
-        const [vpnAttachmentRecord] = await this.platform.listVpnAttachmentRecord(this.vm.id);
-        if (vpnAttachmentRecord) {
-            this.proxy.logAsWarning(
-                'Only one vpn attachment can be associated with' +
-                    ` vm(id: ${this.vm.id}). One found (associated ip: ${vpnAttachmentRecord.ip}).`
+        try {
+            const vpnAttachmentRecord = await this.platform.getTgwVpnAttachmentRecord(
+                this.vm.id,
+                this.vm.primaryPublicIpAddress
             );
-            this.proxy.logAsDebug('called AwsTgwVpnAttachmentStrategy.attach');
-            return VpnAttachmentStrategyResult.ShouldContinue;
-        }
+            if (vpnAttachmentRecord) {
+                this.proxy.logAsWarning(
+                    'Only one vpn attachment can be associated with' +
+                        ` vm(id: ${this.vm.id}). One found (associated ip: ${vpnAttachmentRecord.ip}).`
+                );
+                this.proxy.logAsDebug('called AwsTgwVpnAttachmentStrategy.attach');
+                return VpnAttachmentStrategyResult.ShouldContinue;
+            }
+        } catch (error) {}
         let customerGatewayCreated = false;
         let vpnConnectionCreated = false;
         const settings = this.platform.settings;
+        const resourceTagPrefix = settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix)
+            .value;
         const bgpAsn = Number(settings.get(AwsFortiGateAutoscaleSetting.AwsVpnBgpAsn).value);
         const transitGatewayId = settings.get(AwsFortiGateAutoscaleSetting.AwsTransitGatewayId)
             .value;
         const customerGatewayResourceName = [
-            process.env.RESOURCE_TAG_PREFIX,
+            resourceTagPrefix,
             'customer-gateway',
             this.vm.id,
             this.vm.primaryPublicIpAddress
         ].join('-');
         const vpnResourceName = [
-            process.env.RESOURCE_TAG_PREFIX,
+            resourceTagPrefix,
             'vpn-connection',
             this.vm.id,
             this.vm.primaryPublicIpAddress
         ].join('-');
         const tgwAttachmentResourceName = [
-            process.env.RESOURCE_TAG_PREFIX,
+            resourceTagPrefix,
             'tgw-attachment-vpn',
             this.vm.id,
             this.vm.primaryPublicIpAddress
@@ -74,7 +81,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
             },
             {
                 key: 'ResourceGroup',
-                value: process.env.RESOURCE_TAG_PREFIX
+                value: resourceTagPrefix
             }
         ];
         let customerGatewayId: string;
@@ -173,7 +180,9 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
         // ASSERT: none of these tag task throws an error. error are caught and printed to log
         await Promise.all(tagTasks);
 
+        // it takes a long time (several minutes) to complete updating the tgw route so
         // invoke a tgw vpn handler Lambda function to continue the updating route tasks
+        // in order to not block the main autoscale handler function process.
 
         const request = {
             attachmentId: vpnConnection.transitGatewayAttachmentId
@@ -185,7 +194,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
             await this.platform.saveAwsTgwVpnAttachmentRecord(
                 this.vm.id,
                 this.vm.primaryPrivateIpAddress,
-                vpnConnection.vpnConnection
+                vpnConnection.vpnConnectionId
             );
         } catch (error) {
             this.proxy.logForError('Failed to complete updateTgwVpnAttachmentRecord.', error);
