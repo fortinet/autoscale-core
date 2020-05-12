@@ -926,7 +926,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         // attach nic
         const eni = await this.adaptee.describeNetworkInterface(nicId);
         // eni is able to attach
-        if (eni.Status === 'available' || eni.Status === 'attaching' || eni.Status === 'pending') {
+        if (['available', 'attaching', 'pending'].includes(eni.Status)) {
             // not attaching yet? attach it.
             if (eni.Status === 'available') {
                 await this.adaptee.attachNetworkInterface(
