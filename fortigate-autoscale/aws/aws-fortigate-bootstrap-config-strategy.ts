@@ -14,8 +14,13 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
     ): Promise<void> {
         return super.prepare(platform, proxy, env);
     }
+
+    set platform(platform: AwsPlatformAdapter) {
+        super.platform = platform;
+    }
+
     get platform(): AwsPlatformAdapter {
-        return this.platform as AwsPlatformAdapter;
+        return super.platform as AwsPlatformAdapter;
     }
 
     /**
@@ -23,7 +28,7 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
      * @param  {VirtualMachine} targetVm the target vm which the VPN(s) are attached to
      * @returns {Promise} configset content
      */
-    protected async loadVpnAttachment(targetVm: VirtualMachine): Promise<string> {
+    protected async loadVpn(targetVm: VirtualMachine): Promise<string> {
         this.settings = this.settings || (await this.platform.getSettings());
         try {
             const [config, vpnAttachmentRecord] = await Promise.all([
@@ -49,9 +54,19 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
                         }
                     ))) ||
                 {};
+            if (customerGatewayConfiguration.vpn_connection) {
+                // eslint-disable-next-line dot-notation
+                for (const ownPropKey in customerGatewayConfiguration.vpn_connection['$']) {
+                    if (!customerGatewayConfiguration.vpn_connection[ownPropKey]) {
+                        customerGatewayConfiguration.vpn_connection[ownPropKey] =
+                            // eslint-disable-next-line dot-notation
+                            customerGatewayConfiguration.vpn_connection['$'][ownPropKey];
+                    }
+                }
+            }
             return await this.processConfig(config, {
                 '@device': targetVm,
-                '@vpn_connection': customerGatewayConfiguration
+                '@vpn_connection': customerGatewayConfiguration.vpn_connection
             });
         } catch (error) {
             this.proxy.logForError('Configset Not loaded.', error);
@@ -67,7 +82,7 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
         let baseConfig = await super.loadConfig();
         // if transit gateway vpn attachment is enabled.
         if (this.settings.get(AwsFortiGateAutoscaleSetting.AwsEnableTransitGatewayVpn).truthValue) {
-            baseConfig += await this.loadVpnAttachment(this.env.targetVm);
+            baseConfig += await this.loadVpn(this.env.targetVm);
         }
         return baseConfig;
     }

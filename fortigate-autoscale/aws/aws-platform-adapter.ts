@@ -128,7 +128,6 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     proxy: CloudFunctionProxyAdapter;
     settings: Settings;
     readonly createTime: number;
-    readonly awsOnlyConfigset = ['setuptgwvpn', 'internalelbwebserv'];
     constructor(p: AwsPlatformAdaptee, proxy: CloudFunctionProxyAdapter, createTime?: number) {
         this.adaptee = p;
         this.proxy = proxy;
@@ -634,10 +633,6 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 : this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageDirectory).value,
             'configset'
         ];
-        // if it is an AWS-only configset, load it from the aws subdirectory
-        if (this.awsOnlyConfigset.includes(name)) {
-            keyPrefix.push('aws');
-        }
         keyPrefix.push(name);
         const content = await this.adaptee.getS3ObjectContent(bucket, path.join(...keyPrefix));
         this.proxy.logAsInfo('configset loaded.');

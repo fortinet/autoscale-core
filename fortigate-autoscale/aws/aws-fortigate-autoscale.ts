@@ -11,7 +11,8 @@ import {
 } from '../../context-strategy/nic-attachment-context';
 import {
     VpnAttachmentStrategy,
-    VpnAttachmentStrategyResult
+    VpnAttachmentStrategyResult,
+    NoopVpnAttachmentStrategy
 } from '../../context-strategy/vpn-attachment-context';
 import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../../helper-function';
 import { FortiGateAutoscale } from '../fortigate-autoscale';
@@ -22,6 +23,7 @@ import { AwsNicAttachmentStrategy } from './aws-nic-attachment-strategy';
 import { AwsTgwVpnAttachmentStrategy } from './aws-tgw-vpn-attachment-strategy';
 import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strategy';
 import { AwsTaggingAutoscaleVmStrategy } from './aws-tagging-autoscale-vm-strategy';
+import { AwsFortiGateBootstrapTgwStrategy } from './aws-fortigate-bootstrap-config-strategy';
 
 /**
  * AWS FortiGate Autoscale - class, with capabilities:
@@ -57,7 +59,7 @@ export class AwsFortiGateAutoscale<TReq, Tcontext, TRes>
         // during launching
         this.setNicAttachmentStrategy(new AwsNicAttachmentStrategy());
         // use Noop vpn attachment strategy
-        this.setVpnAttachmentStrategy(new AwsTgwVpnAttachmentStrategy());
+        this.setVpnAttachmentStrategy(new NoopVpnAttachmentStrategy());
     }
     setNicAttachmentStrategy(strategy: NicAttachmentStrategy): void {
         this.nicAttachmentStrategy = strategy;
@@ -216,6 +218,8 @@ export class AwsFortiGateAutoscaleTgw<TReq, Tcontext, TRes> extends AwsFortiGate
 > {
     constructor(p: AwsPlatformAdapter, e: AutoscaleEnvironment, x: CloudFunctionProxyAdapter) {
         super(p, e, x);
+        // use FortiGate bootstrap configuration strategy
+        this.setBootstrapConfigurationStrategy(new AwsFortiGateBootstrapTgwStrategy());
         // use AWS Transit Gateway VPN attachment strategy
         this.setVpnAttachmentStrategy(new AwsTgwVpnAttachmentStrategy());
     }

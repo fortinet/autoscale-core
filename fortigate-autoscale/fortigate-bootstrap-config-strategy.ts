@@ -188,7 +188,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
      */
     protected processConfig(config: string, sourceData?: {}): string {
         if (sourceData) {
-            return this.processConfigV2(config, sourceData);
+            config = this.processConfigV2(config, sourceData);
         }
 
         const psksecret = this.settings.get(AwsFortiGateAutoscaleSetting.FortiGatePskSecret).value;
@@ -225,22 +225,20 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
     protected processConfigV2(config: string, sourceData: {}): string {
         const resourceMap = {};
         Object.assign(resourceMap, sourceData);
-        let nodePath;
         let conf = config;
-        const matches = typeof config === 'string' ? config.match(/({\S+})/gm) : [];
+        const nodePaths = config.match(/{(@[a-zA-Z_-]+(#\d+)*)+(\.[a-zA-Z_-]+(#\d+)*)+}/gm) || [];
         try {
-            for (nodePath of matches) {
+            for (const nodePath of nodePaths) {
                 let replaceBy = null;
                 // check if it is in v2 format: {@SourceType.property[#num][.subProperty[#num]...]}
-                if (nodePath.indexOf('@') === 1) {
-                    const resRoot =
-                        typeof nodePath === 'string' ? nodePath.split('.')[0].substr(1) : '';
-                    if (resourceMap[resRoot]) {
-                        replaceBy = configSetResourceFinder(resourceMap, nodePath);
-                    }
-                    if (replaceBy) {
-                        conf = conf.replace(new RegExp(nodePath, 'g'), replaceBy);
-                    }
+                const [, resRoot] = /^{(@[a-zA-Z_-]+(#\d+)*)+(\.[a-zA-Z_-]+(#\d+)*)+}$/gm.exec(
+                    nodePath
+                );
+                if (resRoot && resourceMap[resRoot]) {
+                    replaceBy = configSetResourceFinder(resourceMap, nodePath);
+                }
+                if (replaceBy) {
+                    conf = conf.replace(new RegExp(nodePath, 'g'), replaceBy);
                 }
             }
             return this.processConfig(conf); // process config V1
