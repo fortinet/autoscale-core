@@ -4,7 +4,7 @@ import path from 'path';
 import chalk from 'chalk';
 import * as commentJson from 'comment-json';
 import archiver from 'archiver';
-import extract from 'extract-zip';
+import decompress from 'decompress';
 
 export interface JSONable {
     [key: string]: string | number | boolean | JSONable | JSONable[];
@@ -813,7 +813,7 @@ export class CodePackman {
                 return;
             }
         }
-        await extract(src, { dir: dest });
+        await decompress(src, dest);
     }
 
     async runNpmCommand(
