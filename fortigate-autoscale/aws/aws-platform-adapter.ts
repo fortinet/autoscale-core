@@ -190,13 +190,15 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         } else if (this.proxy instanceof AwsScheduledEventProxy) {
             const boby = this.proxy.getReqBody();
             if (boby.source === 'aws.autoscaling') {
-                if (boby['detail-type'] === 'EC2 Instance-launch Lifecycle Action') {
+                if (boby['detail-type'].toString() === 'EC2 Instance-launch Lifecycle Action') {
                     return Promise.resolve(ReqType.LaunchingVm);
-                } else if (boby['detail-type'] === 'EC2 Instance Launch Successful') {
+                } else if (boby['detail-type'].toString() === 'EC2 Instance Launch Successful') {
                     return Promise.resolve(ReqType.LaunchedVm);
-                } else if (boby['detail-type'] === 'EC2 Instance-terminate Lifecycle Action') {
+                } else if (
+                    boby['detail-type'].toString() === 'EC2 Instance-terminate Lifecycle Action'
+                ) {
                     return Promise.resolve(ReqType.TerminatingVm);
-                } else if (boby['detail-type'] === 'EC2 Instance Terminate Successful') {
+                } else if (boby['detail-type'].toString() === 'EC2 Instance Terminate Successful') {
                     return Promise.resolve(ReqType.TerminatedVm);
                 } else {
                     throw new Error(

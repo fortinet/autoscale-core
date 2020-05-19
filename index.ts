@@ -28,5 +28,4 @@ export * from './fortigate-autoscale/index';
  * export scripts
  */
 export * from './scripts/code-packman';
-export * from './scripts/make-dist';
 export * from './scripts/aws-testman';
