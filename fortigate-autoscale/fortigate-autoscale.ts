@@ -1,6 +1,6 @@
 import * as HttpStatusCodes from 'http-status-codes';
 
-import { Autoscale, CloudFunctionHandler, HttpError } from '../autoscale-core';
+import { Autoscale, AutoscaleHandler, HttpError } from '../autoscale-core';
 import { AutoscaleEnvironment } from '../autoscale-environment';
 import { CloudFunctionProxy, ReqType } from '../cloud-function-proxy';
 import {
@@ -11,6 +11,8 @@ import { LicensingModelContext } from '../context-strategy/licensing-context';
 import { PlatformAdapter } from '../platform-adapter';
 import { VmTagging } from '../context-strategy/autoscale-context';
 
+export const PRODUCT_NAME_FORTIGATE = 'fortigate';
+
 /**
  * FortiGate class with capabilities:
  * cloud function handling,
@@ -18,9 +20,9 @@ import { VmTagging } from '../context-strategy/autoscale-context';
  * secondary nic attachment
  */
 export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
-    implements CloudFunctionHandler<TReq, TContext, TRes>, BootstrapContext, LicensingModelContext {
+    implements AutoscaleHandler<TReq, TContext, TRes>, BootstrapContext, LicensingModelContext {
     bootstrapConfigStrategy: BootstrapConfigurationStrategy;
-    async handleCloudFunctionRequest(
+    async handleAutoscaleRequest(
         proxy: CloudFunctionProxy<TReq, TContext, TRes>,
         platform: PlatformAdapter,
         env: AutoscaleEnvironment
@@ -30,7 +32,7 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             this.proxy = proxy;
             this.platform = platform;
             this.env = env;
-            this.proxy.logAsInfo('calling handleRequest.');
+            this.proxy.logAsInfo('calling handleAutoscaleRequest.');
             this.proxy.logAsInfo('request integrity check.');
             // TODO: check whether all necessary request information are all there or not using
             // the platform checkRequestIntegrity() method. temporarily disable this checking from
@@ -54,12 +56,12 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             } else if (requestType === ReqType.TerminatingVm) {
                 responseBody = await this.handleTerminatingVm();
             }
-            this.proxy.logAsInfo('called handleRequest.');
+            this.proxy.logAsInfo('called handleAutoscaleRequest.');
             return proxy.formatResponse(HttpStatusCodes.OK, responseBody, {});
         } catch (error) {
             // ASSERT: error is always an instance of Error
             let httpError: HttpError;
-            this.proxy.logForError('called handleRequest.', error);
+            this.proxy.logForError('called handleAutoscaleRequest.', error);
             if (!(error instanceof HttpError)) {
                 httpError = new HttpError(
                     HttpStatusCodes.INTERNAL_SERVER_ERROR,
@@ -71,6 +73,50 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             return proxy.formatResponse(httpError.status, '', {});
         }
     }
+
+    async handleLicenseRequest(
+        proxy: CloudFunctionProxy<TReq, TContext, TRes>,
+        platform: PlatformAdapter,
+        env: AutoscaleEnvironment
+    ): Promise<TRes> {
+        let responseBody: string;
+        try {
+            this.proxy = proxy;
+            this.platform = platform;
+            this.env = env;
+            this.proxy.logAsInfo('calling handleLicenseRequest.');
+            this.proxy.logAsInfo('request integrity check.');
+            // TODO: check whether all necessary request information are all there or not using
+            // the platform checkRequestIntegrity() method. temporarily disable this checking from
+            // the next line for now.
+            // await this.platform.checkRequestIntegrity();
+
+            // init the platform. this step is important
+            await this.platform.init();
+            const requestType = await this.platform.getRequestType();
+            if (requestType === ReqType.BootstrapConfig) {
+                responseBody = await this.handleLicenseAssignment(PRODUCT_NAME_FORTIGATE);
+            } else {
+                throw new Error(`Unsupported request type: ${requestType}.`);
+            }
+            this.proxy.logAsInfo('called handleLicenseRequest.');
+            return proxy.formatResponse(HttpStatusCodes.OK, responseBody, {});
+        } catch (error) {
+            // ASSERT: error is always an instance of Error
+            let httpError: HttpError;
+            this.proxy.logForError('called handleLicenseRequest.', error);
+            if (!(error instanceof HttpError)) {
+                httpError = new HttpError(
+                    HttpStatusCodes.INTERNAL_SERVER_ERROR,
+                    (error as Error).message
+                );
+            } else {
+                httpError = error;
+            }
+            return proxy.formatResponse(httpError.status, '', {});
+        }
+    }
+
     setBootstrapConfigurationStrategy(strategy: BootstrapConfigurationStrategy): void {
         this.bootstrapConfigStrategy = strategy;
     }

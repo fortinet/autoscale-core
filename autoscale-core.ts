@@ -64,8 +64,13 @@ export interface PlatformAdaptee {
 /**
  * To provide Cloud Function handling logics
  */
-export interface CloudFunctionHandler<TReq, TContext, TRes> {
-    handleCloudFunctionRequest(
+export interface AutoscaleHandler<TReq, TContext, TRes> {
+    handleAutoscaleRequest(
+        proxy: CloudFunctionProxy<TReq, TContext, TRes>,
+        platform: PlatformAdapter,
+        env: AutoscaleEnvironment
+    ): Promise<TRes>;
+    handleLicenseRequest(
         proxy: CloudFunctionProxy<TReq, TContext, TRes>,
         platform: PlatformAdapter,
         env: AutoscaleEnvironment
