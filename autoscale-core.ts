@@ -454,9 +454,10 @@ export class Autoscale implements AutoscaleCore {
     }
     async handleLicenseAssignment(productName: string): Promise<string> {
         this.proxy.logAsInfo('calling handleLicenseAssignment.');
+        const settings = await this.platform.getSettings();
         const licenseDir: string = path.join(
-            this.settings.get(AutoscaleSetting.AssetStorageDirectory).value,
-            this.settings.get(AutoscaleSetting.LicenseFIleDirectory).value,
+            settings.get(AutoscaleSetting.AssetStorageDirectory).value,
+            settings.get(AutoscaleSetting.LicenseFIleDirectory).value,
             productName
         );
         this.licensingStrategy.prepare(
@@ -464,7 +465,7 @@ export class Autoscale implements AutoscaleCore {
             this.proxy,
             this.env.targetVm,
             productName,
-            this.settings.get(AutoscaleSetting.AssetStorageContainer).value,
+            settings.get(AutoscaleSetting.AssetStorageContainer).value,
             licenseDir
         );
         let result: LicensingStrategyResult;

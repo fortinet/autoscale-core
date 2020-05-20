@@ -256,7 +256,7 @@ export class MockS3 extends TestFixture {
     s3: S3;
     constructor(s3: S3, rootDir: string) {
         super();
-        this.rootDir = rootDir;
+        this.rootDir = path.join(rootDir, 's3');
         this.s3 = s3;
         this.init();
     }
@@ -278,7 +278,6 @@ export class MockS3 extends TestFixture {
         return CreateApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
-                's3',
                 [request.Bucket, ...request.Prefix.split('/'), this.subCall.subPath]
                     .filter(v => v)
                     .join('/')
@@ -299,7 +298,6 @@ export class MockS3 extends TestFixture {
         return CreateApiResult(() => {
             const filePath = path.resolve(
                 this.rootDir,
-                's3',
                 [request.Bucket, ...request.Key.split('/'), this.subCall.subPath]
                     .filter(v => v)
                     .join('/')
@@ -318,7 +316,7 @@ export class MockEC2 extends TestFixture {
     ec2: EC2;
     constructor(ec2: EC2, rootDir: string) {
         super();
-        this.rootDir = rootDir;
+        this.rootDir = path.join(rootDir, 'ec2');
         this.ec2 = ec2;
         this.init();
     }
@@ -435,7 +433,6 @@ export class MockEC2 extends TestFixture {
                 });
             const filePath = path.resolve(
                 this.rootDir,
-                'ec2',
                 ['describe-instances', sampleName || this.subCall.subPath].filter(v => v).join('-')
             );
             const data = await readFileAsJson(filePath);
@@ -448,7 +445,6 @@ export class MockEC2 extends TestFixture {
         return CreateApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
-                'ec2',
                 ['create-network-interface', this.subCall.subPath].filter(v => v).join('-')
             );
             const data = await readFileAsJson(filePath);
@@ -472,7 +468,6 @@ export class MockEC2 extends TestFixture {
         return CreateApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
-                'ec2',
                 ['describe-network-interfaces', this.subCall.subPath].filter(v => v).join('-')
             );
             const data = await readFileAsJson(filePath);
@@ -485,7 +480,6 @@ export class MockEC2 extends TestFixture {
         return CreateApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
-                'ec2',
                 [
                     'attach-network-interface',
                     request.InstanceId,
@@ -505,7 +499,6 @@ export class MockEC2 extends TestFixture {
         return CreateApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
-                'ec2',
                 ['detach-network-interface', request.AttachmentId].filter(v => v).join('-')
             );
             const data = await readFileAsJson(filePath);
@@ -532,7 +525,6 @@ export class MockEC2 extends TestFixture {
         return CreateApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
-                'ec2',
                 ['create-customer-gateway', request.PublicIp, request.BgpAsn, this.subCall.subPath]
                     .filter(v => v)
                     .join('-')
@@ -551,7 +543,6 @@ export class MockEC2 extends TestFixture {
         return CreateApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
-                'ec2',
                 [
                     'create-vpn-connection',
                     request.CustomerGatewayId,
@@ -576,7 +567,6 @@ export class MockEC2 extends TestFixture {
             const vpnconnectionId: string = request.VpnConnectionIds[0];
             const filePath = path.resolve(
                 this.rootDir,
-                'ec2',
                 ['describe-vpn-connections', vpnconnectionId, this.subCall.subPath]
                     .filter(v => v)
                     .join('-')
@@ -601,7 +591,6 @@ export class MockEC2 extends TestFixture {
             });
             const filePath = path.resolve(
                 this.rootDir,
-                'ec2',
                 [
                     'describe-transit-gateway-attachments',
                     transitGatewayId,
@@ -622,7 +611,6 @@ export class MockEC2 extends TestFixture {
         return CreateApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
-                'ec2',
                 [
                     'enable-transit-gateway-route-table-propagation',
                     request.TransitGatewayAttachmentId,
@@ -643,7 +631,6 @@ export class MockEC2 extends TestFixture {
         return CreateApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
-                'ec2',
                 [
                     'associate-transit-gateway-route-table',
                     request.TransitGatewayAttachmentId,
@@ -665,7 +652,7 @@ export class MockAutoScaling extends TestFixture {
     autoscaling: AutoScaling;
     constructor(autoscaling: AutoScaling, rootDir: string) {
         super();
-        this.rootDir = rootDir;
+        this.rootDir = path.join(rootDir, 'autoscaling');
         this.autoscaling = autoscaling;
         this.init();
     }
@@ -703,7 +690,6 @@ export class MockAutoScaling extends TestFixture {
                 request.AutoScalingGroupNames.map(name => {
                     const filePath = path.resolve(
                         this.rootDir,
-                        'autoscaling',
                         ['describe-auto-scaling-groups', name, this.subCall.subPath]
                             .filter(v => v)
                             .join('-')
@@ -778,7 +764,7 @@ export class MockLambda extends TestFixture {
     lambda: Lambda;
     constructor(lambda: Lambda, rootDir: string) {
         super();
-        this.rootDir = rootDir;
+        this.rootDir = path.join(rootDir, 'lambda');
         this.lambda = lambda;
         this.init();
     }
@@ -795,7 +781,6 @@ export class MockLambda extends TestFixture {
         return CreateApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
-                'lambda',
                 ['invoke', request.FunctionName, this.subCall.subPath].filter(v => v).join('-')
             );
             const data = await readFileAsJson(filePath);
@@ -810,7 +795,7 @@ export class MockDocClient extends TestFixture {
     docClient: DocumentClient;
     constructor(docClient: DocumentClient, rootDir: string) {
         super();
-        this.rootDir = rootDir;
+        this.rootDir = path.join(rootDir, 'docclient');
         this.docClient = docClient;
         this.init();
     }
@@ -847,7 +832,6 @@ export class MockDocClient extends TestFixture {
         return CreateApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
-                'docclient',
                 ['scan', request.TableName.toLowerCase(), this.subCall.subPath]
                     .filter(v => v)
                     .join('-')
@@ -867,7 +851,6 @@ export class MockDocClient extends TestFixture {
         return CreateApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
-                'docclient',
                 [
                     'get',
                     request.TableName.toLowerCase(),
