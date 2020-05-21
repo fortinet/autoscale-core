@@ -242,7 +242,7 @@ export abstract class TestFixture {
     }
 
     clearSubPath(): void {
-        if (this.subCall.callOnce) {
+        if (this.subCall && this.subCall.callOnce) {
             this.stubs.get(this.subCallOwner).subCalls.delete(this.subCallNth);
         }
         this.subCall = null;
@@ -305,7 +305,7 @@ export class MockS3 extends TestFixture {
             const data = fs.readFileSync(filePath);
             this.clearSubPath();
             return {
-                Body: data.toString()
+                Body: data
             };
         });
     }

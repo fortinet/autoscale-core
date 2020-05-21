@@ -454,6 +454,16 @@ export class Autoscale implements AutoscaleCore {
     }
     async handleLicenseAssignment(productName: string): Promise<string> {
         this.proxy.logAsInfo('calling handleLicenseAssignment.');
+        // load target vm
+        if (!this.env.targetVm) {
+            this.env.targetVm = await this.platform.getTargetVm();
+        }
+        // if target vm doesn't exist, unknown request
+        if (!this.env.targetVm) {
+            const error = new Error(`Requested non-existing vm (id:${this.env.targetId}).`);
+            this.proxy.logForError('', error);
+            throw error;
+        }
         const settings = await this.platform.getSettings();
         const licenseDir: string = path.join(
             settings.get(AutoscaleSetting.AssetStorageDirectory).value,
@@ -472,8 +482,8 @@ export class Autoscale implements AutoscaleCore {
         let licenseContent = '';
         try {
             result = await this.licensingStrategy.apply();
-        } catch (error) {
-            this.proxy.logForError('Error in running licensing strategy.', error);
+        } catch (e) {
+            this.proxy.logForError('Error in running licensing strategy.', e);
         }
         if (result === LicensingStrategyResult.LicenseAssigned) {
             licenseContent = await this.licensingStrategy.getLicenseContent();
@@ -484,7 +494,7 @@ export class Autoscale implements AutoscaleCore {
         } else if (result === LicensingStrategyResult.LicenseOutOfStock) {
             this.proxy.logAsError(
                 'License out of stock. ' +
-                    `No license is assigned to this vm (id: ${this.env.masterVm.id})`
+                    `No license is assigned to this vm (id: ${this.env.targetVm.id})`
             );
         }
         this.proxy.logAsInfo('called handleLicenseAssignment.');

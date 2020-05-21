@@ -672,7 +672,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 const algorithm = 'sha256';
                 const licenseFile: LicenseFile = {
                     fileName: blob.fileName,
-                    checksum: genChecksum(blob.content, algorithm),
+                    checksum: genChecksum(content, algorithm),
                     algorithm: algorithm,
                     content: content
                 };
@@ -714,6 +714,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     fileName: item.fileName,
                     checksum: item.checksum,
                     algorithm: item.algorithm,
+                    productName: item.productName,
                     vmId: item.vmId,
                     scalingGroupName: item.scalingGroupName,
                     assignedTime: item.assignedTime,
@@ -729,12 +730,14 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const table = new AwsDBDef.AwsLicenseStock(
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
+        // load all license stock records in the db
         const items = new Map<string, LicenseStockDbItem>(
             (await this.adaptee.listItemFromDb<LicenseStockDbItem>(table)).map(item => {
                 return [item.checksum, item];
             })
         );
         let errorCount = 0;
+        const stockRecordChecksums = Array.from(items.keys());
         await Promise.all(
             records.map(record => {
                 const item: LicenseStockDbItem = {
@@ -749,6 +752,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 let typeText: string;
                 // recrod exisit, update it
                 if (items.has(record.checksum)) {
+                    stockRecordChecksums.splice(stockRecordChecksums.indexOf(record.checksum), 1);
                     conditionExp.type = CreateOrUpdate.UpdateExisting;
                     typeText =
                         `update existing item (filename: ${record.fileName},` +
@@ -765,6 +769,19 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                         this.proxy.logForError(`Failed to ${typeText}.`, err);
                         errorCount++;
                     });
+            })
+        );
+        // remove those records which don't have a corresponding license file.
+        await Promise.all(
+            stockRecordChecksums.map(checksum => {
+                const item = items.get(checksum);
+                return this.adaptee.deleteItemFromDb<LicenseStockDbItem>(table, item).catch(err => {
+                    this.proxy.logForError(
+                        `Failed to delete item (filename: ${item.fileName}) from db.`,
+                        err
+                    );
+                    errorCount++;
+                });
             })
         );
         if (errorCount > 0) {

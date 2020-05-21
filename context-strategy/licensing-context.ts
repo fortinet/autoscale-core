@@ -8,6 +8,7 @@ import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
 import { VirtualMachine } from '../virtual-machine';
 import path from 'path';
 import { HealthCheckSyncState } from '../master-election';
+import { waitFor, WaitForPromiseEmitter, WaitForConditionChecker } from '../helper-function';
 
 export enum LicensingStrategyResult {
     LicenseAssigned = 'license-assigned',
@@ -105,7 +106,7 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
                 .listLicenseFiles(this.storageContainerName, this.licenseDirectoryName)
                 .catch(err => {
                     this.proxy.logForError('failed to list license blob files.', err);
-                    return null;
+                    return [];
                 }),
             this.platform.listLicenseStock(this.productName).catch(err => {
                 this.proxy.logForError('failed to list license stock', err);
@@ -126,43 +127,54 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
             return record.vmId === this.vm.id;
         }) || [null];
 
-        if (!this.licenseRecord) {
+        try {
             // get an available license
-            try {
+            if (this.licenseFiles.length > 0 && !this.licenseRecord) {
                 this.licenseRecord = await this.getAvailableLicense();
-                // load license content
-                const filePath = path.join(this.licenseDirectoryName, this.licenseRecord.fileName);
-                const content = await this.platform.loadLicenseFileContent(
-                    this.storageContainerName,
-                    filePath
-                );
-                this.licenseFile = {
-                    fileName: this.licenseRecord.fileName,
-                    checksum: this.licenseRecord.checksum,
-                    algorithm: this.licenseRecord.algorithm,
-                    content: content
-                };
-                this.proxy.logAsInfo(
-                    `license file (name: ${this.licenseFile.fileName},` +
-                        ` checksum: ${this.licenseFile.checksum}) is loaded.`
-                );
-            } catch (error) {
-                this.proxy.logForError('Failed to get a license.', error);
-                throw new error();
             }
+            if (!this.licenseRecord) {
+                this.proxy.logAsWarning('No license available.');
+                this.proxy.logAsInfo('called ReusableLicensingStrategy.apply');
+                return LicensingStrategyResult.LicenseOutOfStock;
+            }
+
+            // load license content
+            const filePath = path.join(this.licenseDirectoryName, this.licenseRecord.fileName);
+            const content = await this.platform.loadLicenseFileContent(
+                this.storageContainerName,
+                filePath
+            );
+            this.licenseFile = {
+                fileName: this.licenseRecord.fileName,
+                checksum: this.licenseRecord.checksum,
+                algorithm: this.licenseRecord.algorithm,
+                content: content
+            };
+            this.proxy.logAsInfo(
+                `license file (name: ${this.licenseFile.fileName},` +
+                    ` checksum: ${this.licenseFile.checksum}) is loaded.`
+            );
+        } catch (error) {
+            this.proxy.logForError('Failed to get a license.', error);
+            this.proxy.logAsInfo('called ReusableLicensingStrategy.apply');
+            return LicensingStrategyResult.LicenseOutOfStock;
         }
 
         this.proxy.logAsInfo('called ReusableLicensingStrategy.apply');
         return LicensingStrategyResult.LicenseAssigned;
     }
     async updateLicenseStockRecord(licenseFiles: LicenseFile[]): Promise<void> {
-        const stockArray = licenseFiles.map(f => {
-            return {
-                fileName: f.fileName,
-                checksum: f.checksum,
-                algorithm: f.algorithm
-            } as LicenseStockRecord;
-        });
+        const stockArray =
+            (licenseFiles &&
+                licenseFiles.map(f => {
+                    return {
+                        fileName: f.fileName,
+                        checksum: f.checksum,
+                        algorithm: f.algorithm,
+                        productName: this.productName
+                    } as LicenseStockRecord;
+                })) ||
+            [];
         await this.platform.updateLicenseStock(stockArray);
     }
 
@@ -177,27 +189,55 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
         const updatedRecordArray = await Promise.all(
             usageRecords.map(async u => {
                 const healthCheckRecord = await this.platform.getHealthCheckRecord(u.vmId);
-                u.vmInSync = healthCheckRecord.syncState === HealthCheckSyncState.InSync;
+                u.vmInSync = !!(
+                    healthCheckRecord && healthCheckRecord.syncState === HealthCheckSyncState.InSync
+                );
                 return u;
             })
         );
         await this.platform.updateLicenseUsage(updatedRecordArray);
     }
 
-    protected async listOutOfSyncRecord(
-        usageRecords: LicenseUsageRecord[],
-        sync?: boolean
-    ): Promise<LicenseUsageRecord[]> {
+    protected async useLicense(record: LicenseUsageRecord, vm: VirtualMachine): Promise<boolean> {
+        try {
+            const newRecord: LicenseUsageRecord = { ...record };
+            newRecord.scalingGroupName = vm.scalingGroupName;
+            newRecord.vmId = vm.id;
+            // ASSERT: vm is in sync.
+            newRecord.vmInSync = true;
+            await this.platform.updateLicenseUsage([newRecord]);
+            // refresh the usage record because it is updated.
+            this.usageRecords = await this.platform.listLicenseUsage(this.productName);
+            return true;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    protected async listOutOfSyncRecord(sync?: boolean): Promise<LicenseUsageRecord[]> {
+        let outOfSyncArray: LicenseUsageRecord[];
         if (sync) {
-            await this.syncVmStatusToUsageRecords(usageRecords);
-            usageRecords = Array.from(
+            await this.syncVmStatusToUsageRecords(this.usageRecords);
+            this.usageRecords = Array.from(
                 (await this.platform.listLicenseUsage(this.productName)).values()
             );
+            return Array.from(this.usageRecords.values()).filter(usageRecrod => {
+                return !usageRecrod.vmInSync;
+            });
+        } else {
+            outOfSyncArray = Array.from(this.usageRecords.values()).filter(usageRecrod => {
+                return !usageRecrod.vmInSync;
+            });
+            // if every license is in use and seems to be in-sync,
+            // sync the record with vm running state and heartbeat records,
+            // then check it once again
+            if (outOfSyncArray.length === 0) {
+                return await this.listOutOfSyncRecord(true);
+            }
+            return outOfSyncArray;
         }
-        return Array.from(usageRecords.values()).filter(usageRecrod => {
-            return !usageRecrod.vmInSync;
-        });
     }
+
     protected async getAvailableLicense(): Promise<LicenseStockRecord> {
         let outOfSyncArray: LicenseUsageRecord[];
         // try to look for an unused one first
@@ -208,27 +248,49 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
         const unusedArray = this.stockRecords.filter(
             stockRecord => !usageMap.has(stockRecord.checksum)
         );
-        // if no availalbe, check if any in-use license is associated with a vm which isn't in-sync
+        // if no availalbe unused license, check if any in-use license is associated
+        // with a vm which isn't in-sync
         if (unusedArray.length === 0) {
-            outOfSyncArray = await this.listOutOfSyncRecord(this.usageRecords);
-            // if every license is in use and seems to be in-sync,
-            // sync the record with vm running state and heartbeat records,
-            // then check it once again
-            if (outOfSyncArray.length === 0) {
-                outOfSyncArray = await this.listOutOfSyncRecord(this.usageRecords, true);
-            }
-            // run out of license
-            if (outOfSyncArray.length === 0) {
-                throw new Error('Run out of license.');
-            } else {
-                // pick the fist one and return as a reusable license
-                this.proxy.logAsInfo(
-                    `A reusable license (checksum: ${outOfSyncArray[0].checksum},` +
-                        ` previous assigned vmId: ${outOfSyncArray[0].vmId},` +
-                        ` file name: ${outOfSyncArray[0].fileName}) is found.`
+            // pick the fist one and return as a reusable license
+            // in order to avoid race conditions,
+            // set a loop to pick the next available license by updating the usage record
+            // if sucessfully updated one record, that record can then be used.
+            let maxTries = 0;
+            const emitter: WaitForPromiseEmitter<LicenseUsageRecord> = async () => {
+                outOfSyncArray = await this.listOutOfSyncRecord();
+                // determine the maximum number of tries before giving up
+                maxTries = Math.max(maxTries, outOfSyncArray.length);
+                return (
+                    (outOfSyncArray.length > 0 &&
+                        this.useLicense(outOfSyncArray[0], this.vm) &&
+                        outOfSyncArray[0]) ||
+                    null
                 );
-                return outOfSyncArray[0];
-            }
+            };
+            const checker: WaitForConditionChecker<LicenseUsageRecord> = (rec, callCount) => {
+                if (rec) {
+                    return Promise.resolve(true);
+                } else if (outOfSyncArray.length === 0) {
+                    throw new Error('Run out of license.');
+                } else if (callCount >= maxTries) {
+                    throw new Error(`maximum amount of attempts ${maxTries} have been reached.`);
+                } else {
+                    return Promise.resolve(false);
+                }
+            };
+            const licenseRecord = await waitFor<LicenseUsageRecord>(
+                emitter,
+                checker,
+                5000,
+                this.proxy
+            );
+
+            this.proxy.logAsInfo(
+                `A reusable license (checksum: ${licenseRecord.checksum},` +
+                    ` previous assigned vmId: ${licenseRecord.vmId},` +
+                    ` file name: ${licenseRecord.fileName}) is found.`
+            );
+            return licenseRecord;
         } else {
             // pick the first one and return as unused license
             this.proxy.logAsInfo(
