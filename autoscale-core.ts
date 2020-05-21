@@ -64,8 +64,13 @@ export interface PlatformAdaptee {
 /**
  * To provide Cloud Function handling logics
  */
-export interface CloudFunctionHandler<TReq, TContext, TRes> {
-    handleCloudFunctionRequest(
+export interface AutoscaleHandler<TReq, TContext, TRes> {
+    handleAutoscaleRequest(
+        proxy: CloudFunctionProxy<TReq, TContext, TRes>,
+        platform: PlatformAdapter,
+        env: AutoscaleEnvironment
+    ): Promise<TRes>;
+    handleLicenseRequest(
         proxy: CloudFunctionProxy<TReq, TContext, TRes>,
         platform: PlatformAdapter,
         env: AutoscaleEnvironment
@@ -449,9 +454,20 @@ export class Autoscale implements AutoscaleCore {
     }
     async handleLicenseAssignment(productName: string): Promise<string> {
         this.proxy.logAsInfo('calling handleLicenseAssignment.');
+        // load target vm
+        if (!this.env.targetVm) {
+            this.env.targetVm = await this.platform.getTargetVm();
+        }
+        // if target vm doesn't exist, unknown request
+        if (!this.env.targetVm) {
+            const error = new Error(`Requested non-existing vm (id:${this.env.targetId}).`);
+            this.proxy.logForError('', error);
+            throw error;
+        }
+        const settings = await this.platform.getSettings();
         const licenseDir: string = path.join(
-            this.settings.get(AutoscaleSetting.AssetStorageDirectory).value,
-            this.settings.get(AutoscaleSetting.LicenseFIleDirectory).value,
+            settings.get(AutoscaleSetting.AssetStorageDirectory).value,
+            settings.get(AutoscaleSetting.LicenseFIleDirectory).value,
             productName
         );
         this.licensingStrategy.prepare(
@@ -459,15 +475,15 @@ export class Autoscale implements AutoscaleCore {
             this.proxy,
             this.env.targetVm,
             productName,
-            this.settings.get(AutoscaleSetting.AssetStorageContainer).value,
+            settings.get(AutoscaleSetting.AssetStorageContainer).value,
             licenseDir
         );
         let result: LicensingStrategyResult;
         let licenseContent = '';
         try {
             result = await this.licensingStrategy.apply();
-        } catch (error) {
-            this.proxy.logForError('Error in running licensing strategy.', error);
+        } catch (e) {
+            this.proxy.logForError('Error in running licensing strategy.', e);
         }
         if (result === LicensingStrategyResult.LicenseAssigned) {
             licenseContent = await this.licensingStrategy.getLicenseContent();
@@ -478,7 +494,7 @@ export class Autoscale implements AutoscaleCore {
         } else if (result === LicensingStrategyResult.LicenseOutOfStock) {
             this.proxy.logAsError(
                 'License out of stock. ' +
-                    `No license is assigned to this vm (id: ${this.env.masterVm.id})`
+                    `No license is assigned to this vm (id: ${this.env.targetVm.id})`
             );
         }
         this.proxy.logAsInfo('called handleLicenseAssignment.');
