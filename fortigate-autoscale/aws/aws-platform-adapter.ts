@@ -4,12 +4,7 @@ import path from 'path';
 
 import { Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
-import {
-    CloudFunctionProxyAdapter,
-    LogLevel,
-    ReqMethod,
-    ReqType
-} from '../../cloud-function-proxy';
+import { CloudFunctionProxyAdapter, ReqMethod, ReqType } from '../../cloud-function-proxy';
 import { NicAttachmentRecord } from '../../context-strategy/nic-attachment-context';
 import { VpnAttachmentContext } from '../../context-strategy/vpn-attachment-context';
 import {
@@ -571,7 +566,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called updateHealthCheckRecord');
     }
     async createMasterRecord(rec: MasterRecord, oldRec: MasterRecord | null): Promise<void> {
-        this.proxy.log('calling createMasterRecord.', LogLevel.Log);
+        this.proxy.logAsInfo('calling createMasterRecord.');
         try {
             const settings = await this.getSettings();
             const table = new AwsDBDef.AwsMasterElection(
@@ -600,14 +595,14 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             }
 
             await this.adaptee.saveItemToDb<MasterElectionDbItem>(table, item, conditionExp);
-            this.proxy.log('called createMasterRecord.', LogLevel.Log);
+            this.proxy.logAsInfo('called createMasterRecord.');
         } catch (error) {
             this.proxy.logForError('called createMasterRecord.', error);
             throw error;
         }
     }
     async updateMasterRecord(rec: MasterRecord): Promise<void> {
-        this.proxy.log('calling updateMasterRecord.', LogLevel.Log);
+        this.proxy.logAsInfo('calling updateMasterRecord.');
         try {
             const settings = await this.getSettings();
             const table = new AwsDBDef.AwsMasterElection(
@@ -632,7 +627,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     `voteEndTime < ${item.voteEndTime}`
             };
             await this.adaptee.saveItemToDb<MasterElectionDbItem>(table, item, conditionExp);
-            this.proxy.log('called updateMasterRecord.', LogLevel.Log);
+            this.proxy.logAsInfo('called updateMasterRecord.');
         } catch (error) {
             this.proxy.logForError('called updateMasterRecord.', error);
             throw error;
@@ -653,6 +648,29 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const content = await this.adaptee.getS3ObjectContent(bucket, path.join(...keyPrefix));
         this.proxy.logAsInfo('configset loaded.');
         return content;
+    }
+    async listConfigSet(subDirectory?: string, custom?: boolean): Promise<Blob[]> {
+        this.proxy.logAsInfo('calling listConfigSet');
+        const bucket = custom
+            ? this.settings.get(AwsFortiGateAutoscaleSetting.CustomAssetContainer).value
+            : this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageContainer).value;
+        const keyPrefix = [
+            custom
+                ? this.settings.get(AwsFortiGateAutoscaleSetting.CustomAssetDirectory).value
+                : this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageDirectory).value,
+            'configset'
+        ];
+        if (!bucket) {
+            return [];
+        }
+        if (subDirectory) {
+            keyPrefix.push(subDirectory);
+        }
+        const location = path.join(...keyPrefix);
+        this.proxy.logAsInfo(`container: ${bucket}, sub directory: ${location}`);
+        const blobs = await this.adaptee.listS3Object(bucket, location);
+        this.proxy.logAsInfo('called listConfigSet');
+        return blobs;
     }
     async listLicenseFiles(
         storageContainerName: string,

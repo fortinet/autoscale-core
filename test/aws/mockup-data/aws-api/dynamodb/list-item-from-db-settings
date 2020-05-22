@@ -1009,7 +1009,7 @@
                 "S": ""
             },
             "settingKey": {
-                "S": "custom-configset-name"
+                "S": "additional-configset-name-list"
             },
             "editable": {
                 "S": "false"

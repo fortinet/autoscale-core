@@ -88,6 +88,9 @@ const TEST_MASTER_ELECTION: MasterElection = {
 };
 
 class TestPlatformAdapter implements PlatformAdapter {
+    listConfigSet(subDirectory?: string, custom?: boolean): Promise<import('../blob').Blob[]> {
+        return Promise.resolve([]);
+    }
     listAutoscaleVm(identifyScalingGroup?: boolean, listNic?: boolean): Promise<VirtualMachine[]> {
         throw new Error('Method not implemented.');
     }

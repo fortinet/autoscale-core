@@ -287,6 +287,10 @@ export class MockS3 extends TestFixture {
             return {
                 Contents: files.map(fname => {
                     return {
+                        LastModified: '2019-10-16T21:50:42.000Z',
+                        ETag: '"mockup-etag-2141b4a96a36ee71e662"',
+                        StorageClass: 'MOCKUP-DATA',
+                        Size: 1024,
                         Key: path.join(request.Prefix, fname)
                     };
                 })

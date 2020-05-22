@@ -9,6 +9,7 @@ import { PlatformAdapter } from '../platform-adapter';
 import { VirtualMachine } from '../virtual-machine';
 import { AwsFortiGateAutoscaleSetting } from './aws/aws-fortigate-autoscale-settings';
 import { AutoscaleEnvironment } from '../autoscale-environment';
+import { Blob } from '../blob';
 
 export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationStrategy {
     static SUCCESS = 'SUCCESS';
@@ -130,20 +131,84 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         }
     }
     /**
-     * load the configset content for user defined custom configset(s)
-     * @param {string} customList configset name(s) separated by comma
+     * load a batch of configset content
+     * @param {string[]} configSetNameList configset name(s) separated by comma
+     * @param {boolean} customLocation configset is loaded from the custom asset location
+     * @param {boolean} throwError whether throw (just one) error or not
      * @returns {Promise} configset content
      */
-    protected async loadCustom(customList: string): Promise<string> {
-        const nameArray = customList.split(',');
+    protected async loadBatch(
+        configSetNameList: string[],
+        customLocation,
+        throwError
+    ): Promise<string> {
         let customConfigSetContentArray = [];
-        const loaderArray = nameArray.map(customName =>
-            this.platform.loadConfigSet(customName, true)
-        );
+        let errorCount = 0;
+        const loaderArray = configSetNameList
+            .filter(n => !this.alreadyLoaded.includes(n))
+            .map(name =>
+                this.platform
+                    .loadConfigSet(name, customLocation)
+                    .then(content => {
+                        this.alreadyLoaded.push(name);
+                        return content;
+                    })
+                    .catch(() => {
+                        errorCount++;
+                        this.proxy.logAsWarning(
+                            `[${name}] configset doesn't exist in the assets storage. ` +
+                                'Configset Not loaded.'
+                        );
+                        return '';
+                    })
+            );
         if (loaderArray.length > 0) {
             customConfigSetContentArray = await Promise.all(loaderArray);
         }
+        if (throwError && errorCount > 0) {
+            throw new Error('Error occurred when loading some configsets. Please check the log.');
+        }
         return customConfigSetContentArray.join('');
+    }
+    /**
+     * load the custom configset content from user defined custom configset location
+     * @returns {Promise} configset content
+     */
+    protected async loadUserCustom(): Promise<string> {
+        try {
+            const blobs: Blob[] = await this.platform.listConfigSet(null, true);
+            let fileCount = 0;
+            let loadedCount = 0;
+            let errorCount = 0;
+            const contents: string[] = await Promise.all(
+                blobs
+                    .filter(blob => {
+                        // exclude those filename starting with a dot
+                        return !blob.fileName.startsWith('.');
+                    })
+                    .map(blob => {
+                        fileCount++;
+                        return this.platform
+                            .loadConfigSet(blob.fileName, true)
+                            .then(content => {
+                                loadedCount++;
+                                return content;
+                            })
+                            .catch(error => {
+                                errorCount++;
+                                this.proxy.logAsWarning(error);
+                                return '';
+                            });
+                    })
+            );
+            this.proxy.logAsInfo(
+                `Total files: ${fileCount}. ${loadedCount} loaded. ${errorCount} error.`
+            );
+            return contents.join('\n');
+        } catch (error) {
+            this.proxy.logForError('Error in listing files in container.', error);
+            return '';
+        }
     }
     /**
      * load all required configset(s) content and combine them into one string
@@ -151,31 +216,48 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
      */
     protected async loadConfig(): Promise<string> {
         let baseConfig = '';
-        // check if second nic is enabled, config for the second nic must be prepended to
-        // base config
+        // check if second nic is enabled in the settings
+        // configset for the second nic
+        // must be loaded prior to the base config
         if (this.settings.get(AwsFortiGateAutoscaleSetting.EnableNic2).truthValue) {
             baseConfig += await this.loadPort2();
         }
-        baseConfig += await this.loadBase(); // alwasy load base config
-        // if internal elb is integrated
+        baseConfig += await this.loadBase(); // always load base config
+
+        // check if internal elb integration is enabled in the settings
+        // then load the corresponding config set
         if (this.settings.get(AwsFortiGateAutoscaleSetting.EnableInternalElb).truthValue) {
             baseConfig += await this.loadInternalElbWeb();
         }
-        // if faz integration is enabled, require this 'fazintegration' configset
+        // check if faz integration is enabled in the settings
+        // then load the corresponding config set
         if (this.settings.get(AwsFortiGateAutoscaleSetting.EnableFazIntegration).truthValue) {
             baseConfig += await this.loadFazIntegration();
         }
-        // check if other custom configsets are required
-        // NOTE: additional required configsets should be processed last
-        let customConfigSetName = this.settings.get(
-            AwsFortiGateAutoscaleSetting.CustomConfigSetName
-        ).value;
-        // remove whitespaces
-        customConfigSetName = customConfigSetName.replace(new RegExp('\\s', 'gm'), '');
+        // check if any other additional configsets is required
+        // the name list is string of a comma-separated name list, and can be splitted into
+        // a valid string array
+        // NOTE: additional required configsets should be processed second last
+        const additionalConfigSetNameList =
+            this.settings.get(AwsFortiGateAutoscaleSetting.AdditionalConfigSetNameList).value || '';
+
+        // splits the string into an array of string without whitespaces
+        const additionalConfigSetArray =
+            (additionalConfigSetNameList &&
+                additionalConfigSetNameList
+                    .split(/(?<=,|^)[ ]*([a-z1-9]+)[ ]*(?=,|$)/)
+                    .filter(a => !!a && !a.includes(','))) ||
+            [];
+
         // load additional required configsets
-        if (customConfigSetName) {
-            baseConfig += await this.loadCustom(customConfigSetName);
+        if (additionalConfigSetArray.length > 0) {
+            baseConfig += await this.loadBatch(additionalConfigSetArray, false, false);
         }
+
+        // finally, try to include every configset stored in the user custom location
+        // NOTE: user custom configsets should be processed last
+        baseConfig += await this.loadUserCustom();
+
         return baseConfig;
     }
     /**
