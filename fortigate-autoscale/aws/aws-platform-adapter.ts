@@ -15,7 +15,8 @@ import {
     LicenseUsageDbItem,
     MasterElectionDbItem,
     NicAttachmentDbItem,
-    VpnAttachmentDbItem
+    VpnAttachmentDbItem,
+    SettingsDbItem
 } from '../../db-definitions';
 import {
     genChecksum,
@@ -210,6 +211,29 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.settings = await this.adaptee.loadSettings();
         await this.validateSettings();
     }
+    async saveSettingItem(
+        key: string,
+        value: string,
+        description?: string,
+        jsonEncoded?: boolean,
+        editable?: boolean
+    ): Promise<string> {
+        const table = new AwsDBDef.AwsSettings(process.env.RESOURCE_TAG_PREFIX || '');
+        const item: SettingsDbItem = {
+            settingKey: key,
+            settingValue: value,
+            description: description,
+            jsonEncoded: jsonEncoded,
+            editable: editable
+        };
+        const conditionExp: AwsDdbOperations = {
+            Expression: '',
+            type: CreateOrUpdate.CreateOrReplace
+        };
+        await this.adaptee.saveItemToDb<SettingsDbItem>(table, item, conditionExp);
+        return item.settingKey;
+    }
+
     getReqVmId(): string {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {
             const reqMethod = this.proxy.getReqMethod();

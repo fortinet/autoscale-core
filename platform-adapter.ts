@@ -52,6 +52,13 @@ export interface PlatformAdapter {
     readonly createTime: number;
     // checkRequestIntegrity(): void;
     init(): Promise<void>;
+    saveSettingItem(
+        key: string,
+        value: string,
+        description?: string,
+        jsonEncoded?: boolean,
+        editable?: boolean
+    ): Promise<string>;
     getRequestType(): Promise<ReqType>;
     /**
      * heartbeat interval in the request in ms.
