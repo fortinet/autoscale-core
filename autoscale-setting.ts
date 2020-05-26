@@ -5,6 +5,7 @@
  * @enum {number}
  */
 export enum AutoscaleSetting {
+    AdditionalConfigSetNameList = 'additional-configset-name-list',
     AutoscaleHandlerUrl = 'autoscale-handler-url',
     AssetStorageContainer = 'asset-storage-name',
     AssetStorageDirectory = 'asset-storage-key-prefix',
@@ -20,7 +21,6 @@ export enum AutoscaleSetting {
     MasterElectionTimeout = 'master-election-timeout',
     MasterScalingGroupName = 'master-scaling-group-name',
     PaygScalingGroupName = 'payg-scaling-group-name',
-    RequiredConfigSet = 'required-configset',
     ResourceTagPrefix = 'resource-tag-prefix',
     SubnetPair = 'subnet-pair'
 }
