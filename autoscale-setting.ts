@@ -22,7 +22,8 @@ export enum AutoscaleSetting {
     MasterScalingGroupName = 'master-scaling-group-name',
     PaygScalingGroupName = 'payg-scaling-group-name',
     ResourceTagPrefix = 'resource-tag-prefix',
-    SubnetPair = 'subnet-pair'
+    SubnetPair = 'subnet-pair',
+    VpnBgpAsn = 'vpn-bgp-asn'
 }
 
 export interface SubnetPair {

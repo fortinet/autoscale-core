@@ -53,7 +53,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
         const settings = this.platform.settings;
         const resourceTagPrefix = settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix)
             .value;
-        const bgpAsn = Number(settings.get(AwsFortiGateAutoscaleSetting.AwsVpnBgpAsn).value);
+        const bgpAsn = Number(settings.get(AwsFortiGateAutoscaleSetting.VpnBgpAsn).value);
         const transitGatewayId = settings.get(AwsFortiGateAutoscaleSetting.AwsTransitGatewayId)
             .value;
         const customerGatewayResourceName = [
