@@ -5,6 +5,7 @@ import { KeyValue } from './db-definitions';
 import { JSONable } from './jsonable';
 import { HealthCheckRecord, MasterRecord } from './master-election';
 import { NetworkInterface, VirtualMachine } from './virtual-machine';
+import { Blob } from './blob';
 
 export interface ResourceTag {
     key: string;
@@ -51,6 +52,13 @@ export interface PlatformAdapter {
     readonly createTime: number;
     // checkRequestIntegrity(): void;
     init(): Promise<void>;
+    saveSettingItem(
+        key: string,
+        value: string,
+        description?: string,
+        jsonEncoded?: boolean,
+        editable?: boolean
+    ): Promise<string>;
     getRequestType(): Promise<ReqType>;
     /**
      * heartbeat interval in the request in ms.
@@ -91,6 +99,7 @@ export interface PlatformAdapter {
      */
     updateMasterRecord(rec: MasterRecord): Promise<void>;
     loadConfigSet(name: string, custom?: boolean): Promise<string>;
+    listConfigSet(subDirectory?: string, custom?: boolean): Promise<Blob[]>;
     deleteVmFromScalingGroup(vmId: string): Promise<void>;
     listLicenseFiles(
         storageContainerName: string,
