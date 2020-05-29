@@ -1,4 +1,4 @@
-import { SubnetPair } from '../../autoscale-setting';
+import { SubnetPair, SubnetPairIndex } from '../../autoscale-setting';
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import {
     NicAttachmentRecord,
@@ -10,6 +10,7 @@ import { ResourceTag } from '../../platform-adapter';
 import { NetworkInterface, VirtualMachine } from '../../virtual-machine';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsPlatformAdapter } from './aws-platform-adapter';
+import { JSONable } from '../../jsonable';
 
 export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
     vm: VirtualMachine;
@@ -148,11 +149,13 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
 
     protected async getPairedSubnetId(vm: VirtualMachine): Promise<string> {
         const settings = await this.platform.getSettings();
-        const subnetPairs: SubnetPair[] = settings.get(AwsFortiGateAutoscaleSetting.SubnetPair)
-            .jsonValue as SubnetPair[];
+        const subnetPairs: JSONable = settings.get(AwsFortiGateAutoscaleSetting.SubnetPair)
+            .jsonValue;
         const subnets: SubnetPair[] = (Array.isArray(subnetPairs) &&
-            subnetPairs.filter(element => element.subnetId === vm.subnetId)) || [null];
-        return Promise.resolve(subnets[0].pairId);
+            subnetPairs
+                .map((element: unknown) => element as SubnetPair)
+                .filter(element => element.subnetId === vm.subnetId)) || [null];
+        return Promise.resolve(subnets[0].pairIdList[SubnetPairIndex.Service]);
     }
 
     protected async tags(): Promise<ResourceTag[]> {

@@ -26,7 +26,7 @@ import {
     MockLambda,
     MockS3,
     readFileAsJson
-} from '../../scripts/aws-testman';
+} from '../../test-helper/aws-testman';
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */

@@ -1,4 +1,10 @@
-import { APIGatewayProxyEvent, APIGatewayProxyResult, Context, ScheduledEvent } from 'aws-lambda';
+import {
+    APIGatewayProxyEvent,
+    APIGatewayProxyResult,
+    Context,
+    ScheduledEvent,
+    CloudFormationCustomResourceEvent
+} from 'aws-lambda';
 
 import {
     CloudFunctionProxy,
@@ -10,6 +16,8 @@ import {
 } from '../../cloud-function-proxy';
 
 import { mapHttpMethod } from '../../autoscale-core';
+import { JSONable } from '../../jsonable';
+import * as AwsCfnResponse from './aws-cfn-response';
 
 export class AwsScheduledEventProxy extends CloudFunctionProxy<
     ScheduledEvent,
@@ -123,5 +131,73 @@ export class AwsApiGatewayEventProxy extends CloudFunctionProxy<
     }
     getReqMethod(): ReqMethod {
         return mapHttpMethod(this.request.httpMethod);
+    }
+}
+
+export enum AwsCloudFormationCustomResourceEventResponseStatus {
+    SUCCESS = 'SUCCESS',
+    FAILED = 'FAILED'
+}
+export interface AwsCloudFormationCustomResourceEventResponse {
+    status: AwsCloudFormationCustomResourceEventResponseStatus;
+    data: {};
+}
+export class AwsCloudFormationCustomResourceEventProxy extends CloudFunctionProxy<
+    CloudFormationCustomResourceEvent,
+    Context,
+    void
+> {
+    request: CloudFormationCustomResourceEvent;
+    context: Context;
+    log(message: string, level: LogLevel): void {
+        switch (level) {
+            case LogLevel.Debug:
+                console.debug(message);
+                break;
+            case LogLevel.Error:
+                console.error(message);
+                break;
+            case LogLevel.Info:
+                console.info(message);
+                break;
+            case LogLevel.Warn:
+                console.warn(message);
+                break;
+            default:
+                console.log(message);
+        }
+    }
+
+    /**
+     * return a formatted AWS Lambda handler response
+     * @param  {number} httpStatusCode http status code
+     * @param  {CloudFunctionResponseBody} body response body
+     * @param  {{}} headers response header
+     */
+    formatResponse(
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        httpStatusCode: number,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        body: CloudFunctionResponseBody,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        headers: {}
+    ): AwsCloudFormationCustomResourceEventResponse {
+        throw new Error('Not supposed to call the formatResponse method in this implementation.');
+    }
+    getReqBody(): CloudFormationCustomResourceEvent {
+        return this.request;
+    }
+    getRequestAsString(): string {
+        return JSON.stringify(this.request);
+    }
+
+    async sendResponse(successful?: boolean, data?: JSONable): Promise<void> {
+        await AwsCfnResponse.send(
+            this.request,
+            this.context,
+            (successful && AwsCfnResponse.ResponseStatus.SUCCESS) ||
+                AwsCfnResponse.ResponseStatus.FAILED,
+            data || {}
+        );
     }
 }

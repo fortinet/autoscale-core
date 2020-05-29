@@ -39,7 +39,11 @@ import {
     TgwVpnAttachmentRecord
 } from '../../platform-adapter';
 import { NetworkInterface, VirtualMachine } from '../../virtual-machine';
-import { AwsApiGatewayEventProxy, AwsScheduledEventProxy } from './aws-cloud-function-proxy';
+import {
+    AwsApiGatewayEventProxy,
+    AwsScheduledEventProxy,
+    AwsCloudFormationCustomResourceEventProxy
+} from './aws-cloud-function-proxy';
 import { LifecycleItemDbItem } from './aws-db-definitions';
 import * as AwsDBDef from './aws-db-definitions';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
@@ -183,26 +187,47 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 throw new Error(`Unsupported request method: ${reqMethod}`);
             }
         } else if (this.proxy instanceof AwsScheduledEventProxy) {
-            const boby = this.proxy.getReqBody();
-            if (boby.source === 'aws.autoscaling') {
-                if (boby['detail-type'].toString() === 'EC2 Instance-launch Lifecycle Action') {
+            const body = this.proxy.getReqBody();
+            if (body.source === 'aws.autoscaling') {
+                if (String(body['detail-type']) === 'EC2 Instance-launch Lifecycle Action') {
                     return Promise.resolve(ReqType.LaunchingVm);
-                } else if (boby['detail-type'].toString() === 'EC2 Instance Launch Successful') {
+                } else if (String(body['detail-type']) === 'EC2 Instance Launch Successful') {
                     return Promise.resolve(ReqType.LaunchedVm);
                 } else if (
-                    boby['detail-type'].toString() === 'EC2 Instance-terminate Lifecycle Action'
+                    String(body['detail-type']) === 'EC2 Instance-terminate Lifecycle Action'
                 ) {
                     return Promise.resolve(ReqType.TerminatingVm);
-                } else if (boby['detail-type'].toString() === 'EC2 Instance Terminate Successful') {
+                } else if (String(body['detail-type']) === 'EC2 Instance Terminate Successful') {
                     return Promise.resolve(ReqType.TerminatedVm);
                 } else {
                     throw new Error(
                         'Invalid request. ' +
-                            `Unsupported request detail-type: [${boby['detail-type']}]`
+                            `Unsupported request detail-type: [${body['detail-type']}]`
                     );
                 }
             }
-            throw new Error(`Unknown supported source: [${boby.source}]`);
+            throw new Error(`Unknown supported source: [${body.source}]`);
+        } else if (this.proxy instanceof AwsCloudFormationCustomResourceEventProxy) {
+            const body = this.proxy.getReqBody();
+            const arn = this.proxy.context.invokedFunctionArn;
+            // NOTE: only accept requests to the specific service handler Lambda function.
+            // validate requests by comparing the service token against the lambda function arn.
+            if (body.ServiceToken === arn) {
+                if (
+                    body.ResourceType === 'Create' ||
+                    body.ResourceType === 'Update' ||
+                    body.ResourceType === 'Delete'
+                ) {
+                    return Promise.resolve(ReqType.ServiceProviderRequest);
+                } else {
+                    throw new Error(
+                        'Invalid request. ' +
+                            `Unsupported request ResourceType: [${body.ResourceType}]`
+                    );
+                }
+            } else {
+                throw new Error(`Invalid request. Invalid ServiceToken: [${body.ServiceToken}]`);
+            }
         } else {
             throw new Error('Unsupported CloudFunctionProxy.');
         }
@@ -1514,5 +1539,34 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.adaptee.invokeLambda(handlerName, JSON.stringify(payload)).then(() => {
             this.proxy.logAsInfo('called invokeAwsLambda');
         });
+    }
+
+    async updateScalingGroupSize(
+        groupName: string,
+        desiredCapacity: number,
+        minSize?: number,
+        maxSize?: number
+    ): Promise<void> {
+        this.proxy.logAsInfo('calling updateScalingGroupSize');
+        if (desiredCapacity < 0) {
+            throw new Error(
+                `Scaling group desired capacity (value: ${desiredCapacity})` +
+                    ' cannot be smaller than zero.'
+            );
+        }
+        if (minSize !== undefined && minSize > desiredCapacity) {
+            throw new Error(
+                `Scaling group min size (value: ${minSize}) ` +
+                    `cannot be greater than desired capacity (value: ${desiredCapacity}).`
+            );
+        }
+        if (maxSize !== undefined && maxSize < desiredCapacity) {
+            throw new Error(
+                `Scaling group desired capacity (value: ${desiredCapacity}) ` +
+                    `cannot be greater than max size (value: ${maxSize}).`
+            );
+        }
+        await this.adaptee.updateScalingGroupSize(groupName, desiredCapacity, minSize, maxSize);
+        this.proxy.logAsInfo('called updateScalingGroupSize');
     }
 }

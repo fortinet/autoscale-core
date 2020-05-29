@@ -77,6 +77,13 @@ export interface AutoscaleHandler<TReq, TContext, TRes> {
     ): Promise<TRes>;
 }
 
+export interface AutoscaleServiceProvider<TReq, TContext, TRes> {
+    handleServiceRequest(proxy: CloudFunctionProxy<TReq, TContext, TRes>): Promise<TRes>;
+    startAutoscale(): Promise<boolean>;
+    stopAutoscale(): Promise<boolean>;
+    SaveAutoscaleSettings(): Promise<boolean>;
+}
+
 export interface AutoscaleCore
     extends AutoscaleContext,
         ScalingGroupContext,
@@ -595,41 +602,24 @@ export class Autoscale implements AutoscaleCore {
                     editable = false;
                     jsonEncoded = false;
                     break;
-                case 'fortigateautoscalevpcid':
-                    keyName = 'fortigate-autoscale-vpc-id';
-                    description = 'VPC ID of the FortiGate Autoscale.';
+                case 'fortigateautoscalevirtualnetworkid':
+                    keyName = 'fortigate-autoscale-virtual-network-id';
+                    description = 'Virtual Network ID of the FortiGate Autoscale.';
                     editable = false;
                     jsonEncoded = false;
                     break;
-                case 'fortigateautoscalesubnet1':
-                    keyName = 'fortigate-autoscale-subnet-1';
+                case 'fortigateautoscalesubnetidlist':
+                    keyName = 'fortigate-autoscale-subnet-id-list';
                     description =
-                        'The ID of the subnet 1 (in the first selected AZ) ' +
-                        'of the FortiGate Autoscale.';
+                        'The list of ID of the subnet of the FortiGate Autoscale. Comma separated.';
                     editable = false;
                     jsonEncoded = false;
                     break;
-                case 'fortigateautoscalesubnet2':
-                    keyName = 'fortigate-autoscale-subnet-2';
+                case 'fortigateautoscalesubnetpairs':
+                    keyName = 'fortigate-autoscale-subnet-pairs';
                     description =
-                        'The ID of the subnet 2 (in the second selected AZ) ' +
-                        'of the FortiGate Autoscale.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'fortigateautoscaleprotectedsubnet1':
-                    keyName = 'fortigate-autoscale-protected-subnet1';
-                    description =
-                        'The ID of the protected subnet 1 (in the first selected AZ) ' +
-                        'of the FortiGate Autoscale.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'fortigateautoscaleprotectedsubnet2':
-                    keyName = 'fortigate-autoscale-protected-subnet2';
-                    description =
-                        'The ID of the protected subnet 2 (in the second selected AZ) ' +
-                        'of the FortiGate Autoscale.';
+                        'The list of the pairing of one fortigate subnet with an array of' +
+                        ' multiple dependent subnets';
                     editable = false;
                     jsonEncoded = false;
                     break;

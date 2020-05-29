@@ -1,3 +1,5 @@
+import { JSONable } from './jsonable';
+
 /**
  * Enumerated value of SettingItem keys
  *
@@ -10,6 +12,9 @@ export enum AutoscaleSetting {
     AssetStorageContainer = 'asset-storage-name',
     AssetStorageDirectory = 'asset-storage-key-prefix',
     ByolScalingGroupName = 'byol-scaling-group-name',
+    ByolScalingGroupDesiredCapacity = 'byol-scaling-group-desired-capacity',
+    ByolScalingGroupMinSize = 'byol-scaling-group-min-size',
+    ByolScalingGroupMaxSize = 'byol-scaling-group-max-size',
     CustomAssetContainer = 'custom-asset-container',
     CustomAssetDirectory = 'custom-asset-directory',
     EnableNic2 = 'enable-second-nic',
@@ -22,6 +27,9 @@ export enum AutoscaleSetting {
     MasterElectionTimeout = 'master-election-timeout',
     MasterScalingGroupName = 'master-scaling-group-name',
     PaygScalingGroupName = 'payg-scaling-group-name',
+    PaygScalingGroupDesiredCapacity = 'scaling-group-desired-capacity',
+    PaygScalingGroupMinSize = 'scaling-group-min-size',
+    PaygScalingGroupMaxSize = 'scaling-group-max-size',
     ResourceTagPrefix = 'resource-tag-prefix',
     SubnetPair = 'subnet-pair',
     VpnBgpAsn = 'vpn-bgp-asn'
@@ -29,7 +37,12 @@ export enum AutoscaleSetting {
 
 export interface SubnetPair {
     subnetId: string;
-    pairId: string;
+    pairIdList: string[];
+}
+
+export enum SubnetPairIndex {
+    Service,
+    Management
 }
 
 /**
@@ -76,7 +89,7 @@ export class SettingItem {
      * @readonly
      * @type {({} | null)}
      */
-    get jsonValue(): {} | null {
+    get jsonValue(): JSONable {
         if (this.jsonEncoded) {
             try {
                 return JSON.parse(this.value);
