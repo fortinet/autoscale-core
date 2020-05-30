@@ -105,7 +105,7 @@ export enum LifecycleActionResult {
     Abandon = 'ABANDON'
 }
 
-export enum LifecyleState {
+export enum LifecycleState {
     Launching = 'launching',
     Launched = 'launched',
     Terminating = 'terminating',
@@ -118,8 +118,14 @@ export interface LifecycleItem {
     actionResult: LifecycleActionResult;
     actionToken: string;
     hookName: string;
-    state: LifecyleState;
+    state: LifecycleState;
     timestamp: number;
+}
+
+export enum ScalingGroupState {
+    InService,
+    InTransition,
+    Stopped
 }
 
 export class AwsPlatformAdapter implements PlatformAdapter {
@@ -1187,7 +1193,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 return dbItem.actionResult === value;
             })
             .map(([, v]) => v);
-        const [state] = Object.entries(LifecyleState)
+        const [state] = Object.entries(LifecycleState)
             .filter(([, value]) => {
                 return dbItem.state === value;
             })
@@ -1374,39 +1380,50 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called deleteAwsVpnConnection.');
     }
 
-    async getTgwVpnAttachmentRecord(vmId: string, ip: string): Promise<TgwVpnAttachmentRecord> {
-        this.proxy.logAsInfo('calling getTgwVpnAttachmentRecord');
+    async listTgwVpnAttachmentRecord(
+        filters: { vmId: string; ip: string }[] = []
+    ): Promise<TgwVpnAttachmentRecord[]> {
+        this.proxy.logAsInfo('calling listTgwVpnAttachmentRecord');
         const settings = await this.getSettings();
         const table = new AwsDBDef.AwsVpnAttachment(
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
-        const [record] = await (
-            await this.adaptee.listItemFromDb<VpnAttachmentDbItem>(table)
-        ).filter(item => {
-            return item.vmId === vmId && item.ip === ip;
-        });
-        if (!record) {
-            throw new Error(`No vpn attachment found for vm (id: ${vmId}, ip: ${ip})`);
+        let dbItems = await await await this.adaptee.listItemFromDb<VpnAttachmentDbItem>(table);
+        if (filters.length > 0) {
+            const m = filters.map(filter => `${filter.vmId}-${filter.ip}`);
+            dbItems = dbItems.filter(item => m.includes(`${item.vmId}-${item.ip}`));
         }
-        this.proxy.logAsInfo('called getTgwVpnAttachmentRecord');
-        // get the vpnconnection detail
-        const vpnConnection = await this.adaptee.describeVpnConnection(record.vpnConnectionId);
-        // get the transit gateway attachment detail
-        const tgwAttachment = await this.adaptee.describeTransitGatewayAttachment(
-            vpnConnection.TransitGatewayId as string,
-            vpnConnection.VpnConnectionId
+        const records = await Promise.all(
+            dbItems.map(async item => {
+                // get the vpnconnection detail
+                const vpnConnection = await this.adaptee.describeVpnConnection(
+                    item.vpnConnectionId
+                );
+                // get the transit gateway attachment detail
+                const tgwAttachment = await this.adaptee.describeTransitGatewayAttachment(
+                    vpnConnection.TransitGatewayId as string,
+                    vpnConnection.VpnConnectionId
+                );
+                const vpnConnectionJSON: JSONable = {};
+                Object.assign(vpnConnectionJSON, vpnConnection);
+                return {
+                    vmId: item.vmId,
+                    ip: item.ip,
+                    vpnConnectionId: vpnConnection.VpnConnectionId as string,
+                    transitGatewayId: vpnConnection.TransitGatewayId as string,
+                    transitGatewayAttachmentId: tgwAttachment.TransitGatewayAttachmentId,
+                    customerGatewayId: vpnConnection.CustomerGatewayId as string,
+                    vpnConnection: vpnConnectionJSON
+                } as TgwVpnAttachmentRecord;
+            })
         );
-        const vpnConnectionJSON: JSONable = {};
-        Object.assign(vpnConnectionJSON, vpnConnection);
-        return {
-            vmId: record.vmId,
-            ip: record.ip,
-            vpnConnectionId: vpnConnection.VpnConnectionId as string,
-            transitGatewayId: vpnConnection.TransitGatewayId as string,
-            transitGatewayAttachmentId: tgwAttachment.TransitGatewayAttachmentId,
-            customerGatewayId: vpnConnection.CustomerGatewayId as string,
-            vpnConnection: vpnConnectionJSON
-        } as TgwVpnAttachmentRecord;
+        this.proxy.logAsInfo('called listTgwVpnAttachmentRecord');
+        return records;
+    }
+
+    async getTgwVpnAttachmentRecord(vmId: string, ip: string): Promise<TgwVpnAttachmentRecord> {
+        const [record] = await this.listTgwVpnAttachmentRecord([{ vmId: vmId, ip: ip }]);
+        return record;
     }
 
     async saveAwsTgwVpnAttachmentRecord(
@@ -1568,5 +1585,79 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         }
         await this.adaptee.updateScalingGroupSize(groupName, desiredCapacity, minSize, maxSize);
         this.proxy.logAsInfo('called updateScalingGroupSize');
+    }
+
+    async checkScalingGroupState(
+        scalingGroupNames: string[]
+    ): Promise<Map<string, ScalingGroupState>> {
+        try {
+            this.proxy.logAsInfo('calling checkScalingGroupState');
+            const scalingGroups = await this.adaptee.describeAutoScalingGroups(scalingGroupNames);
+
+            const stateMap = new Map<string, ScalingGroupState>();
+            scalingGroups.forEach(scalingGroup => {
+                let state = ScalingGroupState.InService;
+                let noScale = false;
+                let instanceInService = true;
+                let instanceTerminated = false;
+                let instanceStateInTransition = false;
+                let noInstance = false;
+                // check if capacity set to (desired:0, minSize: 0, maxSize: any number)
+                if (scalingGroup.DesiredCapacity === 0 && scalingGroup.MinSize === 0) {
+                    noScale = true;
+                }
+
+                if (scalingGroup.Instances && scalingGroup.Instances.length === 0) {
+                    instanceInService = false;
+                    noInstance = true;
+                }
+                scalingGroup.Instances.forEach(instance => {
+                    if (instance.LifecycleState !== 'InService') {
+                        instanceInService = false;
+                    }
+                    if (
+                        instance.LifecycleState === 'Pending' ||
+                        instance.LifecycleState === 'Pending:Wait' ||
+                        instance.LifecycleState === 'Pending:Proceed' ||
+                        instance.LifecycleState === 'Terminating' ||
+                        instance.LifecycleState === 'Terminating:Wait' ||
+                        instance.LifecycleState === 'Terminating:Proceed' ||
+                        instance.LifecycleState === 'Detaching' ||
+                        instance.LifecycleState === 'EnteringStandby'
+                    ) {
+                        instanceStateInTransition = true;
+                    }
+                    if (instance.LifecycleState === 'Terminated') {
+                        instanceTerminated = true;
+                    }
+                });
+
+                // if any instance is in service, the group is in-service
+                if (instanceInService) {
+                    state = ScalingGroupState.InService;
+                }
+                // if any instance is in transition, the group is in-transition
+                if (instanceStateInTransition) {
+                    state = ScalingGroupState.InTransition;
+                }
+                // if the group is not-scaled and all instances are terminated, the group is stopped
+                if (noScale && instanceTerminated) {
+                    state = ScalingGroupState.Stopped;
+                }
+                // this is the fully stopped case
+                if (noScale && !instanceInService && noInstance) {
+                    state = ScalingGroupState.Stopped;
+                }
+                this.proxy.logAsInfo(
+                    `scaling group: ${scalingGroup.AutoScalingGroupName}` + `, state: ${state} `
+                );
+                stateMap.set(scalingGroup.AutoScalingGroupName, state);
+            });
+
+            return stateMap;
+        } catch (error) {
+            this.proxy.logForError('Error in checking scaling group state', error);
+            throw error;
+        }
     }
 }

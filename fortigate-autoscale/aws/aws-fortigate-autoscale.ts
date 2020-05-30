@@ -1,34 +1,34 @@
 import { AutoscaleEnvironment } from '../../autoscale-environment';
-import { CloudFunctionProxyAdapter, ReqType } from '../../cloud-function-proxy';
+import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import {
-    PreferredGroupMasterElection,
-    ConstantIntervalHeartbeatSyncStrategy
+    ConstantIntervalHeartbeatSyncStrategy,
+    PreferredGroupMasterElection
 } from '../../context-strategy/autoscale-context';
+import { ReusableLicensingStrategy } from '../../context-strategy/licensing-context';
 import {
     NicAttachmentContext,
     NicAttachmentStrategy,
     NicAttachmentStrategyResult
 } from '../../context-strategy/nic-attachment-context';
 import {
+    NoopVpnAttachmentStrategy,
     VpnAttachmentStrategy,
-    VpnAttachmentStrategyResult,
-    NoopVpnAttachmentStrategy
+    VpnAttachmentStrategyResult
 } from '../../context-strategy/vpn-attachment-context';
 import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../../helper-function';
 import { FortiGateAutoscale } from '../fortigate-autoscale';
 import { FortiGateBootstrapConfigStrategy } from '../fortigate-bootstrap-config-strategy';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsPlatformAdapter, TransitGatewayContext } from './aws-platform-adapter';
-import { AwsNicAttachmentStrategy } from './aws-nic-attachment-strategy';
-import { AwsTgwVpnAttachmentStrategy } from './aws-tgw-vpn-attachment-strategy';
-import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strategy';
-import { AwsTaggingAutoscaleVmStrategy } from './aws-tagging-autoscale-vm-strategy';
 import { AwsFortiGateBootstrapTgwStrategy } from './aws-fortigate-bootstrap-config-strategy';
-import { ReusableLicensingStrategy } from '../../context-strategy/licensing-context';
-import { CloudFormationCustomResourceEvent, Context } from 'aws-lambda';
-import { AutoscaleServiceProvider } from '../../autoscale-core';
-import { AwsCloudFormationCustomResourceEventProxy } from './aws-cloud-function-proxy';
-import { AwsPlatformAdaptee } from './aws-platform-adaptee';
+import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strategy';
+import { AwsNicAttachmentStrategy } from './aws-nic-attachment-strategy';
+import {
+    AwsPlatformAdapter,
+    TransitGatewayContext,
+    ScalingGroupState
+} from './aws-platform-adapter';
+import { AwsTaggingAutoscaleVmStrategy } from './aws-tagging-autoscale-vm-strategy';
+import { AwsTgwVpnAttachmentStrategy } from './aws-tgw-vpn-attachment-strategy';
 
 /**
  * AWS FortiGate Autoscale - class, with capabilities:
@@ -157,6 +157,16 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         return result;
     }
 
+    async cleanupUnusedVpn(): Promise<VpnAttachmentStrategyResult> {
+        this.proxy.logAsInfo('calling cleanupUnusedVpn');
+        await this.vpnAttachmentStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
+        const errorCount = await this.vpnAttachmentStrategy.cleanup();
+        this.proxy.logAsInfo('called cleanupUnusedVpn');
+        return errorCount === 0
+            ? VpnAttachmentStrategyResult.Success
+            : VpnAttachmentStrategyResult.Failed;
+    }
+
     /**
      * @override FortiGateAutoscale
      */
@@ -208,6 +218,39 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         await super.handleTerminatingVm();
         return '';
     }
+
+    async stopScalingGroup(groupNames?: string[]): Promise<void> {
+        this.proxy.logAsInfo(
+            `calling stopScalingGroup (${(groupNames && groupNames.join(', ')) || 'unspecified'})`
+        );
+        const settings = await this.platform.getSettings();
+        if (!groupNames) {
+            groupNames = [
+                settings.get(AwsFortiGateAutoscaleSetting.ByolScalingGroupName).value,
+                settings.get(AwsFortiGateAutoscaleSetting.PaygScalingGroupName).value
+            ];
+            this.proxy.logAsInfo(
+                `added (${groupNames && groupNames.join(', ')}) to the group list.`
+            );
+        }
+        const emitter: WaitForPromiseEmitter<Map<string, ScalingGroupState>> = () => {
+            return this.platform.checkScalingGroupState(groupNames);
+        };
+        const checker: WaitForConditionChecker<Map<string, ScalingGroupState>> = (
+            stateMap,
+            callCount
+        ) => {
+            if (callCount > 12) {
+                throw new Error(`maximum amount of attempts ${callCount} have been reached.`);
+            }
+            const runningGroups = Array.from(stateMap.values()).filter(
+                state => state !== ScalingGroupState.Stopped
+            );
+            return Promise.resolve(runningGroups.length === 0);
+        };
+        await waitFor<Map<string, ScalingGroupState>>(emitter, checker, 5000, this.proxy);
+        this.proxy.logAsInfo(`called stopScalingGroup (${groupNames.join(', ')})`);
+    }
 }
 
 /**
@@ -229,203 +272,5 @@ export class AwsFortiGateAutoscaleTgw<TReq, TContext, TRes> extends AwsFortiGate
         this.setBootstrapConfigurationStrategy(new AwsFortiGateBootstrapTgwStrategy());
         // use AWS Transit Gateway VPN attachment strategy
         this.setVpnAttachmentStrategy(new AwsTgwVpnAttachmentStrategy());
-    }
-}
-
-export type AwsFortiGateAutoscaleServiceEvent =
-    | AwsFortiGateAutoscaleServiceEventStartAutoscale
-    | AwsFortiGateAutoscaleServiceEventStopAutoscale
-    | AwsFortiGateAutoscaleServiceEventSaveSettings
-    | AwsFortiGateAutoscaleServiceEventUnknown;
-export interface AwsFortiGateAutoscaleServiceEventBase {
-    ServiceToken: string;
-}
-
-export interface AwsFortiGateAutoscaleServiceEventStartAutoscale
-    extends AwsFortiGateAutoscaleServiceEventBase {
-    ServiceType: 'startAutoscale' | 'initiateAutoscale';
-    DesireCapacity?: number;
-    MinSize?: number;
-    MaxSize?: number;
-}
-
-export interface AwsFortiGateAutoscaleServiceEventStopAutoscale
-    extends AwsFortiGateAutoscaleServiceEventBase {
-    ServiceType: 'stopAutoscale';
-}
-
-export interface AwsFortiGateAutoscaleServiceEventSaveSettings
-    extends AwsFortiGateAutoscaleServiceEventBase {
-    ServiceType: 'saveSettings';
-    [key: string]: string;
-}
-
-export interface AwsFortiGateAutoscaleServiceEventUnknown
-    extends AwsFortiGateAutoscaleServiceEventBase {
-    ServiceType: undefined;
-    [key: string]: string;
-}
-
-export class AwsFortiGateAutoscaleServiceProvider
-    implements AutoscaleServiceProvider<CloudFormationCustomResourceEvent, Context, void> {
-    autoscale: AwsFortiGateAutoscale<CloudFormationCustomResourceEvent, Context, void>;
-    get proxy(): AwsCloudFormationCustomResourceEventProxy {
-        return this.autoscale.proxy as AwsCloudFormationCustomResourceEventProxy;
-    }
-    get platform(): AwsPlatformAdapter {
-        return this.autoscale.platform;
-    }
-    async handleServiceRequest(proxy: AwsCloudFormationCustomResourceEventProxy): Promise<void> {
-        this.proxy.logAsInfo('calling handleServiceRequest');
-        try {
-            const env = {} as AutoscaleEnvironment;
-            const p = new AwsPlatformAdaptee();
-            const pa = new AwsPlatformAdapter(p, proxy);
-            this.autoscale = new AwsFortiGateAutoscale<
-                CloudFormationCustomResourceEvent,
-                Context,
-                void
-            >(pa, env, proxy);
-            this.autoscale.init();
-            const reqType: ReqType = await this.platform.getRequestType();
-            const serviceEventType: string = this.proxy.getReqBody().RequestType;
-            const serviceEvent: AwsFortiGateAutoscaleServiceEvent = {
-                ServiceType: undefined,
-                ServiceToken: undefined
-            };
-            Object.assign(serviceEvent, this.proxy.getReqBody().ResourceProperties || {});
-            this.proxy.logAsInfo(
-                `RequestType: ${this.proxy.request.RequestType}, serviceType: ${serviceEvent.ServiceType}`
-            );
-            if (reqType === ReqType.ServiceProviderRequest) {
-                switch (serviceEventType) {
-                    case 'Create':
-                    case 'Update':
-                        switch (serviceEvent.ServiceType) {
-                            case 'initiateAutoscale':
-                            case 'startAutoscale':
-                                await this.startAutoscale();
-                                break;
-                            case 'saveSettings':
-                                await this.SaveAutoscaleSettings();
-                                break;
-                            case 'stopAutoscale':
-                                this.proxy.logAsWarning(
-                                    `ServiceType: [${serviceEvent.ServiceType}] is skipped in ` +
-                                        `the RequestType: [${serviceEventType}]`
-                                );
-                                break;
-                            case undefined:
-                            default:
-                                throw new Error(
-                                    `Unsupported service type: [${serviceEvent.ServiceType}]`
-                                );
-                        }
-                        break;
-                    case 'Delete':
-                        switch (serviceEvent.ServiceType) {
-                            case 'initiateAutoscale':
-                            case 'startAutoscale':
-                            case 'saveSettings':
-                                this.proxy.logAsWarning(
-                                    `ServiceType: [${serviceEvent.ServiceType}] is skipped in ` +
-                                        `the RequestType: [${serviceEventType}]`
-                                );
-                                break;
-                            case 'stopAutoscale':
-                                await this.stopAutoscale();
-                                break;
-                            case undefined:
-                            default:
-                                throw new Error(
-                                    `Unsupported service type: [${serviceEvent.ServiceType}]`
-                                );
-                        }
-                        break;
-                    default:
-                        throw new Error(`Unsupported RequestType: [${serviceEventType}]`);
-                }
-            } else {
-                this.proxy.logAsWarning('Not a service provider request.');
-                this.proxy.logAsInfo('called handleServiceRequest');
-                await this.proxy.sendResponse(false);
-            }
-        } catch (error) {
-            this.proxy.logForError('Handle service request error.', error);
-            this.proxy.logAsInfo('called handleServiceRequest');
-            await this.proxy.sendResponse(false);
-        }
-    }
-    async startAutoscale(): Promise<boolean> {
-        const settings = await this.platform.getSettings();
-        const byolGroupName = settings.get(AwsFortiGateAutoscaleSetting.ByolScalingGroupName).value;
-        const byolDesiredCapacity = Number(
-            settings.get(AwsFortiGateAutoscaleSetting.ByolScalingGroupDesiredCapacity).value
-        );
-        const byolMinSize = Number(
-            settings.get(AwsFortiGateAutoscaleSetting.ByolScalingGroupMinSize).value
-        );
-        const byolMaxSize = Number(
-            settings.get(AwsFortiGateAutoscaleSetting.ByolScalingGroupMaxSize).value
-        );
-        const paygGroupName = settings.get(AwsFortiGateAutoscaleSetting.PaygScalingGroupName).value;
-        const paygDesiredCapacity = Number(
-            settings.get(AwsFortiGateAutoscaleSetting.PaygScalingGroupDesiredCapacity).value
-        );
-        const paygMinSize = Number(
-            settings.get(AwsFortiGateAutoscaleSetting.PaygScalingGroupMinSize).value
-        );
-        const paygMaxSize = Number(
-            settings.get(AwsFortiGateAutoscaleSetting.PaygScalingGroupMaxSize).value
-        );
-        const startScalingGroup = async (
-            groupName: string,
-            desiredCapacity: number,
-            minSize?: number,
-            maxSize?: number
-        ): Promise<boolean> => {
-            await this.platform.updateScalingGroupSize(
-                groupName,
-                desiredCapacity,
-                minSize,
-                maxSize
-            );
-            return true;
-        };
-        const tasks: Promise<boolean>[] = [];
-        if (byolGroupName) {
-            tasks.push(
-                startScalingGroup(
-                    byolGroupName,
-                    byolDesiredCapacity,
-                    byolMinSize,
-                    byolMaxSize
-                ).catch(error => {
-                    this.proxy.logForError('BYOL scaling group failed to start.', error);
-                    return false;
-                })
-            );
-        }
-        if (paygGroupName) {
-            tasks.push(
-                startScalingGroup(
-                    paygGroupName,
-                    paygDesiredCapacity,
-                    paygMinSize,
-                    paygMaxSize
-                ).catch(error => {
-                    this.proxy.logForError('PAYG scaling group failed to start.', error);
-                    return false;
-                })
-            );
-        }
-        const [s1, s2] = await Promise.all(tasks);
-        return s1 && s2;
-    }
-    stopAutoscale(): Promise<boolean> {
-        throw new Error('Method not implemented.');
-    }
-    SaveAutoscaleSettings(): Promise<boolean> {
-        throw new Error('Method not implemented.');
     }
 }

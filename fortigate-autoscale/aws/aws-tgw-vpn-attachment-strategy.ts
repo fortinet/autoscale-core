@@ -300,5 +300,32 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
             throw error;
         }
     }
-    // protected listVpnAttachmentRecord;
+
+    async cleanup(): Promise<number> {
+        this.proxy.logAsInfo('calling AwsTgwVpnAttachmentStrategy.cleanup.');
+        const vpnAttachmentRecords = await this.platform.listTgwVpnAttachmentRecord([]);
+        let errorCount = 0;
+        await Promise.all(
+            vpnAttachmentRecords.map(async record => {
+                try {
+                    // delete vpn
+                    await this.platform.deleteAwsVpnConnection(record.vpnConnectionId);
+                    this.proxy.logAsDebug('vpn connection deleted.');
+                    // delete customer gateway
+                    await this.platform.deleteAwsCustomerGateway(record.customerGatewayId);
+                    this.proxy.logAsDebug('customer gateway deleted.');
+                    // delete vpn attachment record
+                    await this.platform.deleteAwsTgwVpnAttachmentRecord(record.vmId, record.ip);
+                } catch (error) {
+                    this.proxy.logForError(
+                        `Error in cleaning vpn for (vmId: ${record.vmId}, ` + `ip: ${record.ip})`,
+                        error
+                    );
+                    errorCount++;
+                }
+            })
+        );
+        this.proxy.logAsInfo('called AwsTgwVpnAttachmentStrategy.cleanup.');
+        return errorCount;
+    }
 }
