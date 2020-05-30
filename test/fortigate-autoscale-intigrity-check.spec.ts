@@ -51,7 +51,7 @@ describe('FortiGate sanity test.', () => {
         event = await awsTestMan.fakeApiGatewayRequest(
             path.resolve(mockDataDir, 'request/event-fgt-get-config.json')
         );
-        context = await awsTestMan.fakeApiGatewayContext();
+        context = await awsTestMan.fakeLambdaContext();
 
         const {
             autoscale,

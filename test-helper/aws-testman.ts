@@ -40,7 +40,7 @@ export class AwsTestMan {
         return readFileAsJson(filePath);
     }
 
-    fakeApiGatewayContext(): Promise<Context> {
+    fakeLambdaContext(): Promise<Context> {
         return Promise.resolve({
             callbackWaitsForEmptyEventLoop: false,
             functionName: 'fake-caller',
@@ -60,7 +60,7 @@ export class AwsTestMan {
         await requestHandler.call(
             requestHandler,
             requestEvent,
-            requestContext || (await this.fakeApiGatewayContext())
+            requestContext || (await this.fakeLambdaContext())
         );
     }
 
