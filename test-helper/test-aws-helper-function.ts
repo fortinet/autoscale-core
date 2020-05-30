@@ -1,4 +1,10 @@
-import { APIGatewayProxyEvent, Context, APIGatewayProxyResult, ScheduledEvent } from 'aws-lambda';
+import {
+    APIGatewayProxyEvent,
+    Context,
+    APIGatewayProxyResult,
+    ScheduledEvent,
+    CloudFormationCustomResourceEvent
+} from 'aws-lambda';
 import {
     TestAwsFortiGateAutoscale,
     TestAwsTgwFortiGateAutoscale
@@ -7,6 +13,8 @@ import { AutoscaleEnvironment, AwsPlatformAdapter } from '../index';
 import { TestAwsPlatformAdaptee } from './test-aws-platform-adaptee';
 import { TestAwsApiGatewayEventProxy } from './test-aws-api-gateway-event-proxy';
 import { TestAwsScheduledEventProxy } from './test-aws-scheduled-event-proxy';
+import { AwsFortiGateAutoscaleServiceProvider } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-service';
+import { AwsCloudFormationCustomResourceEventProxy } from '../fortigate-autoscale/aws/aws-cloud-function-proxy';
 
 export const createAwsApiGatewayEventHandler = (
     event: APIGatewayProxyEvent,
@@ -141,5 +149,38 @@ export const createTestAwsTgwScheduledEventHandler = (
         platformAdaptee: p,
         platformAdapter: pa,
         proxy: proxy
+    };
+};
+
+export const createAwsCloudFormationCustomResourceEventHandler = (
+    event: CloudFormationCustomResourceEvent,
+    context: Context
+): {
+    autoscale: TestAwsFortiGateAutoscale<CloudFormationCustomResourceEvent, Context, void>;
+    env: AutoscaleEnvironment;
+    platformAdaptee: TestAwsPlatformAdaptee;
+    platformAdapter: AwsPlatformAdapter;
+    proxy: AwsCloudFormationCustomResourceEventProxy;
+    serviceProvider: AwsFortiGateAutoscaleServiceProvider;
+} => {
+    const env = {} as AutoscaleEnvironment;
+    const proxy = new AwsCloudFormationCustomResourceEventProxy(event, context);
+    const p = new TestAwsPlatformAdaptee();
+    const pa = new AwsPlatformAdapter(p, proxy);
+    const autoscale = new TestAwsFortiGateAutoscale<
+        CloudFormationCustomResourceEvent,
+        Context,
+        void
+    >(pa, env, proxy);
+    const serviceProvider: AwsFortiGateAutoscaleServiceProvider = new AwsFortiGateAutoscaleServiceProvider(
+        autoscale
+    );
+    return {
+        autoscale: autoscale,
+        env: env,
+        platformAdaptee: p,
+        platformAdapter: pa,
+        proxy: proxy,
+        serviceProvider: serviceProvider
     };
 };

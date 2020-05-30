@@ -77,8 +77,8 @@ export interface AutoscaleHandler<TReq, TContext, TRes> {
     ): Promise<TRes>;
 }
 
-export interface AutoscaleServiceProvider<TReq, TContext, TRes> {
-    handleServiceRequest(proxy: CloudFunctionProxy<TReq, TContext, TRes>): Promise<TRes>;
+export interface AutoscaleServiceProvider<TRes> {
+    handleServiceRequest(): Promise<TRes>;
     startAutoscale(): Promise<boolean>;
     stopAutoscale(): Promise<boolean>;
     SaveAutoscaleSettings(props: { [key: string]: string }): Promise<boolean>;

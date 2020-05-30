@@ -7,17 +7,17 @@ import { describe, it } from 'mocha';
 import path from 'path';
 import Sinon from 'sinon';
 
-import { Settings } from '../../autoscale-setting';
+import { Settings } from '../../../autoscale-setting';
 import {
     CloudFunctionProxyAdapter,
     CloudFunctionResponseBody,
     LogLevel
-} from '../../cloud-function-proxy';
-import { AwsFortiGateAutoscaleSetting } from '../../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
-import { AwsPlatformAdaptee } from '../../fortigate-autoscale/aws/aws-platform-adaptee';
-import { AwsPlatformAdapter } from '../../fortigate-autoscale/aws/aws-platform-adapter';
-import { compare } from '../../helper-function';
-import { ResourceTag } from '../../platform-adapter';
+} from '../../../cloud-function-proxy';
+import { AwsFortiGateAutoscaleSetting } from '../../../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
+import { AwsPlatformAdaptee } from '../../../fortigate-autoscale/aws/aws-platform-adaptee';
+import { AwsPlatformAdapter } from '../../../fortigate-autoscale/aws/aws-platform-adapter';
+import { compare } from '../../../helper-function';
+import { ResourceTag } from '../../../platform-adapter';
 import {
     AwsTestMan,
     MockAutoScaling,
@@ -26,7 +26,7 @@ import {
     MockLambda,
     MockS3,
     readFileAsJson
-} from '../../test-helper/aws-testman';
+} from '../../../test-helper/aws-testman';
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */

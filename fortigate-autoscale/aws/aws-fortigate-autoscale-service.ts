@@ -1,15 +1,13 @@
 import { CloudFormationCustomResourceEvent, Context } from 'aws-lambda';
 
 import { AutoscaleServiceProvider } from '../../autoscale-core';
-import { AutoscaleEnvironment } from '../../autoscale-environment';
 import { ReqType } from '../../cloud-function-proxy';
+import { NicAttachmentStrategyResult } from '../../context-strategy/nic-attachment-context';
+import { VpnAttachmentStrategyResult } from '../../context-strategy/vpn-attachment-context';
 import { AwsCloudFormationCustomResourceEventProxy } from './aws-cloud-function-proxy';
 import { AwsFortiGateAutoscale } from './aws-fortigate-autoscale';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsPlatformAdaptee } from './aws-platform-adaptee';
 import { AwsPlatformAdapter } from './aws-platform-adapter';
-import { NicAttachmentStrategyResult } from 'context-strategy/nic-attachment-context';
-import { VpnAttachmentStrategyResult } from 'context-strategy/vpn-attachment-context';
 
 export type AwsFortiGateAutoscaleServiceEvent =
     | AwsFortiGateAutoscaleServiceEventStartAutoscale
@@ -45,27 +43,23 @@ export interface AwsFortiGateAutoscaleServiceEventUnknown
     [key: string]: string;
 }
 
-export class AwsFortiGateAutoscaleServiceProvider
-    implements AutoscaleServiceProvider<CloudFormationCustomResourceEvent, Context, void> {
+export class AwsFortiGateAutoscaleServiceProvider implements AutoscaleServiceProvider<void> {
     autoscale: AwsFortiGateAutoscale<CloudFormationCustomResourceEvent, Context, void>;
+    constructor(
+        autoscale: AwsFortiGateAutoscale<CloudFormationCustomResourceEvent, Context, void>
+    ) {
+        this.autoscale = autoscale;
+    }
     get proxy(): AwsCloudFormationCustomResourceEventProxy {
         return this.autoscale.proxy as AwsCloudFormationCustomResourceEventProxy;
     }
     get platform(): AwsPlatformAdapter {
         return this.autoscale.platform;
     }
-    async handleServiceRequest(proxy: AwsCloudFormationCustomResourceEventProxy): Promise<void> {
+    async handleServiceRequest(): Promise<void> {
         this.proxy.logAsInfo('calling handleServiceRequest');
         try {
-            const env = {} as AutoscaleEnvironment;
-            const p = new AwsPlatformAdaptee();
-            const pa = new AwsPlatformAdapter(p, proxy);
-            this.autoscale = new AwsFortiGateAutoscale<
-                CloudFormationCustomResourceEvent,
-                Context,
-                void
-            >(pa, env, proxy);
-            this.autoscale.init();
+            await this.autoscale.init();
             const reqType: ReqType = await this.platform.getRequestType();
             const serviceEventType: string = this.proxy.getReqBody().RequestType;
             const serviceEvent: AwsFortiGateAutoscaleServiceEvent = {
@@ -124,6 +118,7 @@ export class AwsFortiGateAutoscaleServiceProvider
                     default:
                         throw new Error(`Unsupported RequestType: [${serviceEventType}]`);
                 }
+                await this.proxy.sendResponse(true);
             } else {
                 this.proxy.logAsWarning('Not a service provider request.');
                 this.proxy.logAsInfo('called handleServiceRequest');

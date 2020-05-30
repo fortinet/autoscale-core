@@ -218,21 +218,16 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             const arn = this.proxy.context.invokedFunctionArn;
             // NOTE: only accept requests to the specific service handler Lambda function.
             // validate requests by comparing the service token against the lambda function arn.
-            if (body.ServiceToken === arn) {
-                if (
-                    body.ResourceType === 'Create' ||
-                    body.ResourceType === 'Update' ||
-                    body.ResourceType === 'Delete'
-                ) {
-                    return Promise.resolve(ReqType.ServiceProviderRequest);
-                } else {
-                    throw new Error(
-                        'Invalid request. ' +
-                            `Unsupported request ResourceType: [${body.ResourceType}]`
-                    );
-                }
+            if (
+                body.ResourceType === 'AWS::CloudFormation::CustomResource' &&
+                body.ServiceToken === arn
+            ) {
+                return Promise.resolve(ReqType.ServiceProviderRequest);
             } else {
-                throw new Error(`Invalid request. Invalid ServiceToken: [${body.ServiceToken}]`);
+                throw new Error(
+                    `Invalid request. ResourceType: [${body.ResourceType}], ` +
+                        `ServiceToken: [${body.ServiceToken}]`
+                );
             }
         } else {
             throw new Error('Unsupported CloudFunctionProxy.');

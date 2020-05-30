@@ -1,7 +1,14 @@
+/* eslint-disable @typescript-eslint/no-empty-function */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { APIGatewayProxyEvent, APIGatewayProxyResult, Context, ScheduledEvent } from 'aws-lambda';
+import {
+    APIGatewayProxyEvent,
+    APIGatewayProxyResult,
+    Context,
+    ScheduledEvent,
+    CloudFormationCustomResourceEvent
+} from 'aws-lambda';
 import { AutoScaling, EC2, ELBv2, Lambda, S3 } from 'aws-sdk';
 import * as commentJson from 'comment-json';
 import fs from 'fs';
@@ -45,11 +52,13 @@ export class AwsTestMan {
             callbackWaitsForEmptyEventLoop: false,
             functionName: 'fake-caller',
             functionVersion: '1.0.0',
-            invokedFunctionArn: 'arn::',
+            invokedFunctionArn:
+                'arn:aws:lambda:no-where-1:123456789012:function:mockup-lambda-function-AAAAAAAAAAAAA',
             memoryLimitInMB: '128',
             awsRequestId: 'fake-aws-request-id',
             logGroupName: 'fake-log-group-name',
-            logStreamName: 'fake-log-stream-name'
+            logStreamName: 'fake-log-stream-name',
+            done: function() {}
         } as Context);
     }
     async makeApiGatewayRequest(
@@ -74,6 +83,15 @@ export class AwsTestMan {
     async fakeApiGatewayRequest(filePath: string): Promise<APIGatewayProxyEvent> {
         const e = await this.readFileAsJson(path.resolve(this.rootDir, filePath));
         const event = {} as APIGatewayProxyEvent;
+        Object.assign(event, e);
+        return event;
+    }
+
+    async fakeCfnCustomResourceRequest(
+        filePath: string
+    ): Promise<CloudFormationCustomResourceEvent> {
+        const e = await this.readFileAsJson(path.resolve(this.rootDir, filePath));
+        const event = {} as CloudFormationCustomResourceEvent;
         Object.assign(event, e);
         return event;
     }
@@ -686,6 +704,14 @@ export class MockAutoScaling extends TestFixture {
         this.setFakeCall('terminateInstanceInAutoScalingGroup', args => {
             return this.terminateInstanceInAutoScalingGroup(args);
         });
+        // NOTE: stub
+        this.setStub(
+            'updateAutoScalingGroup',
+            Sinon.stub(this.autoscaling, 'updateAutoScalingGroup')
+        );
+        this.setFakeCall('updateAutoScalingGroup', args => {
+            return this.updateAutoScalingGroup(args);
+        });
     }
 
     describeAutoScalingGroups(request: AutoScaling.AutoScalingGroupNamesType): ApiResult {
@@ -721,6 +747,12 @@ export class MockAutoScaling extends TestFixture {
     terminateInstanceInAutoScalingGroup(
         request: AutoScaling.TerminateInstanceInAutoScalingGroupType
     ): ApiResult {
+        return CreateApiResult(() => {
+            return;
+        });
+    }
+
+    updateAutoScalingGroup(request: AutoScaling.UpdateAutoScalingGroupType): ApiResult {
         return CreateApiResult(() => {
             return;
         });

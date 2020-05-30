@@ -6,7 +6,7 @@
 import * as path from 'path';
 import { describe, it } from 'mocha';
 import { APIGatewayProxyEvent, Context } from 'aws-lambda';
-import { AwsFortiGateAutoscaleSetting } from '../fortigate-autoscale';
+import { AwsFortiGateAutoscaleSetting } from '../../fortigate-autoscale';
 import {
     AwsTestMan,
     MockEC2,
@@ -15,10 +15,10 @@ import {
     MockElbv2,
     MockLambda,
     MockDocClient
-} from '../test-helper/aws-testman';
+} from '../../test-helper/aws-testman';
 
 import Sinon from 'sinon';
-import { createAwsApiGatewayEventHandler } from '../test-helper/test-aws-helper-function';
+import { createAwsApiGatewayEventHandler } from '../../test-helper/test-aws-helper-function';
 
 describe('FortiGate sanity test.', () => {
     let mockDataRootDir: string;
@@ -75,7 +75,7 @@ describe('FortiGate sanity test.', () => {
 
         const settingsToSave: { [key: string]: string } = {};
         Object.values({ ...AwsFortiGateAutoscaleSetting }).forEach(value => {
-            const settingKey = value.toLowerCase().replace(new RegExp('-', 'g'), '');
+            const settingKey = (value as string).toLowerCase().replace(new RegExp('-', 'g'), '');
             settingsToSave[settingKey] = value;
             return settingsToSave;
         });
