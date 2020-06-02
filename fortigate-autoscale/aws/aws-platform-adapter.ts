@@ -15,8 +15,8 @@ import {
     LicenseUsageDbItem,
     MasterElectionDbItem,
     NicAttachmentDbItem,
-    VpnAttachmentDbItem,
-    SettingsDbItem
+    SettingsDbItem,
+    VpnAttachmentDbItem
 } from '../../db-definitions';
 import {
     genChecksum,
@@ -24,6 +24,7 @@ import {
     WaitForConditionChecker,
     WaitForPromiseEmitter
 } from '../../helper-function';
+import { JSONable } from '../../jsonable';
 import {
     HealthCheckRecord,
     HealthCheckSyncState,
@@ -41,14 +42,13 @@ import {
 import { NetworkInterface, VirtualMachine } from '../../virtual-machine';
 import {
     AwsApiGatewayEventProxy,
-    AwsScheduledEventProxy,
-    AwsCloudFormationCustomResourceEventProxy
+    AwsCloudFormationCustomResourceEventProxy,
+    AwsScheduledEventProxy
 } from './aws-cloud-function-proxy';
 import { LifecycleItemDbItem } from './aws-db-definitions';
 import * as AwsDBDef from './aws-db-definitions';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsPlatformAdaptee } from './aws-platform-adaptee';
-import { JSONable } from 'jsonable';
 
 export const TAG_KEY_RESOURCE_GROUP = 'tag:ResourceGroup';
 export const TAG_KEY_AUTOSCALE_ROLE = 'AutoscaleRole';

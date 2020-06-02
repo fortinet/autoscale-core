@@ -716,25 +716,19 @@ export class MockAutoScaling extends TestFixture {
 
     describeAutoScalingGroups(request: AutoScaling.AutoScalingGroupNamesType): ApiResult {
         return CreateApiResult(async () => {
-            const data = await Promise.all(
-                request.AutoScalingGroupNames.map(name => {
-                    const filePath = path.resolve(
-                        this.rootDir,
-                        ['describe-auto-scaling-groups', name, this.subCall.subPath]
-                            .filter(v => v)
-                            .join('-')
-                    );
-                    return readFileAsJson(filePath);
-                })
+            const filePath = path.resolve(
+                this.rootDir,
+                [
+                    'describe-auto-scaling-groups',
+                    request.AutoScalingGroupNames.join('-'),
+                    this.subCall.subPath
+                ]
+                    .filter(v => v)
+                    .join('-')
             );
+            const data = await readFileAsJson(filePath);
             this.clearSubPath();
-            let groups = [];
-            data.forEach(d => {
-                groups = [...groups, ...(d.AutoScalingGroups as Array<any>)];
-            });
-            return {
-                AutoScalingGroups: groups
-            };
+            return data;
         });
     }
 

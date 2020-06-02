@@ -130,6 +130,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
             return Promise.resolve(failureNum === 0);
         };
         try {
+            this.nicAttachmentStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
             await waitFor<number>(emitter, checker, 5000, this.proxy);
             this.proxy.logAsInfo('called cleanupUnusedNic');
             return NicAttachmentStrategyResult.Success;
@@ -248,6 +249,12 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
             );
             return Promise.resolve(runningGroups.length === 0);
         };
+        // update each group and set cap and min size to 0 in order to fully stop the auto scaling group.
+        await Promise.all(
+            groupNames.map(name => {
+                return this.platform.updateScalingGroupSize(name, 0, 0);
+            })
+        );
         await waitFor<Map<string, ScalingGroupState>>(emitter, checker, 5000, this.proxy);
         this.proxy.logAsInfo(`called stopScalingGroup (${groupNames.join(', ')})`);
     }

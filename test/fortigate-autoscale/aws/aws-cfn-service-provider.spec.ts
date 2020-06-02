@@ -48,10 +48,10 @@ describe('FortiGate Autoscale AWS CloudFormation service provider.', () => {
             mocDocClient.restoreAll();
         });
         let event: CloudFormationCustomResourceEvent;
-        it('Calling startAutoscale service.', async () => {
+        it('Calling startAutoscale service. should be Passed on a create RequestType.', async () => {
             mockDataDir = path.resolve(mockDataRootDir, 'aws-cfn-service-provider');
             event = await awsTestMan.fakeCfnCustomResourceRequest(
-                path.resolve(mockDataDir, 'request/event-cfn-start-autoscale.json')
+                path.resolve(mockDataDir, 'request/event-cfn-start-autoscale-on-create.json')
             );
             context = await awsTestMan.fakeLambdaContext();
 
@@ -102,6 +102,273 @@ describe('FortiGate Autoscale AWS CloudFormation service provider.', () => {
             Sinon.assert.match(spyUpdateScalingGroupSize.calledWith(paygGroupName, 0, 0, 6), true);
             // ASSERT: complete successfully with sending a 'true' as response
             Sinon.assert.match(spyProxySendResponse.calledWith(true), true);
+
+            spyUpdateScalingGroupSize.restore();
+            stubAwsCfnResponse.restore();
+            spyProxySendResponse.restore();
+        });
+
+        it('Calling startAutoscale service. should be ignored on a delete RequestType.', async () => {
+            mockDataDir = path.resolve(mockDataRootDir, 'aws-cfn-service-provider');
+            event = await awsTestMan.fakeCfnCustomResourceRequest(
+                path.resolve(mockDataDir, 'request/event-cfn-start-autoscale-on-delete.json')
+            );
+            context = await awsTestMan.fakeLambdaContext();
+
+            const {
+                proxy,
+                platformAdapter: awsPlatformAdapter,
+                platformAdaptee: awsPlatformAdaptee,
+                serviceProvider: awsCfnServiceProvider
+            } = await createAwsCloudFormationCustomResourceEventHandler(event, context);
+
+            ({
+                s3: mockS3,
+                ec2: mockEC2,
+                autoscaling: mockAutoscaling,
+                elbv2: mockElbv2,
+                lambda: mockLambda,
+                docClient: mocDocClient
+            } = awsPlatformAdaptee.stubAwsServices(path.resolve(mockDataDir, 'aws-api')));
+
+            const spyUpdateScalingGroupSize = Sinon.spy(
+                awsPlatformAdapter,
+                'updateScalingGroupSize'
+            );
+
+            const spyProxySendResponse = Sinon.spy(proxy, 'sendResponse');
+
+            const stubAwsCfnResponse = Sinon.stub(AwsCfnResponse, 'send');
+
+            stubAwsCfnResponse.callsFake((event1, context1, responsStatus) => {
+                // ASSERT: this function is called with arguments of expected types.
+                Sinon.assert.match(event1, Sinon.match.object);
+                Sinon.assert.match(context1, Sinon.match.object);
+                Sinon.assert.match(responsStatus, Sinon.match.string);
+                return Promise.resolve();
+            });
+
+            await awsCfnServiceProvider.handleServiceRequest();
+
+            // ASSERT: updateScalingGroupSize should not be called
+            Sinon.assert.match(spyUpdateScalingGroupSize.called, false);
+            // ASSERT: complete successfully with sending a 'true' as response
+            Sinon.assert.match(spyProxySendResponse.calledWith(true), true);
+
+            spyUpdateScalingGroupSize.restore();
+            stubAwsCfnResponse.restore();
+            spyProxySendResponse.restore();
+        });
+
+        it('Calling stoptAutoscale service. Should be passed on a delete RequestType', async () => {
+            mockDataDir = path.resolve(mockDataRootDir, 'aws-cfn-service-provider');
+            event = await awsTestMan.fakeCfnCustomResourceRequest(
+                path.resolve(mockDataDir, 'request/event-cfn-stop-autoscale-on-delete.json')
+            );
+            context = await awsTestMan.fakeLambdaContext();
+
+            const {
+                proxy,
+                platformAdapter: awsPlatformAdapter,
+                platformAdaptee: awsPlatformAdaptee,
+                serviceProvider: awsCfnServiceProvider
+            } = await createAwsCloudFormationCustomResourceEventHandler(event, context);
+
+            ({
+                s3: mockS3,
+                ec2: mockEC2,
+                autoscaling: mockAutoscaling,
+                elbv2: mockElbv2,
+                lambda: mockLambda,
+                docClient: mocDocClient
+            } = awsPlatformAdaptee.stubAwsServices(path.resolve(mockDataDir, 'aws-api')));
+
+            const spyUpdateScalingGroupSize = Sinon.spy(
+                awsPlatformAdapter,
+                'updateScalingGroupSize'
+            );
+
+            const stubCheckScalingGroupState = Sinon.stub(
+                awsPlatformAdapter,
+                'checkScalingGroupState'
+            );
+
+            const spyProxySendResponse = Sinon.spy(proxy, 'sendResponse');
+
+            const stubAwsCfnResponse = Sinon.stub(AwsCfnResponse, 'send');
+
+            stubAwsCfnResponse.callsFake((event1, context1, responsStatus) => {
+                // ASSERT: this function is called with arguments of expected types.
+                Sinon.assert.match(event1, Sinon.match.object);
+                Sinon.assert.match(context1, Sinon.match.object);
+                Sinon.assert.match(responsStatus, Sinon.match.string);
+                return Promise.resolve();
+            });
+
+            // set up a hook for next autoscaling.describeAutoScalingGroups
+            stubCheckScalingGroupState.callsFake(groupNames => {
+                stubCheckScalingGroupState.restore();
+                // start a sequential calls from this point onward
+                // re-direct mockup data source
+                mockAutoscaling.enableSequentialFakeCall('describeAutoScalingGroups');
+                return awsPlatformAdapter.checkScalingGroupState(groupNames);
+            });
+
+            const spyCheckScalingGroupStateArgs = stubCheckScalingGroupState.args;
+
+            await awsCfnServiceProvider.handleServiceRequest();
+
+            const settings = await awsPlatformAdapter.getSettings();
+            const byolGroupName = settings.get(AwsFortiGateAutoscaleSetting.ByolScalingGroupName)
+                .value;
+            const paygGroupName = settings.get(AwsFortiGateAutoscaleSetting.PaygScalingGroupName)
+                .value;
+
+            // ASSERT: platform adapter updateScalingGroupSize is called with byol group name.
+            // and desired cap and min size are both set to 0
+            Sinon.assert.match(spyUpdateScalingGroupSize.calledWith(byolGroupName, 0, 0), true);
+            // ASSERT: platform adapter updateScalingGroupSize is called with payg group name.
+            // and desired cap and min size are both set to 0
+            Sinon.assert.match(spyUpdateScalingGroupSize.calledWith(paygGroupName, 0, 0), true);
+            // ASSERT: platform adapter checkScalingGroupState is called.
+            Sinon.assert.match(stubCheckScalingGroupState.called, true);
+            // ASSERT: platform adapter checkScalingGroupState is called on both groups
+            Sinon.assert.match(!!spyCheckScalingGroupStateArgs, true);
+            if (spyCheckScalingGroupStateArgs) {
+                Sinon.assert.match(
+                    spyCheckScalingGroupStateArgs[0][0].includes(byolGroupName),
+                    true
+                );
+                Sinon.assert.match(
+                    spyCheckScalingGroupStateArgs[0][0].includes(paygGroupName),
+                    true
+                );
+            }
+            // ASSERT: complete successfully with sending a 'true' as response
+            Sinon.assert.match(spyProxySendResponse.calledWith(true), true);
+
+            spyUpdateScalingGroupSize.restore();
+            stubAwsCfnResponse.restore();
+            spyProxySendResponse.restore();
+        });
+        it('Calling stoptAutoscale service. Should be ignored on a create RequestType', async () => {
+            mockDataDir = path.resolve(mockDataRootDir, 'aws-cfn-service-provider');
+            event = await awsTestMan.fakeCfnCustomResourceRequest(
+                path.resolve(mockDataDir, 'request/event-cfn-stop-autoscale-on-create.json')
+            );
+            context = await awsTestMan.fakeLambdaContext();
+
+            const {
+                proxy,
+                platformAdapter: awsPlatformAdapter,
+                platformAdaptee: awsPlatformAdaptee,
+                serviceProvider: awsCfnServiceProvider
+            } = await createAwsCloudFormationCustomResourceEventHandler(event, context);
+
+            ({
+                s3: mockS3,
+                ec2: mockEC2,
+                autoscaling: mockAutoscaling,
+                elbv2: mockElbv2,
+                lambda: mockLambda,
+                docClient: mocDocClient
+            } = awsPlatformAdaptee.stubAwsServices(path.resolve(mockDataDir, 'aws-api')));
+
+            const spyUpdateScalingGroupSize = Sinon.spy(
+                awsPlatformAdapter,
+                'updateScalingGroupSize'
+            );
+
+            const spyProxySendResponse = Sinon.spy(proxy, 'sendResponse');
+
+            const stubAwsCfnResponse = Sinon.stub(AwsCfnResponse, 'send');
+
+            stubAwsCfnResponse.callsFake((event1, context1, responsStatus) => {
+                // ASSERT: this function is called with arguments of expected types.
+                Sinon.assert.match(event1, Sinon.match.object);
+                Sinon.assert.match(context1, Sinon.match.object);
+                Sinon.assert.match(responsStatus, Sinon.match.string);
+                return Promise.resolve();
+            });
+
+            await awsCfnServiceProvider.handleServiceRequest();
+
+            // ASSERT: updateScalingGroupSize should not be called
+            Sinon.assert.match(spyUpdateScalingGroupSize.called, false);
+            // ASSERT: complete successfully with sending a 'true' as response
+            Sinon.assert.match(spyProxySendResponse.calledWith(true), true);
+
+            spyUpdateScalingGroupSize.restore();
+            stubAwsCfnResponse.restore();
+            spyProxySendResponse.restore();
+        });
+        it('Calling saveSettings service. Should pass on a create RequestType', async () => {
+            mockDataDir = path.resolve(mockDataRootDir, 'aws-cfn-service-provider');
+            event = await awsTestMan.fakeCfnCustomResourceRequest(
+                path.resolve(mockDataDir, 'request/event-cfn-save-settings-on-create.json')
+            );
+            context = await awsTestMan.fakeLambdaContext();
+
+            const settingsToSave: { [key: string]: string } = {};
+            Object.values({ ...AwsFortiGateAutoscaleSetting }).forEach(value => {
+                const settingKey = value.toLowerCase().replace(new RegExp('-', 'g'), '');
+                settingsToSave[settingKey] = value;
+                return settingsToSave;
+            });
+
+            Object.assign(event.ResourceProperties, settingsToSave);
+
+            const {
+                proxy,
+                platformAdapter: awsPlatformAdapter,
+                platformAdaptee: awsPlatformAdaptee,
+                serviceProvider: awsCfnServiceProvider
+            } = await createAwsCloudFormationCustomResourceEventHandler(event, context);
+
+            ({
+                s3: mockS3,
+                ec2: mockEC2,
+                autoscaling: mockAutoscaling,
+                elbv2: mockElbv2,
+                lambda: mockLambda,
+                docClient: mocDocClient
+            } = awsPlatformAdaptee.stubAwsServices(path.resolve(mockDataDir, 'aws-api')));
+
+            const spySaveSettingItem = Sinon.spy(awsPlatformAdapter, 'saveSettingItem');
+
+            // change the s3 root dir
+            mockS3.rootDir = mockDataDir;
+
+            const spyProxySendResponse = Sinon.spy(proxy, 'sendResponse');
+
+            const stubAwsCfnResponse = Sinon.stub(AwsCfnResponse, 'send');
+
+            stubAwsCfnResponse.callsFake((event1, context1, responsStatus) => {
+                // ASSERT: this function is called with arguments of expected types.
+                Sinon.assert.match(event1, Sinon.match.object);
+                Sinon.assert.match(context1, Sinon.match.object);
+                Sinon.assert.match(responsStatus, Sinon.match.string);
+                return Promise.resolve();
+            });
+
+            await awsCfnServiceProvider.handleServiceRequest();
+            // ASSERT: saveSettings() completes sucessfully without any error.
+            Sinon.assert.match(spySaveSettingItem.threw(), false);
+            // ASSERT: each key has been processed and saved.
+            const savedKeys = await Promise.all(spySaveSettingItem.returnValues);
+            const keyNotSaved = Object.values(settingsToSave).filter(value => {
+                return !savedKeys.includes(value);
+            });
+            if (savedKeys.length !== Object.keys(settingsToSave).length) {
+                console.error('The following keys not processed: ', keyNotSaved);
+            }
+            Sinon.assert.match(savedKeys.length, Object.keys(settingsToSave).length);
+
+            // ASSERT: complete successfully with sending a 'true' as response
+            Sinon.assert.match(spyProxySendResponse.calledWith(true), true);
+
+            stubAwsCfnResponse.restore();
+            spyProxySendResponse.restore();
         });
     });
 
