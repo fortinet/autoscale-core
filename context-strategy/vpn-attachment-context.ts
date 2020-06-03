@@ -26,9 +26,13 @@ export interface VpnAttachmentStrategy {
     ): Promise<void>;
     attach(): Promise<VpnAttachmentStrategyResult>;
     detach(): Promise<VpnAttachmentStrategyResult>;
+    cleanup(): Promise<number>;
 }
 
 export class NoopVpnAttachmentStrategy implements VpnAttachmentStrategy {
+    cleanup(): Promise<number> {
+        return Promise.resolve(0);
+    }
     attach(): Promise<VpnAttachmentStrategyResult> {
         return Promise.resolve(VpnAttachmentStrategyResult.ShouldContinue);
     }

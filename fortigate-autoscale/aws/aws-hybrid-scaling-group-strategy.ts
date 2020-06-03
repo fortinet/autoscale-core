@@ -1,7 +1,7 @@
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import { ScalingGroupStrategy } from '../../context-strategy/scaling-group-context';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsPlatformAdapter, LifecyleState, LifecycleActionResult } from './aws-platform-adapter';
+import { AwsPlatformAdapter, LifecycleState, LifecycleActionResult } from './aws-platform-adapter';
 import { JSONable } from 'jsonable';
 
 export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
@@ -31,7 +31,7 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         const lifecycleItem = this.platform.extractLifecycleItemFromRequest(reqDetail);
         lifecycleItem.vmId = targetVm.id;
         lifecycleItem.scalingGroupName = targetVm.scalingGroupName;
-        lifecycleItem.state = LifecyleState.Launching;
+        lifecycleItem.state = LifecycleState.Launching;
         let elbAttachedDone = false;
 
         const targetGroupArn = settings.get(
@@ -89,22 +89,22 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         // ASSERT: terget vm is available or throw error
         const lifecycleItem = await this.platform.getLifecycleItem(targetVm.id);
         if (lifecycleItem) {
-            // ASSERT: the associated lifecyle item is in Launching state.
+            // ASSERT: the associated lifecycle item is in Launching state.
             // only complete the lifecycle of launching
-            if (lifecycleItem.state === LifecyleState.Launching) {
+            if (lifecycleItem.state === LifecycleState.Launching) {
                 // complete the lifecycle action with a success
                 await this.platform.completeLifecycleAction(lifecycleItem, true);
             } else {
                 throw new Error(
                     'Incorrec    t state found in attempting to complete a lifecycle ' +
                         `of vm(id: ${targetVm.id}). ` +
-                        `Expected state: [${LifecyleState.Launching}], ` +
+                        `Expected state: [${LifecycleState.Launching}], ` +
                         `actual state: [${lifecycleItem.state}]`
                 );
             }
         } else {
             this.proxy.logAsWarning(
-                `Attempting to complete a (stete: ${LifecyleState.Launching}) ` +
+                `Attempting to complete a (stete: ${LifecycleState.Launching}) ` +
                     `lifecycle of vm(id: ${targetVm.id}). Lifecycle item not found.`
             );
         }
@@ -126,7 +126,7 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         const lifecycleItem = this.platform.extractLifecycleItemFromRequest(reqDetail);
         lifecycleItem.vmId = targetVm.id;
         lifecycleItem.scalingGroupName = targetVm.scalingGroupName;
-        lifecycleItem.state = LifecyleState.Terminating;
+        lifecycleItem.state = LifecycleState.Terminating;
 
         try {
             // detach instance from load balancer target group
@@ -168,22 +168,22 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         // ASSERT: terget vm is available or throw error
         const lifecycleItem = await this.platform.getLifecycleItem(targetVm.id);
         if (lifecycleItem) {
-            // ASSERT: the associated lifecyle item is in terminating state.
+            // ASSERT: the associated lifecycle item is in terminating state.
             // only complete the lifecycle of terminating
-            if (lifecycleItem.state === LifecyleState.Terminating) {
+            if (lifecycleItem.state === LifecycleState.Terminating) {
                 // complete the lifecycle action with a success
                 await this.platform.completeLifecycleAction(lifecycleItem, true);
             } else {
                 throw new Error(
                     'Incorrec    t state found in attempting to complete a lifecycle ' +
                         `of vm(id: ${targetVm.id}). ` +
-                        `Expected state: [${LifecyleState.Terminating}], ` +
+                        `Expected state: [${LifecycleState.Terminating}], ` +
                         `actual state: [${lifecycleItem.state}]`
                 );
             }
         } else {
             this.proxy.logAsWarning(
-                `Attempting to complete a (stete: ${LifecyleState.Terminating}) ` +
+                `Attempting to complete a (stete: ${LifecycleState.Terminating}) ` +
                     `lifecycle of vm(id: ${targetVm.id}). Lifecycle item not found.`
             );
         }

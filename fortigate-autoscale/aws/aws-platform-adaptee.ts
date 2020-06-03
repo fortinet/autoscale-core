@@ -1,5 +1,5 @@
 import { AutoScaling, EC2, ELBv2, Lambda, S3 } from 'aws-sdk';
-import { LifecycleActionResult } from 'aws-sdk/clients/autoscaling';
+import { LifecycleActionResult, UpdateAutoScalingGroupType } from 'aws-sdk/clients/autoscaling';
 import { DocumentClient, ExpressionAttributeValueMap } from 'aws-sdk/clients/dynamodb';
 import fs from 'fs';
 import { isIPv4 } from 'net';
@@ -670,5 +670,24 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 }
             );
         });
+    }
+
+    async updateScalingGroupSize(
+        groupName: string,
+        desiredCapacity: number,
+        minSize?: number,
+        maxSize?: number
+    ): Promise<void> {
+        const request: UpdateAutoScalingGroupType = {
+            AutoScalingGroupName: groupName,
+            DesiredCapacity: desiredCapacity
+        };
+        if (minSize !== undefined) {
+            request.MinSize = minSize;
+        }
+        if (maxSize !== undefined) {
+            request.MaxSize = maxSize;
+        }
+        await this.autoscaling.updateAutoScalingGroup(request).promise();
     }
 }

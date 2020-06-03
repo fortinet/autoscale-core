@@ -17,6 +17,7 @@ export * from './context-strategy/scaling-group-context';
 export * from './context-strategy/vpn-attachment-context';
 export * from './context-strategy/bootstrap-context';
 export * from './context-strategy/licensing-context';
+export * from './helper-function';
 export { DBDef };
 
 /**
@@ -28,4 +29,8 @@ export * from './fortigate-autoscale/index';
  * export scripts
  */
 export * from './scripts/code-packman';
-export * from './scripts/aws-testman';
+
+/**
+ * export test-helpers
+ */
+export * from './test-helper';
