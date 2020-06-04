@@ -1,6 +1,12 @@
-import { AutoScaling, EC2, ELBv2, Lambda, S3 } from 'aws-sdk';
-import { LifecycleActionResult, UpdateAutoScalingGroupType } from 'aws-sdk/clients/autoscaling';
+import AutoScaling, {
+    LifecycleActionResult,
+    UpdateAutoScalingGroupType
+} from 'aws-sdk/clients/autoscaling';
 import { DocumentClient, ExpressionAttributeValueMap } from 'aws-sdk/clients/dynamodb';
+import EC2 from 'aws-sdk/clients/ec2';
+import ELBv2 from 'aws-sdk/clients/elbv2';
+import Lambda from 'aws-sdk/clients/lambda';
+import S3 from 'aws-sdk/clients/s3';
 import fs from 'fs';
 import { isIPv4 } from 'net';
 import path from 'path';
