@@ -6,9 +6,9 @@ import * as commentJson from 'comment-json';
 import archiver from 'archiver';
 import decompress from 'decompress';
 
-export interface JSONable {
-    [key: string]: string | number | boolean | JSONable | JSONable[];
-}
+export type JSONable = {
+    [key in string | number]: string | number | boolean | JSONable | JSONable[];
+};
 
 export enum ExitCode {
     Ok,
@@ -30,6 +30,56 @@ export interface TsConfig extends JSONable {
         outDir: string;
         sourceMap: boolean;
     };
+}
+
+export type PackmanConfigPackage = {
+    name: string;
+    staticFile: {
+        name: string;
+        copyFrom: string;
+        saveTo: string;
+    }[];
+    function: {
+        name: string;
+        ref: string;
+    }[];
+    saveFunctionSource: boolean;
+    functionSourceDir?: string;
+    functionPackageDir: string;
+};
+
+export type PackmanConfigBundle = {
+    filenamePrefix?: string;
+    filenameSuffix?: string;
+};
+
+export type PackmanConigOutput = {
+    outDir: string;
+    packageDir: string;
+};
+
+export type PackmanConfigFunction = {
+    name: string;
+    source: {
+        filename: string;
+        location: string;
+    };
+    output: {
+        filename: string;
+        location: string;
+    };
+    copyList: {
+        name: string;
+        location: string;
+        fromSourceDir: boolean;
+    }[];
+    syncVersion: boolean;
+};
+export interface PackmanConfig extends JSONable {
+    function: PackmanConfigFunction[];
+    bundle: PackmanConfigBundle;
+    package: PackmanConfigPackage[];
+    output: PackmanConigOutput;
 }
 
 export enum ArchiverType {
@@ -694,6 +744,32 @@ export class CodePackman {
         return this.readJson(path.resolve(dir, 'package.json'), options);
     }
 
+    writePackageJson(
+        dir: string,
+        content: JSONable,
+        options?: CodePackmanOptions
+    ): Promise<ExitCode> {
+        try {
+            options = options || this._options;
+            if (this.safeDirCheck(dir, options)) {
+                fs.writeFileSync(
+                    path.resolve(dir, 'package.json'),
+                    JSON.stringify(content, null, 4)
+                );
+            }
+            return Promise.resolve(ExitCode.Ok);
+        } catch (error) {
+            if (options.printStdError) {
+                console.error(error);
+            }
+            if (options.suppressError) {
+                return Promise.resolve(ExitCode.Ok);
+            } else {
+                throw error;
+            }
+        }
+    }
+
     readTsConfig(dir: string, options?: CodePackmanOptions): Promise<JSONable> {
         return this.readJson(path.resolve(dir, 'tsconfig.json'), options);
     }
@@ -984,5 +1060,141 @@ export class CodePackman {
 
     async finalize(): Promise<ExitCode> {
         return await this.copyDir(this.tempDistDir, this.distDir);
+    }
+
+    async readPackmanConfig(): Promise<PackmanConfig> {
+        return (await this.readJson(
+            path.resolve(this._projectRoot, 'packman.config.json')
+        )) as PackmanConfig;
+    }
+
+    async buildWithPackmanConfig(): Promise<boolean> {
+        try {
+            const config = await this.readPackmanConfig();
+            const results = await Promise.all(
+                config.package.map(pkg => {
+                    return this.pack(pkg, config).catch(error => {
+                        console.error(`Error in packing [${chalk.cyan(pkg.name)}]`, error);
+                        return false;
+                    });
+                })
+            );
+            console.log(`${chalk.cyan('( ͡° ͜ʖ ͡°) ')}completed!`);
+            return results.filter(r => !!r).length === 0;
+        } catch (error) {
+            console.error('Failed to build with packman config. See error:', error);
+            return false;
+        }
+    }
+
+    private async pack(pkg: PackmanConfigPackage, config: PackmanConfig): Promise<boolean> {
+        const tempDir = this.makeTempDir();
+        const pkgDir = path.resolve(tempDir, pkg.name);
+        const functionPackageDir = path.resolve(pkgDir, pkg.functionPackageDir);
+        const functionSourceDir =
+            (pkg.saveFunctionSource && path.resolve(pkgDir, pkg.functionPackageDir)) || null;
+        await this.makeDir(pkgDir);
+        await this.makeDir(functionPackageDir);
+        if (pkg.saveFunctionSource) {
+            await this.makeDir(functionSourceDir);
+        }
+        // pack functions
+        const funcPkgLocations = await Promise.all(
+            pkg.function.map(func => {
+                return this.packFunction(func.name, func.ref, config);
+            })
+        );
+        for (const func of funcPkgLocations) {
+            await this.cp([func.zipFile], functionPackageDir);
+            if (pkg.saveFunctionSource) {
+                await this.cp([func.resourceLocation], functionSourceDir);
+            }
+        }
+        // pack static files
+        for (const staticFile of pkg.staticFile) {
+            const fromPath = path.resolve(this.projectRoot, staticFile.copyFrom);
+            const toPath = path.resolve(pkgDir, staticFile.saveTo);
+            await this.cp([fromPath], toPath);
+        }
+        // zip it
+        const archiveInput: ArchiverInput = {
+            name: pkgDir,
+            type: ArchiverType.directory
+        };
+        const pkgFilename = `${pkg.name}.zip`;
+        await this.pushd(tempDir);
+        await this.zip([archiveInput], pkgFilename);
+        await this.popd();
+        // copy to dest
+        await this.cp([path.resolve(tempDir, pkgFilename)], config.output.packageDir);
+        console.log(
+            `${chalk.cyan('package saved to:')}${path.resolve(
+                config.output.packageDir,
+                pkgFilename
+            )}`
+        );
+        return true;
+    }
+
+    private async packFunction(
+        name: string,
+        ref: string,
+        config: PackmanConfig
+    ): Promise<{
+        zipFile: string;
+        resourceLocation: string;
+    }> {
+        const [conf] = config.function.filter(c => c.name === ref);
+        if (!conf) {
+            return null;
+        }
+        const funcConfig: PackmanConfigFunction = { ...conf };
+        const bundleOutDir = path.resolve(this.projectRoot, config.output.outDir);
+        const funcSrcDir = path.resolve(this.projectRoot, funcConfig.source.location);
+        const funcOutDir = path.resolve(this.tempDir, name);
+        const copyList: string[] = funcConfig.copyList.map(c => {
+            return path.resolve((c.fromSourceDir && funcSrcDir) || this.projectRoot, c.location);
+        });
+        const bundleFileName =
+            `${config.bundle.filenamePrefix || ''}` +
+            `${funcConfig.name}${config.bundle.filenameSuffix || ''}.js`;
+        copyList.push(path.resolve(bundleOutDir, bundleFileName));
+
+        // copy all required files into function output dir.
+        await this.makeDir(funcOutDir);
+        await this.pushd(funcOutDir);
+        await this.cp(copyList, funcOutDir);
+        await this.mv(
+            path.resolve(funcOutDir, bundleFileName),
+            path.resolve(funcOutDir, 'index.js')
+        );
+
+        // update the package json.
+        const options = { ...this._options };
+        options.suppressError = true;
+        const funcPackage = await this.readPackageJson(funcOutDir, options);
+        if (Object.keys(funcPackage).length > 0) {
+            funcPackage.main = 'index.js';
+            if (funcConfig.syncVersion) {
+                const projectPackage = await this.readPackageJson(this.projectRoot);
+                funcPackage.version = projectPackage.version;
+            }
+            await this.writePackageJson(funcOutDir, funcPackage);
+        }
+
+        // zip it
+        const archiveInput: ArchiverInput = {
+            name: funcOutDir,
+            type: ArchiverType.directory
+        };
+        const zipFilename = `${name}.zip`;
+        await this.pushd(this.tempDir);
+        await this.zip([archiveInput], zipFilename);
+        await this.popd();
+
+        return Promise.resolve({
+            zipFile: path.resolve(this.tempDir, zipFilename),
+            resourceLocation: funcOutDir
+        });
     }
 }
