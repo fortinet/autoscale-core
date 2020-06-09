@@ -1093,8 +1093,10 @@ export class CodePackman {
         const functionPackageDir = path.resolve(pkgDir, pkg.functionPackageDir);
         const functionSourceDir =
             (pkg.saveFunctionSource && path.resolve(pkgDir, pkg.functionPackageDir)) || null;
+        const functionOutDir = path.resolve(this.projectRoot, config.output.packageDir);
         await this.makeDir(pkgDir);
         await this.makeDir(functionPackageDir);
+        await this.makeDir(functionOutDir);
         if (pkg.saveFunctionSource) {
             await this.makeDir(functionSourceDir);
         }
@@ -1126,12 +1128,9 @@ export class CodePackman {
         await this.zip([archiveInput], pkgFilename);
         await this.popd();
         // copy to dest
-        await this.cp([path.resolve(tempDir, pkgFilename)], config.output.packageDir);
+        await this.cp([path.resolve(tempDir, pkgFilename)], functionOutDir);
         console.log(
-            `${chalk.cyan('package saved to:')}${path.resolve(
-                config.output.packageDir,
-                pkgFilename
-            )}`
+            `${chalk.cyan('package saved to:')}${path.resolve(functionOutDir, pkgFilename)}`
         );
         return true;
     }
