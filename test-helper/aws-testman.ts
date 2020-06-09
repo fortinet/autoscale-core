@@ -2,14 +2,26 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// import {
+//     APIGatewayProxyEvent,
+//     APIGatewayProxyResult,
+//     Context,
+//     ScheduledEvent,
+//     CloudFormationCustomResourceEvent
+// } from 'aws-lambda';
 import {
     APIGatewayProxyEvent,
     APIGatewayProxyResult,
+    CloudFormationCustomResourceEvent,
     Context,
-    ScheduledEvent,
-    CloudFormationCustomResourceEvent
+    ScheduledEvent
 } from 'aws-lambda';
-import { AutoScaling, EC2, ELBv2, Lambda, S3 } from 'aws-sdk';
+import AutoScaling from 'aws-sdk/clients/autoscaling';
+import { DocumentClient } from 'aws-sdk/clients/dynamodb';
+import EC2 from 'aws-sdk/clients/ec2';
+import ELBv2 from 'aws-sdk/clients/elbv2';
+import Lambda, { InvocationRequest } from 'aws-sdk/clients/lambda';
+import S3 from 'aws-sdk/clients/s3';
 import * as commentJson from 'comment-json';
 import fs from 'fs';
 import path from 'path';
@@ -17,7 +29,6 @@ import Sinon, { SinonStub } from 'sinon';
 
 import { SettingItem, Settings } from '../autoscale-setting';
 import { JSONable } from '../jsonable';
-import { DocumentClient } from 'aws-sdk/clients/dynamodb';
 
 export type ApiGatewayRequestHandler = (
     event: APIGatewayProxyEvent,
@@ -807,7 +818,7 @@ export class MockLambda extends TestFixture {
         });
     }
 
-    invoke(request: Lambda.InvocationRequest): ApiResult {
+    invoke(request: InvocationRequest): ApiResult {
         return CreateApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
