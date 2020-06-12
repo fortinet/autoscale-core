@@ -311,7 +311,6 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             AwsFortiGateAutoscaleSetting.FortiGateSyncInterface,
             AwsFortiGateAutoscaleSetting.FortiGateTrafficPort,
             AwsFortiGateAutoscaleSetting.FortiGateAdminPort,
-            AwsFortiGateAutoscaleSetting.FortiGateInternalElbDns,
             AwsFortiGateAutoscaleSetting.HeartbeatInterval,
             AwsFortiGateAutoscaleSetting.ByolScalingGroupName,
             AwsFortiGateAutoscaleSetting.PaygScalingGroupName

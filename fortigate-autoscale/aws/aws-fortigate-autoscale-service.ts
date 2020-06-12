@@ -6,7 +6,10 @@ import { NicAttachmentStrategyResult } from '../../context-strategy/nic-attachme
 import { VpnAttachmentStrategyResult } from '../../context-strategy/vpn-attachment-context';
 import { AwsCloudFormationCustomResourceEventProxy } from './aws-cloud-function-proxy';
 import { AwsFortiGateAutoscale } from './aws-fortigate-autoscale';
-import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
+import {
+    AwsFortiGateAutoscaleSetting,
+    AwsFortiGateAutoscaleSettingItemDictionary
+} from './aws-fortigate-autoscale-settings';
 import { AwsPlatformAdapter } from './aws-platform-adapter';
 
 export type AwsFortiGateAutoscaleServiceEvent =
@@ -241,7 +244,7 @@ export class AwsFortiGateAutoscaleServiceProvider implements AutoscaleServicePro
         const props: { [key: string]: string } = { ...event };
         delete props.ServiceToken;
         delete props.ServiceType;
-        await this.autoscale.saveSettings(props);
+        await this.autoscale.saveSettings(props, AwsFortiGateAutoscaleSettingItemDictionary);
         this.proxy.logAsInfo('called SaveAutoscaleSettings');
         return true;
     }
