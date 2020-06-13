@@ -16,6 +16,7 @@ import {
     VpnAttachmentStrategyResult
 } from '../../context-strategy/vpn-attachment-context';
 import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../../helper-function';
+import { VirtualMachineState } from '../../virtual-machine';
 import { FortiGateAutoscale } from '../fortigate-autoscale';
 import { FortiGateBootstrapConfigStrategy } from '../fortigate-bootstrap-config-strategy';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
@@ -24,8 +25,8 @@ import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strate
 import { AwsNicAttachmentStrategy } from './aws-nic-attachment-strategy';
 import {
     AwsPlatformAdapter,
-    TransitGatewayContext,
-    ScalingGroupState
+    ScalingGroupState,
+    TransitGatewayContext
 } from './aws-platform-adapter';
 import { AwsTaggingAutoscaleVmStrategy } from './aws-tagging-autoscale-vm-strategy';
 import { AwsTgwVpnAttachmentStrategy } from './aws-tgw-vpn-attachment-strategy';
@@ -76,6 +77,9 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
     }
     async handleNicAttachment(): Promise<NicAttachmentStrategyResult> {
         this.proxy.logAsInfo('calling handleNicAttachment');
+        if (!this.env.targetVm || this.env.targetVm.state === VirtualMachineState.Terminated) {
+            return NicAttachmentStrategyResult.ShouldTerminateVm;
+        }
         this.nicAttachmentStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
         try {
             const result = await this.nicAttachmentStrategy.attach();
@@ -237,12 +241,12 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         const emitter: WaitForPromiseEmitter<Map<string, ScalingGroupState>> = () => {
             return this.platform.checkScalingGroupState(groupNames);
         };
-        const checker: WaitForConditionChecker<Map<string, ScalingGroupState>> = (
-            stateMap,
-            callCount
-        ) => {
-            if (callCount > 12) {
-                throw new Error(`maximum amount of attempts ${callCount} have been reached.`);
+        const checker: WaitForConditionChecker<Map<string, ScalingGroupState>> = stateMap => {
+            this.proxy.logAsInfo(`Remaining time: ${this.proxy.getRemainingExecutionTime()}.`);
+            if (this.proxy.getRemainingExecutionTime() < 30000) {
+                throw new Error(
+                    'Unable to complete because function execution is timing out in 30 seconds.'
+                );
             }
             const runningGroups = Array.from(stateMap.values()).filter(
                 state => state !== ScalingGroupState.Stopped
@@ -255,7 +259,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
                 return this.platform.updateScalingGroupSize(name, 0, 0);
             })
         );
-        await waitFor<Map<string, ScalingGroupState>>(emitter, checker, 5000, this.proxy);
+        await waitFor<Map<string, ScalingGroupState>>(emitter, checker, 5000, this.proxy, 0);
         this.proxy.logAsInfo(`called stopScalingGroup (${groupNames.join(', ')})`);
     }
 }

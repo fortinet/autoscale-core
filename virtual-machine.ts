@@ -1,3 +1,9 @@
+export enum VirtualMachineState {
+    Pending = 'Pending',
+    Running = 'Running',
+    Stopped = 'Stopped',
+    Terminated = 'Terminated'
+}
 export interface VirtualMachine {
     id: string;
     scalingGroupName: string;
@@ -10,6 +16,7 @@ export interface VirtualMachine {
     networkInterfaces?: NetworkInterface[];
     networkInterfaceIds?: string[];
     sourceData?: { [key: string]: unknown };
+    state: VirtualMachineState;
 }
 
 export interface NetworkInterface {

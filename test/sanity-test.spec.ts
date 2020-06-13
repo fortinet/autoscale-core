@@ -38,7 +38,7 @@ import {
     PlatformAdapter,
     ResourceTag
 } from '../platform-adapter';
-import { NetworkInterface, VirtualMachine } from '../virtual-machine';
+import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../virtual-machine';
 import { compare } from '../helper-function';
 import { AwsFortiGateAutoscaleSetting } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
 
@@ -66,7 +66,8 @@ const TEST_VM: VirtualMachine = {
     primaryPrivateIpAddress: '3',
     primaryPublicIpAddress: '4',
     virtualNetworkId: '5',
-    subnetId: '6'
+    subnetId: '6',
+    state: VirtualMachineState.Running
 };
 
 const TEST_MASTER_RECORD: MasterRecord = {
@@ -224,6 +225,14 @@ class TestPlatformAdapter implements PlatformAdapter {
 }
 
 class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
+    private executionStartTime: number;
+    constructor() {
+        this.executionStartTime = Date.now();
+    }
+    getRemainingExecutionTime(): number {
+        // set it to 60 seconds
+        return this.executionStartTime + 60000 - Date.now();
+    }
     getRequestAsString(): string {
         return 'fake-req-as-string';
     }

@@ -452,6 +452,16 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         await this.ec2.modifyInstanceAttribute(request).promise();
     }
 
+    async updateNetworkInterfaceSrcDestChecking(nicId: string, enable?: boolean): Promise<void> {
+        const request: EC2.ModifyNetworkInterfaceAttributeRequest = {
+            SourceDestCheck: {
+                Value: enable
+            },
+            NetworkInterfaceId: nicId
+        };
+        await this.ec2.modifyNetworkInterfaceAttribute(request).promise();
+    }
+
     async elbRegisterTargets(targetGroupArn: string, instanceIds: string[]): Promise<void> {
         const input: ELBv2.Types.RegisterTargetsInput = {
             TargetGroupArn: targetGroupArn,

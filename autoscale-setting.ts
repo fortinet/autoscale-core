@@ -32,7 +32,6 @@ export enum AutoscaleSetting {
     PaygScalingGroupMinSize = 'scaling-group-min-size',
     PaygScalingGroupMaxSize = 'scaling-group-max-size',
     ResourceTagPrefix = 'resource-tag-prefix',
-    SubnetPair = 'subnet-pair',
     VmInfoCacheTime = 'vm-info-cache-time',
     VpnBgpAsn = 'vpn-bgp-asn'
 }
@@ -374,16 +373,6 @@ AutoscaleSettingItemDictionary[AutoscaleSetting.ResourceTagPrefix] = {
     description: 'Resource tag prefix.',
     editable: true,
     jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.SubnetPair] = {
-    keyName: AutoscaleSetting.SubnetPair,
-    description:
-        'The list of the pairing of one fortigate subnet with an array of' +
-        ' multiple dependent subnets',
-    editable: false,
-    jsonEncoded: true,
     booleanType: false
 };
 

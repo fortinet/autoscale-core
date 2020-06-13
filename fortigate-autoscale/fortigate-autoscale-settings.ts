@@ -110,7 +110,7 @@ FortiGateAutoscaleSettingItemDictionary[
     keyName: FortiGateAutoscaleSettingEX.FortiGateAutoscaleSubnetPairs,
     description:
         'A list of paired subnet for the north-south traffic routing purposes.' +
-        ' Format: [{subnetId:name, pairId:name}, ...]',
+        ' Format: [{subnetId: [pairId1, pairId2, ...]}, ...]',
     editable: false,
     jsonEncoded: true,
     booleanType: false
