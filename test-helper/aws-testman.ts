@@ -2,13 +2,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// import {
-//     APIGatewayProxyEvent,
-//     APIGatewayProxyResult,
-//     Context,
-//     ScheduledEvent,
-//     CloudFormationCustomResourceEvent
-// } from 'aws-lambda';
 import {
     APIGatewayProxyEvent,
     APIGatewayProxyResult,
@@ -59,6 +52,7 @@ export class AwsTestMan {
     }
 
     fakeLambdaContext(): Promise<Context> {
+        const now = Date.now();
         return Promise.resolve({
             callbackWaitsForEmptyEventLoop: false,
             functionName: 'fake-caller',
@@ -69,7 +63,10 @@ export class AwsTestMan {
             awsRequestId: 'fake-aws-request-id',
             logGroupName: 'fake-log-group-name',
             logStreamName: 'fake-log-stream-name',
-            done: function() {}
+            done: function() {},
+            getRemainingTimeInMillis: function() {
+                return now + 120000;
+            }
         } as Context);
     }
     async makeApiGatewayRequest(
@@ -82,6 +79,13 @@ export class AwsTestMan {
             requestEvent,
             requestContext || (await this.fakeLambdaContext())
         );
+    }
+
+    async fakeScheduledEventRequest(filePath: string): Promise<ScheduledEvent> {
+        const e = await this.readFileAsJson(path.resolve(this.rootDir, filePath));
+        const event = {} as ScheduledEvent;
+        Object.assign(event, e);
+        return event;
     }
 
     async fakeLaunchingVmRequest(filePath: string): Promise<ScheduledEvent> {
@@ -109,6 +113,14 @@ export class AwsTestMan {
 
     async fakeCustomRequest(filePath: string): Promise<JSONable> {
         return await this.readFileAsJson(path.resolve(this.rootDir, filePath));
+    }
+
+    async loadEnvironmentVariables(filePath: string): Promise<boolean> {
+        const e = await this.readFileAsJson(path.resolve(this.rootDir, filePath));
+        Object.entries(e).forEach(([key, value]) => {
+            process.env[key] = (typeof value === 'string' && value) || JSON.stringify(value);
+        });
+        return true;
     }
 
     fakeDescribeInstance(instances: EC2.Instance[]): Promise<EC2.DescribeInstancesResult> {

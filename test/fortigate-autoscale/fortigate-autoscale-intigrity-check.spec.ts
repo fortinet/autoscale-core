@@ -6,7 +6,10 @@
 import * as path from 'path';
 import { describe, it } from 'mocha';
 import { APIGatewayProxyEvent, Context } from 'aws-lambda';
-import { AwsFortiGateAutoscaleSetting } from '../../fortigate-autoscale';
+import {
+    AwsFortiGateAutoscaleSetting,
+    AwsFortiGateAutoscaleSettingItemDictionary
+} from '../../fortigate-autoscale';
 import {
     AwsTestMan,
     MockEC2,
@@ -75,12 +78,14 @@ describe('FortiGate sanity test.', () => {
 
         const settingsToSave: { [key: string]: string } = {};
         Object.values({ ...AwsFortiGateAutoscaleSetting }).forEach(value => {
-            const settingKey = (value as string).toLowerCase().replace(new RegExp('-', 'g'), '');
-            settingsToSave[settingKey] = value;
+            settingsToSave[value] = value;
             return settingsToSave;
         });
 
-        const result = await autoscale.saveSettings(settingsToSave);
+        const result = await autoscale.saveSettings(
+            settingsToSave,
+            AwsFortiGateAutoscaleSettingItemDictionary
+        );
         // ASSERT: saveSettings() completes sucessfully without any error.
         Sinon.assert.match(result, true);
         // ASSERT: saveSettings() completes sucessfully without any error.

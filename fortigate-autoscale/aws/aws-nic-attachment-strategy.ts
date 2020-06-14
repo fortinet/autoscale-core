@@ -69,7 +69,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
     }
 
     protected async setAttached(vm: VirtualMachine, nic: NetworkInterface): Promise<void> {
-        this.proxy.logAsDebug('calling AwsNicAttachmentStrategy.setAttaching');
+        this.proxy.logAsDebug('calling AwsNicAttachmentStrategy.setAttached');
         const record = await this.getRecord(vm, nic);
         if (record) {
             if (record.attachmentState === NicAttachmentStatus.Attached) {
@@ -77,7 +77,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
                     `The nic (id: ${nic.id}) is already attached to vm(id: ${vm.id})`
                 );
                 return;
-            } else {
+            } else if (record.attachmentState !== NicAttachmentStatus.Attaching) {
                 this.proxy.logAsError(
                     `The nic (id: ${nic.id}) is in` +
                         ` state: ${record.attachmentState} with vm(id: ${vm.id}).` +
@@ -91,7 +91,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
     }
 
     protected async setDetaching(vm: VirtualMachine, nic: NetworkInterface): Promise<void> {
-        this.proxy.logAsDebug('calling AwsNicAttachmentStrategy.setDetaching');
+        this.proxy.logAsDebug('calling AwsNicAttachmentStrategy.setAttached');
         const record = await this.getRecord(vm, nic);
         if (record) {
             if (record.attachmentState === NicAttachmentStatus.Detaching) {
@@ -147,15 +147,26 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
         this.proxy.logAsDebug('calling AwsNicAttachmentStrategy.deleteRecord');
     }
 
-    protected async getPairedSubnetId(vm: VirtualMachine): Promise<string> {
+    protected async getPairedSubnetId(vm: VirtualMachine, index: SubnetPairIndex): Promise<string> {
         const settings = await this.platform.getSettings();
-        const subnetPairs: JSONable = settings.get(AwsFortiGateAutoscaleSetting.SubnetPair)
-            .jsonValue;
-        const subnets: SubnetPair[] = (Array.isArray(subnetPairs) &&
+        const subnetPairs: JSONable = settings.get(
+            AwsFortiGateAutoscaleSetting.FortiGateAutoscaleSubnetPairs
+        ).jsonValue;
+        const subnets: SubnetPair[] =
+            Array.isArray(subnetPairs) &&
             subnetPairs
-                .map((element: unknown) => element as SubnetPair)
-                .filter(element => element.subnetId === vm.subnetId)) || [null];
-        return Promise.resolve(subnets[0].pairIdList[SubnetPairIndex.Service]);
+                .map((element: unknown) => {
+                    const [entry] = Object.entries(element);
+                    return (
+                        entry &&
+                        ({
+                            subnetId: entry[0],
+                            pairIdList: entry[1]
+                        } as SubnetPair)
+                    );
+                })
+                .filter(element => element.subnetId === vm.subnetId);
+        return Promise.resolve(subnets[0] && subnets[0].pairIdList[index]);
     }
 
     protected async tags(): Promise<ResourceTag[]> {
@@ -190,7 +201,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
 
     async attach(): Promise<NicAttachmentStrategyResult> {
         this.proxy.logAsInfo('calling AwsNicAttachmentStrategy.attach');
-        // this implementation is to attach a single nic
+        // this implementation is to attach one nic to the paired subnet for 'service' use
         // list all attachment records and get the first
         const [record] = await this.listRecord(this.vm);
 
@@ -212,7 +223,10 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
                 // collect the security group from the vm first
                 const securtyGroupIds: string[] = this.vm.securityGroups.map(sg => sg.id);
                 // determine the private subnet paired with the vm subnet
-                const pairedSubnetId: string = await this.getPairedSubnetId(this.vm);
+                const pairedSubnetId: string = await this.getPairedSubnetId(
+                    this.vm,
+                    SubnetPairIndex.Service
+                );
                 const description =
                     `Addtional nic for instance(id:${this.vm.id}) ` +
                     `in auto scaling group: ${this.vm.scalingGroupName}`;
@@ -241,6 +255,9 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
                     );
                     throw error;
                 }
+
+                // update the source dest check on this new eni
+                await this.platform.updateVmSourceDestinationChecking(this.vm.id, false);
 
                 // update nic attachment record again
                 await this.setAttached(this.vm, nic);

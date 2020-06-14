@@ -35,6 +35,10 @@ import {
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
+    private executionStartTime: number;
+    constructor() {
+        this.executionStartTime = Date.now();
+    }
     getRequestAsString(): string {
         return 'fake-req-as-string';
     }
@@ -58,6 +62,10 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     }
     logForError(messagePrefix: string, error: Error): void {
         console.log(error);
+    }
+    getRemainingExecutionTime(): number {
+        // set it to 60 seconds
+        return this.executionStartTime + 60000 - Date.now();
     }
 }
 

@@ -178,6 +178,9 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
         };
         await this.handleTaggingAutoscaleVm([vmTagging]);
 
+        // TODO: need to update egress traffic route when master role has changed.
+        // egress traffic route table is set in in EgressTrafficRouteTableList
+
         // get the bootstrap configuration
         await this.bootstrapConfigStrategy.prepare(this.platform, this.proxy, this.env);
         await this.bootstrapConfigStrategy.apply();

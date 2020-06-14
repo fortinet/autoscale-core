@@ -1,7 +1,7 @@
 import path from 'path';
 
 import { AutoscaleEnvironment } from './autoscale-environment';
-import { AutoscaleSetting, Settings } from './autoscale-setting';
+import { AutoscaleSetting, Settings, SettingItemDictionary } from './autoscale-setting';
 import { CloudFunctionProxy, CloudFunctionProxyAdapter, ReqMethod } from './cloud-function-proxy';
 import {
     AutoscaleContext,
@@ -89,7 +89,10 @@ export interface AutoscaleCore
         ScalingGroupContext,
         LicensingModelContext {
     init(): Promise<void>;
-    saveSettings(settings: { [key: string]: string }): Promise<boolean>;
+    saveSettings(
+        input: { [key: string]: string },
+        itemDict: SettingItemDictionary
+    ): Promise<boolean>;
 }
 
 export interface HAActivePassiveBoostrapStrategy {
@@ -261,6 +264,9 @@ export class Autoscale implements AutoscaleCore {
         // this.env.masterRecord
 
         const masterElection = await this.handleMasterElection();
+
+        // TODO: need to update egress traffic route when master role has changed.
+        // egress traffic route table is set in in EgressTrafficRouteTableList
 
         // handle unhealthy vm
 
@@ -515,420 +521,49 @@ export class Autoscale implements AutoscaleCore {
         return licenseContent;
     }
 
-    async saveSettings(settings: { [key: string]: string }): Promise<boolean> {
-        const tasks = [];
-        const errorTasks = [];
+    async saveSettings(
+        input: { [key: string]: string },
+        itemDict: SettingItemDictionary
+    ): Promise<boolean> {
+        const errorTasks: string[] = [];
+        const unsupportedKeys: string[] = [];
         // eslint-disable-next-line prefer-const
-        for (let [key, value] of Object.entries(settings)) {
-            let keyName: string;
-            let description: string;
-            let jsonEncoded: boolean;
-            let editable: boolean;
-            switch (key.toLowerCase()) {
-                case 'servicetype':
-                    // ignore service type
-                    break;
-                case 'deploymentsettingssaved':
-                    keyName = 'deployment-settings-saved';
-                    description =
-                        'A flag setting item that indicates all deployment ' +
-                        'settings have been saved.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'byolscalinggroupdesiredcapacity':
-                    keyName = 'byol-scaling-group-desired-capacity';
-                    description = 'BYOL Scaling group desired capacity.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'byolscalinggroupminsize':
-                    keyName = 'byol-scaling-group-min-size';
-                    description = 'BYOL Scaling group min size.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'byolscalinggroupmaxsize':
-                    keyName = 'byol-scaling-group-max-size';
-                    description = 'BYOL Scaling group max size.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'scalinggroupdesiredcapacity':
-                    keyName = 'scaling-group-desired-capacity';
-                    description = 'PAYG Scaling group desired capacity.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'scalinggroupminsize':
-                    keyName = 'scaling-group-min-size';
-                    description = 'PAYG Scaling group min size.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'scalinggroupmaxsize':
-                    keyName = 'scaling-group-max-size';
-                    description = 'PAYG Scaling group max size.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'resourcetagprefix':
-                    keyName = 'resource-tag-prefix';
-                    description = 'Resource tag prefix.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'customidentifier':
-                    keyName = 'custom-id';
-                    description = 'Custom Identifier.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'uniqueid':
-                    keyName = 'unique-id';
-                    description = 'Unique ID.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'assetstoragename':
-                    keyName = 'asset-storage-name';
-                    description = 'Asset storage name.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'assetstoragekeyprefix':
-                    keyName = 'asset-storage-key-prefix';
-                    description = 'Asset storage key prefix.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'fortigateautoscalevirtualnetworkid':
-                    keyName = 'fortigate-autoscale-virtual-network-id';
-                    description = 'Virtual Network ID of the FortiGate Autoscale.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'fortigateautoscalesubnetidlist':
-                    keyName = 'fortigate-autoscale-subnet-id-list';
-                    description =
-                        'The list of ID of the subnet of the FortiGate Autoscale. Comma separated.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'fortigateautoscalesubnetpairs':
-                    keyName = 'fortigate-autoscale-subnet-pairs';
-                    description =
-                        'The list of the pairing of one fortigate subnet with an array of' +
-                        ' multiple dependent subnets';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'fortigatepsksecret':
-                    keyName = 'fortigate-psk-secret';
-                    description = 'The PSK for FortiGate Autoscale Synchronization.';
-                    break;
-                case 'fortigateadminport':
-                    keyName = 'fortigate-admin-port';
-                    description = 'The port number for administrative login to FortiGate.';
-                    break;
-                case 'fortigatetrafficport':
-                    keyName = 'fortigate-traffic-port';
-                    description =
-                        'The port number for load balancer to route traffic through ' +
-                        'FortiGate to the protected services behind the load balancer.';
-                    break;
-                case 'fortigatesyncinterface':
-                    keyName = 'fortigate-sync-interface';
-                    description =
-                        'The interface the FortiGate uses for configuration ' + 'synchronization.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'lifecyclehooktimeout':
-                    keyName = 'lifecycle-hook-timeout';
-                    description = 'The auto scaling group lifecycle hook timeout time in second.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'heartbeatinterval':
-                    keyName = 'heartbeat-interval';
-                    description = 'The FortiGate sync heartbeat interval in second.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'masterelectiontimeout':
-                    keyName = 'master-election-timeout';
-                    description = 'The FortiGate master election timtout time in second.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'masterelectionnowait':
-                    keyName = 'master-election-no-wait';
-                    description =
-                        'Do not wait for the new master to come up. This FortiGate ' +
-                        'can receive the new master ip in one of its following heartbeat sync.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'heartbeatlosscount':
-                    keyName = 'heartbeat-loss-count';
-                    description = 'The FortiGate sync heartbeat loss count.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'heartbeatdelayallowance':
-                    keyName = 'heartbeat-delay-allowance';
-                    description = 'The FortiGate sync heartbeat delay allowance time in second.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'autoscalehandlerurl':
-                    keyName = 'autoscale-handler-url';
-                    description = 'The FortiGate Autoscale handler URL.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'masterscalinggroupname':
-                    keyName = 'master-scaling-group-name';
-                    description = 'The name of the master auto scaling group.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'paygscalinggroupname':
-                    keyName = 'payg-scaling-group-name';
-                    description = 'The name of the PAYG auto scaling group.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'byolscalinggroupname':
-                    keyName = 'byol-scaling-group-name';
-                    description = 'The name of the BYOL auto scaling group.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'requiredconfigset':
-                    keyName = 'required-configset';
-                    description = 'A comma-delimited list of required configsets.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'requireddbtable':
-                    keyName = 'required-db-table';
-                    description = 'A comma-delimited list of required DB table names.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'transitgatewayid':
-                    keyName = 'transit-gateway-id';
-                    description =
-                        'The ID of the Transit Gateway the FortiGate Autoscale is ' +
-                        'attached to.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'enabletransitgatewayvpn':
-                    keyName = 'enable-transit-gateway-vpn';
-                    value = value && value !== 'false' ? 'true' : 'false';
-                    description =
-                        'Toggle ON / OFF the Transit Gateway VPN creation on each ' +
-                        'FortiGate instance';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'enablesecondnic':
-                    keyName = 'enable-second-nic';
-                    value = value && value !== 'false' ? 'true' : 'false';
-                    description =
-                        'Toggle ON / OFF the secondary eni creation on each ' +
-                        'FortiGate instance';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'vpnbgpasn':
-                    keyName = 'vpn-bgp-asn';
-                    description = 'The BGP Autonomous System Number used with the VPN connections.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'transitgatewayvpnhandlername':
-                    keyName = 'transit-gateway-vpn-handler-name';
-                    description = 'The Transit Gateway VPN handler function name.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'transitgatewayroutetableinbound':
-                    keyName = 'transit-gateway-route-table-inbound';
-                    description = 'The Id of the Transit Gateway inbound route table.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'transitgatewayroutetableoutbound':
-                    keyName = 'transit-gateway-route-table-outbound';
-                    description = 'The Id of the Transit Gateway outbound route table.';
-                    break;
-                case 'enablehybridlicensing':
-                    keyName = 'enable-hybrid-licensing';
-                    description = 'Toggle ON / OFF the hybrid licensing feature.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'enablefortigateelb':
-                    keyName = 'enable-fortigate-elb';
-                    description =
-                        'Toggle ON / OFF the elastic load balancing for the FortiGate ' +
-                        'scaling groups.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'enableinternalelb':
-                    keyName = 'enable-internal-elb';
-                    description =
-                        'Toggle ON / OFF the internal elastic load balancing for ' +
-                        'the protected services by FortiGate.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'fortigateautoscaleelbdns':
-                    keyName = 'fortigate-autoscale-elb-dns';
-                    description =
-                        'The DNS name of the elastic load balancer for the FortiGate ' +
-                        'scaling groups.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'fortigateautoscaletargetgrouparn':
-                    keyName = 'fortigate-autoscale-target-group-arn';
-                    description =
-                        'The ARN of the target group for FortiGate to receive ' +
-                        'load balanced traffic.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'fortigateprotectedinternalelbdns':
-                    keyName = 'fortigate-protected-internal-elb-dns';
-                    description =
-                        'The DNS name of the elastic load balancer for the scaling ' +
-                        'groups of services protected by FortiGate';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'enablevminfocache':
-                    keyName = 'enable-vm-info-cache';
-                    description =
-                        'Toggle ON / OFF the vm info cache feature. It caches the ' +
-                        'vm info in db to reduce API calls to query a vm from the platform.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'vminfocachetime':
-                    keyName = 'vm-info-cache-time';
-                    description = 'The vm info cache time in seconds.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'fortigatelicensestoragekeyprefix':
-                    keyName = 'fortigate-license-storage-key-prefix';
-                    description = 'The key prefix for FortiGate licenses in the access storage.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'getlicensegraceperiod':
-                    keyName = 'get-license-grace-period';
-                    description =
-                        'The period (time in seconds) for preventing a newly assigned ' +
-                        ' license to be recycled.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'enablefortianalyzerintegration':
-                    keyName = 'enable-fortianalyzer-integration';
-                    description =
-                        'Enable FortiAnalyzer integration with the FortiGates cluster ' +
-                        'in the Autoscale.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'fazhandlername':
-                    keyName = 'faz-handler-name';
-                    description = 'The FortiGate Autoscale - FortiAnalyzer handler function name.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'enableintegratedegressnatgateway':
-                    keyName = 'enable-integrated-egress-nat-gateway';
-                    description =
-                        'Toggle ON / OFF the feature for using master FortiGate in' +
-                        ' the scaling group as the NAT gateway for egress traffic from protected' +
-                        ' private subnets.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'egresstrafficroutetable':
-                    keyName = 'egress-traffic-route-table';
-                    description =
-                        'The route table associated with the protected private subnets,' +
-                        ' which should bet configured to contain a route 0.0.0.0/0 to the' +
-                        ' master fortigate to handle egress traffic.';
-                    editable = false;
-                    jsonEncoded = false;
-                    break;
-                case 'subnetpair':
-                    keyName = 'subnet-pair';
-                    description =
-                        'A list of paired subnet for the north-south traffic routing purposes.' +
-                        ' Format: [{subnetId:name, pairId:name}, ...]';
-                    editable = false;
-                    jsonEncoded = true;
-                    break;
-                case 'licensefiledirectory':
-                    keyName = 'license-file-directory';
-                    description =
-                        'The sub directory for storing license files under the asset container.';
-                    editable = true;
-                    jsonEncoded = false;
-                    break;
-                case 'additionalconfigsetnamelist':
-                    keyName = 'additional-configset-name-list';
-                    description =
-                        'The comma-separated list of the name of a configset. These configsets' +
-                        ' are required dependencies for the Autoscale to work for a certain ' +
-                        ' deployment. Can be left empty.';
-                    editable = true;
-                    jsonEncoded = false;
-                    break;
-                case 'customassetcontainer':
-                    keyName = 'custom-asset-container';
-                    description =
-                        'The asset storage name for some user custom resources, such as:' +
-                        ' custom configset, license files, etc.';
-                    editable = true;
-                    jsonEncoded = false;
-                    break;
-                case 'customassetdirectory':
-                    keyName = 'custom-asset-directory';
-                    description =
-                        'The sub directory to the user custom resources under the' +
-                        ' custom-asset-container.';
-                    editable = true;
-                    jsonEncoded = false;
-                    break;
-                default:
-                    break;
+        const settingItemDefKey: string[] = Object.keys(itemDict);
+        const tasks = Object.entries(input).map(([settingKey, settingValue]) => {
+            const key = settingKey.toLowerCase();
+            if (settingItemDefKey.includes(key)) {
+                const def = itemDict[key];
+                let value = settingValue;
+                if (def.booleanType) {
+                    value = (settingValue === 'true' && 'true') || 'false';
+                }
+
+                return this.platform
+                    .saveSettingItem(
+                        def.keyName,
+                        value,
+                        def.description,
+                        def.jsonEncoded,
+                        def.editable
+                    )
+                    .then(() => true)
+                    .catch(error => {
+                        this.proxy.logForError(`failed to save setting for key: ${key}. `, error);
+                        errorTasks.push(key);
+                        return true;
+                    });
+            } else {
+                unsupportedKeys.push(key);
+                return Promise.resolve(true);
             }
-            if (keyName) {
-                tasks.push(
-                    this.platform
-                        .saveSettingItem(keyName, value, description, jsonEncoded, editable)
-                        .catch(error => {
-                            this.proxy.logForError(
-                                `failed to save setting for key: ${keyName}. `,
-                                error
-                            );
-                            errorTasks.push({ key: keyName, value: value });
-                        })
-                );
-            }
+        });
+
+        if (unsupportedKeys.length > 0) {
+            this.proxy.logAsWarning(
+                `Unsupported setting cannot be saved: ${unsupportedKeys.join(', ')}.`
+            );
         }
+
         await Promise.all(tasks);
         return errorTasks.length === 0;
     }
