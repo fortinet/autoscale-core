@@ -84,19 +84,17 @@ export class SettingItem {
      * the string type value of the setting.
      *
      * @readonly
-     * @type {(string | null)}
+     * @type {string}
      */
-    get value(): string | null {
-        return (
-            (this.rawValue.trim().toLowerCase() === SettingItem.NO_VALUE && null) || this.rawValue
-        );
+    get value(): string {
+        return this.rawValue.trim().toLowerCase() === SettingItem.NO_VALUE ? null : this.rawValue;
     }
     /**
      * Returns the object type of this setting if it is a JSON object,
      * or null if it isn't.
      *
      * @readonly
-     * @type {({} | null)}
+     * @type {{}}
      */
     get jsonValue(): JSONable {
         if (this.jsonEncoded) {
