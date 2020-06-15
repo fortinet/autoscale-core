@@ -87,6 +87,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             const attributeValues: ExpressionAttributeValueMap = {};
             const attributeExp: string[] = [];
             Array.from(table.attributes.values()).forEach(attr => {
+                if (attr.isKey) {
+                    return;
+                }
                 const value =
                     typeof item[attr.name] === 'object'
                         ? JSON.stringify(item[attr.name])
@@ -484,7 +487,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
 
     async terminateInstanceInAutoScalingGroup(
         instanceId: string,
-        descCapacity?: boolean
+        descCapacity = false
     ): Promise<void> {
         const params: AutoScaling.TerminateInstanceInAutoScalingGroupType = {
             InstanceId: instanceId,

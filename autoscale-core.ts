@@ -345,6 +345,7 @@ export class Autoscale implements AutoscaleCore {
             updatedMasterIp = masterElection.oldMaster.primaryPrivateIpAddress;
         }
 
+        // need to update the health check record again due to master ip changes.
         if (needToUpdateHealthCheckRecord) {
             this.env.targetHealthCheckRecord.masterIp = updatedMasterIp;
             await this.platform.updateHealthCheckRecord(this.env.targetHealthCheckRecord);

@@ -220,7 +220,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         let oldLossCount = 0;
         let newLossCount = 0;
         let oldInterval = 0;
-        const newInterval = this.platform.getReqHeartbeatInterval();
+        const newInterval = this.platform.getReqHeartbeatInterval() * 1000;
         const heartbeatArriveTime: number = this.platform.createTime;
         let delay = 0;
         let oldSeq = 0;
@@ -230,7 +230,6 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             Number(settings.get(AutoscaleSetting.HeartbeatDelayAllowance).value) * 1000;
         // max amount of heartbeat loss count allowed before deeming a device unhealthy
         const maxLossCount = Number(settings.get(AutoscaleSetting.HeartbeatLossCount).value);
-        const nextHeartbeatTime: number = heartbeatArriveTime + newInterval;
         // get health check record for target vm
         // ASSERT: this.targetVm is valid
         let targetHealthCheckRecord = await this.platform.getHealthCheckRecord(this.targetVm.id);
@@ -246,7 +245,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 masterIp: '', // master ip is unknown to this strategy
                 heartbeatInterval: newInterval,
                 heartbeatLossCount: 0, // set to 0 because it is the first heartbeat
-                nextHeartbeatTime: nextHeartbeatTime,
+                nextHeartbeatTime: heartbeatArriveTime + newInterval,
                 syncState: HeartbeatSyncState.InSync,
                 seq: 1, // set to 1 because it is the first heartbeat
                 healthy: true,
@@ -301,6 +300,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             // update health check record
             try {
                 targetHealthCheckRecord.seq += 1;
+                targetHealthCheckRecord.nextHeartbeatTime += newInterval;
                 await this.platform.updateHealthCheckRecord(targetHealthCheckRecord);
             } catch (error) {
                 this.proxy.logForError('updateHealthCheckRecord() error.', error);
@@ -313,7 +313,8 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         this.proxy.logAsInfo(
             `Heartbeat sync result: ${this.result},` +
                 ` heartbeat sequence: ${oldSeq}->${targetHealthCheckRecord.seq},` +
-                ` heartbeat arrive time: ${heartbeatArriveTime} ms,` +
+                ` heartbeat expected arrive time: ${targetHealthCheckRecord.nextHeartbeatTime} ms,` +
+                ` heartbeat actual arrive time: ${heartbeatArriveTime} ms,` +
                 ` heartbeat delay allowance: ${delayAllowance} ms,` +
                 ` heartbeat calculated delay: ${delay} ms,` +
                 ` heartbeat interval: ${oldInterval}->${newInterval} ms,` +
