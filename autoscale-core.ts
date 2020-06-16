@@ -528,7 +528,6 @@ export class Autoscale implements AutoscaleCore {
     ): Promise<boolean> {
         const errorTasks: string[] = [];
         const unsupportedKeys: string[] = [];
-        // eslint-disable-next-line prefer-const
         const settingItemDefKey: string[] = Object.keys(itemDict);
         const tasks = Object.entries(input).map(([settingKey, settingValue]) => {
             const key = settingKey.toLowerCase();
