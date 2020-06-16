@@ -729,24 +729,38 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     }
     async listConfigSet(subDirectory?: string, custom?: boolean): Promise<Blob[]> {
         this.proxy.logAsInfo('calling listConfigSet');
-        const bucket = custom
-            ? this.settings.get(AwsFortiGateAutoscaleSetting.CustomAssetContainer).value
-            : this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageContainer).value;
-        const keyPrefix = [
-            custom
-                ? this.settings.get(AwsFortiGateAutoscaleSetting.CustomAssetDirectory).value
-                : this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageDirectory).value,
-            'configset'
-        ];
+        let bucket: string;
+        let keyPrefix: string;
+        let blobs: Blob[] = [];
+        if (custom) {
+            bucket = this.settings.get(AwsFortiGateAutoscaleSetting.CustomAssetContainer).value;
+            keyPrefix = this.settings.get(AwsFortiGateAutoscaleSetting.CustomAssetDirectory).value;
+            // if custom asset container or directory isn't set, do not load.
+            if (!(bucket && keyPrefix)) {
+                this.proxy.logAsInfo(
+                    'Custom config set location not specified. No configset loaded.'
+                );
+                return [];
+            }
+        } else {
+            bucket = this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageContainer).value;
+            keyPrefix = this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageDirectory).value;
+        }
         if (!bucket) {
+            this.proxy.logAsInfo('Config set location not specified. No configset loaded.');
             return [];
         }
-        if (subDirectory) {
-            keyPrefix.push(subDirectory);
+
+        const location = path.join(
+            ...[keyPrefix, 'configset', subDirectory || null].filter(r => !!r)
+        );
+
+        try {
+            this.proxy.logAsInfo(`container: ${bucket}, list configset in directory: ${location}`);
+            blobs = await this.adaptee.listS3Object(bucket, location);
+        } catch (error) {
+            this.proxy.logAsWarning(error);
         }
-        const location = path.join(...keyPrefix);
-        this.proxy.logAsInfo(`container: ${bucket}, sub directory: ${location}`);
-        const blobs = await this.adaptee.listS3Object(bucket, location);
         this.proxy.logAsInfo('called listConfigSet');
         return blobs;
     }
