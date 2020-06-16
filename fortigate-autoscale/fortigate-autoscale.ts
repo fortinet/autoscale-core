@@ -143,40 +143,40 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
         if (this.env.targetHealthCheckRecord) {
             this.proxy.logAsWarning(
                 `Health check record for vm (id: ${this.env.targetVm.id}) ` +
-                    'already exists. It looks like this bootstrap configuration request' +
-                    " isn't normal. ignore it by returning empty."
+                    'already exists. It seems this bootstrap configuration request is duplicate.'
             );
-            this.proxy.logAsInfo('called handleBootstrap.');
-            return '';
-        }
-        // if master is elected?
-        // get master vm
-        if (!this.env.masterVm) {
-            this.env.masterVm = await this.platform.getMasterVm();
-        }
-        // get master record
-        this.env.masterRecord = this.env.masterRecord || (await this.platform.getMasterRecord());
-        // handle master election. the expected result should be one of:
-        // master election is triggered
-        // master election is finalized
-        // master election isn't needed
-        const masterElection = await this.handleMasterElection();
+        } else {
+            // if master is elected?
+            // get master vm
+            if (!this.env.masterVm) {
+                this.env.masterVm = await this.platform.getMasterVm();
+            }
+            // get master record
+            this.env.masterRecord =
+                this.env.masterRecord || (await this.platform.getMasterRecord());
+            // handle master election. the expected result should be one of:
+            // master election is triggered
+            // master election is finalized
+            // master election isn't needed
+            const masterElection = await this.handleMasterElection();
 
-        // assert master record should be available now
-        // get master record again
-        this.env.masterVm = masterElection.newMaster || masterElection.oldMaster;
-        this.env.masterRecord = masterElection.newMasterRecord || masterElection.oldMasterRecord;
+            // assert master record should be available now
+            // get master record again
+            this.env.masterVm = masterElection.newMaster || masterElection.oldMaster;
+            this.env.masterRecord =
+                masterElection.newMasterRecord || masterElection.oldMasterRecord;
 
-        // tag the new vm
-        const vmTagging: VmTagging = {
-            vmId: this.env.targetVm.id,
-            newVm: true, // ASSERT: vm in boostraping is a new vm
-            newMasterRole:
-                (masterElection.newMaster &&
-                    this.platform.vmEquals(this.env.targetVm, this.env.masterVm)) ||
-                false
-        };
-        await this.handleTaggingAutoscaleVm([vmTagging]);
+            // tag the new vm
+            const vmTagging: VmTagging = {
+                vmId: this.env.targetVm.id,
+                newVm: true, // ASSERT: vm in boostraping is a new vm
+                newMasterRole:
+                    (masterElection.newMaster &&
+                        this.platform.vmEquals(this.env.targetVm, this.env.masterVm)) ||
+                    false
+            };
+            await this.handleTaggingAutoscaleVm([vmTagging]);
+        }
 
         // TODO: need to update egress traffic route when master role has changed.
         // egress traffic route table is set in in EgressTrafficRouteTableList

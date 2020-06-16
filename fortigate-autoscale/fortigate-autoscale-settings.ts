@@ -16,7 +16,8 @@ export enum FortiGateAutoscaleSettingEX {
     FortiGateAutoscaleSubnetIdList = 'fortigate-autoscale-subnet-id-list',
     FortiGateAutoscaleSubnetPairs = 'fortigate-autoscale-subnet-pairs',
     FortiGateSyncInterface = 'fortigate-sync-interface',
-    FortiGateTrafficPort = 'fortigate-traffic-port'
+    FortiGateTrafficPort = 'fortigate-traffic-port',
+    FortiGateTrafficProtocol = 'fortigate-traffic-protocol'
 }
 
 export const FortiGateAutoscaleSettingItemDictionary: { [key: string]: SettingItemDefinition } = {
@@ -128,6 +129,16 @@ FortiGateAutoscaleSettingItemDictionary[FortiGateAutoscaleSettingEX.FortiGateTra
     keyName: FortiGateAutoscaleSettingEX.FortiGateTrafficPort,
     description:
         'The port number for load balancer to route traffic through ' +
+        'FortiGate to the protected services behind the load balancer.',
+    editable: true,
+    jsonEncoded: false,
+    booleanType: false
+};
+
+FortiGateAutoscaleSettingItemDictionary[FortiGateAutoscaleSettingEX.FortiGateTrafficProtocol] = {
+    keyName: FortiGateAutoscaleSettingEX.FortiGateTrafficProtocol,
+    description:
+        'The protocol for the traffic to be routed by the load balancer through ' +
         'FortiGate to the protected services behind the load balancer.',
     editable: true,
     jsonEncoded: false,

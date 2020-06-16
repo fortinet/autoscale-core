@@ -345,6 +345,7 @@ export class Autoscale implements AutoscaleCore {
             updatedMasterIp = masterElection.oldMaster.primaryPrivateIpAddress;
         }
 
+        // need to update the health check record again due to master ip changes.
         if (needToUpdateHealthCheckRecord) {
             this.env.targetHealthCheckRecord.masterIp = updatedMasterIp;
             await this.platform.updateHealthCheckRecord(this.env.targetHealthCheckRecord);
@@ -527,7 +528,6 @@ export class Autoscale implements AutoscaleCore {
     ): Promise<boolean> {
         const errorTasks: string[] = [];
         const unsupportedKeys: string[] = [];
-        // eslint-disable-next-line prefer-const
         const settingItemDefKey: string[] = Object.keys(itemDict);
         const tasks = Object.entries(input).map(([settingKey, settingValue]) => {
             const key = settingKey.toLowerCase();
