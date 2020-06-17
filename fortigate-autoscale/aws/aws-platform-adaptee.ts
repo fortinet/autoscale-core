@@ -2,7 +2,11 @@ import AutoScaling, {
     LifecycleActionResult,
     UpdateAutoScalingGroupType
 } from 'aws-sdk/clients/autoscaling';
-import { DocumentClient, ExpressionAttributeValueMap } from 'aws-sdk/clients/dynamodb';
+import {
+    DocumentClient,
+    ExpressionAttributeValueMap,
+    ExpressionAttributeNameMap
+} from 'aws-sdk/clients/dynamodb';
 import EC2 from 'aws-sdk/clients/ec2';
 import ELBv2 from 'aws-sdk/clients/elbv2';
 import Lambda from 'aws-sdk/clients/lambda';
@@ -85,6 +89,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 keys[name] = item[name];
             });
             const attributeValues: ExpressionAttributeValueMap = {};
+            const attributeNames: ExpressionAttributeNameMap = {};
             const attributeExp: string[] = [];
             Array.from(table.attributes.values()).forEach(attr => {
                 if (attr.isKey) {
@@ -94,8 +99,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                     typeof item[attr.name] === 'object'
                         ? JSON.stringify(item[attr.name])
                         : item[attr.name];
+                attributeNames[`#${attr.name}`] = attr.name;
                 attributeValues[`:${attr.name}`] = value;
-                attributeExp.push(`${attr.name} = :${attr.name}`);
+                attributeExp.push(`#${attr.name} = :${attr.name}`);
             });
 
             const updateItemInput: DocumentClient.UpdateItemInput = {
@@ -103,7 +109,8 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 Key: keys,
                 UpdateExpression:
                     (attributeExp.length > 0 && `set ${attributeExp.join(', ')}`) || undefined,
-                ExpressionAttributeValues: attributeValues
+                ExpressionAttributeValues: attributeValues,
+                ExpressionAttributeNames: attributeNames
             };
             await this.docClient.update(updateItemInput).promise();
         } else {
