@@ -22,6 +22,7 @@ export interface AutoscaleContext {
     handleHeartbeatSync(): Promise<string>;
     setTaggingAutoscaleVmStrategy(strategy: TaggingVmStrategy): void;
     handleTaggingAutoscaleVm(taggings: VmTagging[]): Promise<void>;
+    onVmFullyConfigured(): Promise<void>;
 }
 
 export interface MasterElectionStrategy {
@@ -358,7 +359,8 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                     return Promise.resolve(false);
                 }
             };
-            // commit update
+            // change status to outofsync
+            healthcheckRecord.syncState = HeartbeatSyncState.OutOfSync;
             await this.platform.updateHealthCheckRecord(healthcheckRecord);
             // wait for state change
             await waitFor(emitter, checker, 5000, this.proxy);

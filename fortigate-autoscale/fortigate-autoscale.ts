@@ -44,6 +44,8 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             const requestType = await this.platform.getRequestType();
             if (requestType === ReqType.LaunchingVm) {
                 responseBody = await this.handleLaunchingVm();
+            } else if (requestType === ReqType.LaunchedVm) {
+                responseBody = await this.handleLaunchedVm();
             } else if (requestType === ReqType.BootstrapConfig) {
                 responseBody = await this.handleBootstrap();
             } else if (requestType === ReqType.HeartbeatSync) {
@@ -55,6 +57,8 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
                 responseBody = '';
             } else if (requestType === ReqType.TerminatingVm) {
                 responseBody = await this.handleTerminatingVm();
+            } else if (requestType === ReqType.TerminatedVm) {
+                responseBody = await this.handleTerminatedVm();
             }
             this.proxy.logAsInfo('called handleAutoscaleRequest.');
             return proxy.formatResponse(HttpStatusCodes.OK, responseBody, {});

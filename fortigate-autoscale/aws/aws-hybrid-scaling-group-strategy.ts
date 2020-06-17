@@ -82,32 +82,9 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
             throw new Error('Launching vm unsuccessfully.');
         }
     }
-    async onLaunchedVm(): Promise<string> {
+    onLaunchedVm(): Promise<string> {
         this.proxy.logAsInfo('calling AwsHybridScalingGroupStrategy.onLaunchedVm');
-        // get the current lifecycle item associated with the target vm
-        const targetVm = await this.platform.getTargetVm();
-        // ASSERT: terget vm is available or throw error
-        const lifecycleItem = await this.platform.getLifecycleItem(targetVm.id);
-        if (lifecycleItem) {
-            // ASSERT: the associated lifecycle item is in Launching state.
-            // only complete the lifecycle of launching
-            if (lifecycleItem.state === LifecycleState.Launching) {
-                // complete the lifecycle action with a success
-                await this.platform.completeLifecycleAction(lifecycleItem, true);
-            } else {
-                throw new Error(
-                    'Incorrec    t state found in attempting to complete a lifecycle ' +
-                        `of vm(id: ${targetVm.id}). ` +
-                        `Expected state: [${LifecycleState.Launching}], ` +
-                        `actual state: [${lifecycleItem.state}]`
-                );
-            }
-        } else {
-            this.proxy.logAsWarning(
-                `Attempting to complete a (stete: ${LifecycleState.Launching}) ` +
-                    `lifecycle of vm(id: ${targetVm.id}). Lifecycle item not found.`
-            );
-        }
+        this.proxy.logAsInfo('no action needed.');
         this.proxy.logAsInfo('called AwsHybridScalingGroupStrategy.onLaunchedVm');
         return Promise.resolve('');
     }
@@ -134,22 +111,36 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
                 AwsFortiGateAutoscaleSetting.AwsLoadBalancerTargetGroupArn
             ).value;
             await this.platform.loadBalancerDetachVm(targetGroupArn, [targetVm.id]);
-            // NOTE: TODO: REVIEW: is it possible to enter a terminating state while it is in
-            // another transitioning state such as launching?
 
             // check if any existing lifecycle item for the target vm (such as in launching)
             // then change to abandon it later.
             const existingLifecycleItem = await this.platform.getLifecycleItem(targetVm.id);
             if (existingLifecycleItem) {
-                Object.assign(lifecycleItem, existingLifecycleItem);
-                lifecycleItem.actionResult = LifecycleActionResult.Abandon;
-                await this.platform.updateLifecycleItem(lifecycleItem);
-            } else {
-                // NOTE: TODO: REVIEW: what if a vm is manually deleted externally, ie. termination
-                // not triggered by the scaling group? will the terminating hook be triggered as well?
-                // create lifecycle hook
-                await this.platform.createLifecycleItem(lifecycleItem);
+                // NOTE: REVIEW: is it possible to enter a terminating state while it is in
+                // another transitioning state such as launching?
+                // if the hook item state is launching, it means there's must be something wrong
+                // in the auto scaling group. try to abandon the lifecycle hook and delete the
+                // lifecycle item.
+                // NOTE: it may always be an inconsistent lifecycle item left in the db but its
+                // lifecycle hook doesn't exist, so calling the AWS api to abandon it will cause
+                // and error. should catch it.
+                existingLifecycleItem.actionResult = LifecycleActionResult.Abandon;
+                try {
+                    // call platform to complete the lifecycle hook.
+                    await this.platform.completeLifecycleAction(existingLifecycleItem, false);
+                } catch (error) {
+                    this.proxy.logAsWarning(
+                        `The corresponding lifecycle hook doesn't exist:${JSON.stringify(
+                            existingLifecycleItem
+                        )}`
+                    );
+                }
             }
+            // NOTE: TODO: REVIEW: what if a vm is manually deleted externally, ie. termination
+            // not triggered by the scaling group? will the terminating hook be triggered as well?
+            // create lifecycle hook
+            await this.platform.createLifecycleItem(lifecycleItem);
+            // call platform to complete the lifecycle hook.
             this.proxy.logAsInfo('called AwsHybridScalingGroupStrategy.onTerminatingVm');
             return Promise.resolve('');
         } catch (error) {
@@ -188,6 +179,65 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
             );
         }
         this.proxy.logAsInfo('called AwsHybridScalingGroupStrategy.onTerminatedVm');
+        return Promise.resolve('');
+    }
+    async completeLaunching(success = true): Promise<string> {
+        this.proxy.logAsInfo(`calling completeLaunching (${success})`);
+        // get the current lifecycle item associated with the target vm
+        const targetVm = await this.platform.getTargetVm();
+        // ASSERT: terget vm is available or throw error
+        const lifecycleItem = await this.platform.getLifecycleItem(targetVm.id);
+        if (lifecycleItem) {
+            // ASSERT: the associated lifecycle item is in Launching state.
+            // only complete the lifecycle of launching
+            if (lifecycleItem.state === LifecycleState.Launching) {
+                // complete the lifecycle action with a success
+                await this.platform.completeLifecycleAction(lifecycleItem, success);
+                this.proxy.logAsInfo(`called completeLaunching (${success})`);
+            } else {
+                throw new Error(
+                    'Incorrect state found in attempting to complete a lifecycle ' +
+                        `of vm(id: ${targetVm.id}). ` +
+                        `Expected state: [${LifecycleState.Launching}], ` +
+                        `actual state: [${lifecycleItem.state}]`
+                );
+            }
+        } else {
+            this.proxy.logAsWarning(
+                `Attempting to complete a (stete: ${LifecycleState.Launching}) ` +
+                    `lifecycle of vm(id: ${targetVm.id}). Lifecycle item not found.`
+            );
+        }
+        return Promise.resolve('');
+    }
+    async completeTerminating(success = true): Promise<string> {
+        this.proxy.logAsInfo(`calling completeTerminating (${success})`);
+        // get the current lifecycle item associated with the target vm
+        const targetVm = await this.platform.getTargetVm();
+        // ASSERT: terget vm is available or throw error
+        const lifecycleItem = await this.platform.getLifecycleItem(targetVm.id);
+        if (lifecycleItem) {
+            // ASSERT: the associated lifecycle item is in Launching state.
+            // only complete the lifecycle of launching
+            if (lifecycleItem.state === LifecycleState.Terminating) {
+                // complete the lifecycle action with a success
+                await this.platform.completeLifecycleAction(lifecycleItem, success);
+                this.proxy.logAsInfo(`called completeTerminating (${success})`);
+            } else {
+                throw new Error(
+                    'Incorrect state found in attempting to complete a lifecycle ' +
+                        `of vm(id: ${targetVm.id}). ` +
+                        `Expected state: [${LifecycleState.Launching}], ` +
+                        `actual state: [${lifecycleItem.state}]`
+                );
+            }
+        } else {
+            this.proxy.logAsWarning(
+                `Attempting to complete a (stete: ${LifecycleState.Launching}) ` +
+                    `lifecycle of vm(id: ${targetVm.id}). Lifecycle item not found.`
+            );
+            this.proxy.logAsInfo(`called completeTerminating (${success})`);
+        }
         return Promise.resolve('');
     }
 }

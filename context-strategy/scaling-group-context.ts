@@ -19,6 +19,8 @@ export interface ScalingGroupStrategy {
     onLaunchedVm(): Promise<string>;
     onTerminatingVm(): Promise<string>;
     onTerminatedVm(): Promise<string>;
+    completeLaunching(success?: boolean): Promise<string>;
+    completeTerminating(success?: boolean): Promise<string>;
 }
 
 export class NoopScalingGroupStrategy implements ScalingGroupStrategy {
@@ -43,6 +45,14 @@ export class NoopScalingGroupStrategy implements ScalingGroupStrategy {
     }
     onTerminatedVm(): Promise<string> {
         this.proxy.logAsInfo('Noop on terminated.');
+        return Promise.resolve('');
+    }
+    completeLaunching(success = true): Promise<string> {
+        this.proxy.logAsInfo(`Noop on completeLaunching (${success})`);
+        return Promise.resolve('');
+    }
+    completeTerminating(success = true): Promise<string> {
+        this.proxy.logAsInfo(`Noop on completeLaunching (${success})`);
         return Promise.resolve('');
     }
 }
