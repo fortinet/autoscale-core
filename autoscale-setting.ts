@@ -11,15 +11,16 @@ export enum AutoscaleSetting {
     AutoscaleHandlerUrl = 'autoscale-handler-url',
     AssetStorageContainer = 'asset-storage-name',
     AssetStorageDirectory = 'asset-storage-key-prefix',
-    ByolScalingGroupName = 'byol-scaling-group-name',
     ByolScalingGroupDesiredCapacity = 'byol-scaling-group-desired-capacity',
     ByolScalingGroupMinSize = 'byol-scaling-group-min-size',
     ByolScalingGroupMaxSize = 'byol-scaling-group-max-size',
+    ByolScalingGroupName = 'byol-scaling-group-name',
     CustomAssetContainer = 'custom-asset-container',
     CustomAssetDirectory = 'custom-asset-directory',
-    EnableNic2 = 'enable-second-nic',
+    EnableExternalElb = 'enable-external-elb',
     EnableHybridLicensing = 'enable-hybrid-licensing',
     EnableInternalElb = 'enable-internal-elb',
+    EnableNic2 = 'enable-second-nic',
     EnableVmInfoCache = 'enable-vm-info-cache',
     HeartbeatDelayAllowance = 'heartbeat-delay-allowance',
     HeartbeatInterval = 'heartbeat-interval',
@@ -27,10 +28,10 @@ export enum AutoscaleSetting {
     LicenseFileDirectory = 'license-file-directory',
     MasterElectionTimeout = 'master-election-timeout',
     MasterScalingGroupName = 'master-scaling-group-name',
-    PaygScalingGroupName = 'payg-scaling-group-name',
     PaygScalingGroupDesiredCapacity = 'scaling-group-desired-capacity',
     PaygScalingGroupMinSize = 'scaling-group-min-size',
     PaygScalingGroupMaxSize = 'scaling-group-max-size',
+    PaygScalingGroupName = 'payg-scaling-group-name',
     ResourceTagPrefix = 'resource-tag-prefix',
     VmInfoCacheTime = 'vm-info-cache-time',
     VpnBgpAsn = 'vpn-bgp-asn'
@@ -178,7 +179,9 @@ export const AutoscaleSettingItemDictionary: SettingItemDictionary = {
     },
     [AutoscaleSetting.AutoscaleHandlerUrl]: {
         keyName: AutoscaleSetting.AutoscaleHandlerUrl,
-        description: 'The FortiGate Autoscale handler URL.',
+        description:
+            'The Autoscale handler (cloud function) URL as the communication endpoint between' +
+            'Autoscale and device in the scaling group(s).',
         editable: false,
         jsonEncoded: false,
         booleanType: false
@@ -194,13 +197,6 @@ export const AutoscaleSettingItemDictionary: SettingItemDictionary = {
         keyName: AutoscaleSetting.AssetStorageDirectory,
         description: 'Asset storage key prefix.',
         editable: false,
-        jsonEncoded: false,
-        booleanType: false
-    },
-    [AutoscaleSetting.ByolScalingGroupName]: {
-        keyName: AutoscaleSetting.ByolScalingGroupName,
-        description: 'The name of the BYOL auto scaling group.',
-        editable: true,
         jsonEncoded: false,
         booleanType: false
     },
@@ -225,6 +221,13 @@ export const AutoscaleSettingItemDictionary: SettingItemDictionary = {
         jsonEncoded: false,
         booleanType: false
     },
+    [AutoscaleSetting.ByolScalingGroupName]: {
+        keyName: AutoscaleSetting.ByolScalingGroupName,
+        description: 'The name of the BYOL auto scaling group.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
     [AutoscaleSetting.CustomAssetContainer]: {
         keyName: AutoscaleSetting.CustomAssetContainer,
         description:
@@ -241,9 +244,10 @@ export const AutoscaleSettingItemDictionary: SettingItemDictionary = {
         jsonEncoded: false,
         booleanType: false
     },
-    [AutoscaleSetting.EnableNic2]: {
-        keyName: AutoscaleSetting.EnableNic2,
-        description: 'Toggle ON / OFF the secondary eni creation on each FortiGate instance.',
+    [AutoscaleSetting.EnableExternalElb]: {
+        keyName: AutoscaleSetting.EnableExternalElb,
+        description:
+            'Toggle ON / OFF the external elastic load balancing for device in the external-facing Autoscale scaling group(s).',
         editable: false,
         jsonEncoded: false,
         booleanType: true
@@ -258,7 +262,16 @@ export const AutoscaleSettingItemDictionary: SettingItemDictionary = {
     [AutoscaleSetting.EnableInternalElb]: {
         keyName: AutoscaleSetting.EnableInternalElb,
         description:
-            'Toggle ON / OFF the internal elastic load balancing for the protected services by FortiGate.',
+            'Toggle ON / OFF the internal elastic load balancing feature to allow traffic flow out' +
+            ' the device in the Autoscale scaling groups(s) into an internal load balancer.',
+        editable: false,
+        jsonEncoded: false,
+        booleanType: true
+    },
+    [AutoscaleSetting.EnableNic2]: {
+        keyName: AutoscaleSetting.EnableNic2,
+        description:
+            'Toggle ON / OFF the secondary eni creation on each device in the Autoscale scaling group(s).',
         editable: false,
         jsonEncoded: false,
         booleanType: true
@@ -274,21 +287,28 @@ export const AutoscaleSettingItemDictionary: SettingItemDictionary = {
     },
     [AutoscaleSetting.HeartbeatDelayAllowance]: {
         keyName: AutoscaleSetting.HeartbeatDelayAllowance,
-        description: 'The FortiGate sync heartbeat delay allowance time in second.',
+        description:
+            'The maximum amount of time (in seconds) allowed for network latency of the Autoscale' +
+            ' device heartbeat arriving at the Autoscale handler.',
         editable: true,
         jsonEncoded: false,
         booleanType: false
     },
     [AutoscaleSetting.HeartbeatInterval]: {
         keyName: AutoscaleSetting.HeartbeatInterval,
-        description: 'The FortiGate sync heartbeat interval in second.',
+        description:
+            'The length of time (in seconds) that an Autoscale device waits between' +
+            ' sending heartbeat requests to the Autoscale handler.',
         editable: true,
         jsonEncoded: false,
         booleanType: false
     },
     [AutoscaleSetting.HeartbeatLossCount]: {
         keyName: AutoscaleSetting.HeartbeatLossCount,
-        description: 'The FortiGate sync heartbeat loss count.',
+        description:
+            'Number of consecutively lost heartbeats.' +
+            ' When the Heartbeat Loss Count has been reached,' +
+            ' the device is deemed unhealthy and fail-over activities will commence.',
         editable: true,
         jsonEncoded: false,
         booleanType: false
@@ -302,7 +322,7 @@ export const AutoscaleSettingItemDictionary: SettingItemDictionary = {
     },
     [AutoscaleSetting.MasterElectionTimeout]: {
         keyName: AutoscaleSetting.MasterElectionTimeout,
-        description: 'The FortiGate master election timtout time in second.',
+        description: 'The maximum time (in seconds) to wait for a master election to complete.',
         editable: true,
         jsonEncoded: false,
         booleanType: false
@@ -310,13 +330,6 @@ export const AutoscaleSettingItemDictionary: SettingItemDictionary = {
     [AutoscaleSetting.MasterScalingGroupName]: {
         keyName: AutoscaleSetting.MasterScalingGroupName,
         description: 'The name of the master auto scaling group.',
-        editable: false,
-        jsonEncoded: false,
-        booleanType: false
-    },
-    [AutoscaleSetting.PaygScalingGroupName]: {
-        keyName: AutoscaleSetting.PaygScalingGroupName,
-        description: 'The name of the PAYG auto scaling group.',
         editable: false,
         jsonEncoded: false,
         booleanType: false
@@ -338,6 +351,13 @@ export const AutoscaleSettingItemDictionary: SettingItemDictionary = {
     [AutoscaleSetting.PaygScalingGroupMaxSize]: {
         keyName: AutoscaleSetting.PaygScalingGroupMaxSize,
         description: 'PAYG Scaling group max size.',
+        editable: false,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.PaygScalingGroupName]: {
+        keyName: AutoscaleSetting.PaygScalingGroupName,
+        description: 'The name of the PAYG auto scaling group.',
         editable: false,
         jsonEncoded: false,
         booleanType: false
