@@ -82,9 +82,30 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
             throw new Error('Launching vm unsuccessfully.');
         }
     }
-    onLaunchedVm(): Promise<string> {
+    async onLaunchedVm(): Promise<string> {
         this.proxy.logAsInfo('calling AwsHybridScalingGroupStrategy.onLaunchedVm');
-        this.proxy.logAsInfo('no action needed.');
+        // get the current lifecycle item associated with the target vm
+        const targetVm = await this.platform.getTargetVm();
+        // ASSERT: terget vm is available or throw error
+        const lifecycleItem = await this.platform.getLifecycleItem(targetVm.id);
+        if (lifecycleItem) {
+            // ASSERT: the associated lifecycle item is in launching state.
+            // only delete the lifecycle item of launching state
+            if (lifecycleItem.state === LifecycleState.Launching) {
+                // cleanup the lifecycle item because now the lifecycle hook is in launched state
+                await this.platform.deleteLifecycleItem(lifecycleItem.vmId);
+            } else {
+                throw new Error(
+                    `Incorrect lifecycle item state (${lifecycleItem.state}) found in handling` +
+                        ` the terminated vm(id: ${targetVm.id}).` +
+                        ` Expected state is: [${LifecycleState.Launching}].`
+                );
+            }
+        } else {
+            this.proxy.logAsWarning(
+                `A lifecycle item for vm(id: ${targetVm.id} isn't found in the LifecycleItem table.`
+            );
+        }
         this.proxy.logAsInfo('called AwsHybridScalingGroupStrategy.onLaunchedVm');
         return Promise.resolve('');
     }
@@ -93,13 +114,18 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         const settings = await this.platform.getSettings();
         // update FGT source dest checking
         const targetVm = await this.platform.getTargetVm();
-        let reqDetail: { [key: string]: string };
+        let req: JSONable;
         try {
-            reqDetail = JSON.parse(this.platform.getReqAsString());
+            req = JSON.parse(this.platform.getReqAsString()) as JSONable;
         } catch (error) {
             this.proxy.logForError('Unable to convert request detail to JSON object.', error);
             throw new Error('Malformed request.');
         }
+        if (!req.detail) {
+            this.proxy.logAsError(`Request content: ${JSON.stringify(req)}`);
+            throw new Error("'detail' property not found on the request.");
+        }
+        const reqDetail = req.detail as JSONable;
         const lifecycleItem = this.platform.extractLifecycleItemFromRequest(reqDetail);
         lifecycleItem.vmId = targetVm.id;
         lifecycleItem.scalingGroupName = targetVm.scalingGroupName;
@@ -160,22 +186,20 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         const lifecycleItem = await this.platform.getLifecycleItem(targetVm.id);
         if (lifecycleItem) {
             // ASSERT: the associated lifecycle item is in terminating state.
-            // only complete the lifecycle of terminating
+            // only delete the lifecycle item of terminating state
             if (lifecycleItem.state === LifecycleState.Terminating) {
-                // complete the lifecycle action with a success
-                await this.platform.completeLifecycleAction(lifecycleItem, true);
+                // cleanup the lifecycle item because now the lifecycle hook is in terminated state
+                await this.platform.deleteLifecycleItem(lifecycleItem.vmId);
             } else {
                 throw new Error(
-                    'Incorrec    t state found in attempting to complete a lifecycle ' +
-                        `of vm(id: ${targetVm.id}). ` +
-                        `Expected state: [${LifecycleState.Terminating}], ` +
-                        `actual state: [${lifecycleItem.state}]`
+                    `Incorrect lifecycle item state (${lifecycleItem.state}) found in handling` +
+                        ` the terminated vm(id: ${targetVm.id}).` +
+                        ` Expected state is: [${LifecycleState.Terminating}].`
                 );
             }
         } else {
             this.proxy.logAsWarning(
-                `Attempting to complete a (stete: ${LifecycleState.Terminating}) ` +
-                    `lifecycle of vm(id: ${targetVm.id}). Lifecycle item not found.`
+                `A lifecycle item for vm(id: ${targetVm.id} isn't found in the LifecycleItem table.`
             );
         }
         this.proxy.logAsInfo('called AwsHybridScalingGroupStrategy.onTerminatedVm');

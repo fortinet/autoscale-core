@@ -214,23 +214,6 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
     /**
      * @override FortiGateAutoscale
      */
-    async handleLaunchedVm(): Promise<string> {
-        this.proxy.logAsInfo('calling handleLaunchedVm');
-        // NOTE: will handle launched vm logic first, and delete lifecycle item last.
-        await super.handleLaunchedVm();
-        // delete lifecycle item here
-        const targetVm = await this.platform.getTargetVm();
-        const lifecycleItem = await this.platform.getLifecycleItem(targetVm.id);
-        if (lifecycleItem) {
-            await this.platform.deleteLifecycleItem(lifecycleItem.vmId);
-        }
-        this.proxy.logAsInfo('called handleLaunchedVm');
-        return '';
-    }
-
-    /**
-     * @override FortiGateAutoscale
-     */
     async handleTerminatingVm(): Promise<string> {
         this.proxy.logAsInfo('calling handleTerminatingVm');
         this.env.targetVm = await this.platform.getTargetVm();
@@ -245,22 +228,6 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         }
         await super.handleTerminatingVm();
         this.proxy.logAsInfo('called handleTerminatingVm');
-        return '';
-    }
-
-    /**
-     * @override FortiGateAutoscale
-     */
-    async handleTerminatedVm(): Promise<string> {
-        this.proxy.logAsInfo('calling handleTerminatedVm');
-        // NOTE: will handle terminated vm logic first, and delete lifecycle item last.
-        await super.handleTerminatedVm();
-        // delete lifecycle item here
-        const lifecycleItem = await this.platform.getLifecycleItem(this.env.targetVm.id);
-        if (lifecycleItem) {
-            await this.platform.deleteLifecycleItem(lifecycleItem.vmId);
-        }
-        this.proxy.logAsInfo('called handleTerminatedVm');
         return '';
     }
 
