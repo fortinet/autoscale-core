@@ -219,7 +219,8 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         // NOTE: will handle launched vm logic first, and delete lifecycle item last.
         await super.handleLaunchedVm();
         // delete lifecycle item here
-        const lifecycleItem = await this.platform.getLifecycleItem(this.env.targetVm.id);
+        const targetVm = await this.platform.getTargetVm();
+        const lifecycleItem = await this.platform.getLifecycleItem(targetVm.id);
         if (lifecycleItem) {
             await this.platform.deleteLifecycleItem(lifecycleItem.vmId);
         }
