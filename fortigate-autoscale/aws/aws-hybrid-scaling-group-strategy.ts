@@ -34,6 +34,7 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         lifecycleItem.state = LifecycleState.Launching;
         let elbAttachedDone = false;
 
+        const enableElb = settings.get(AwsFortiGateAutoscaleSetting.EnableExternalElb).truthValue;
         const targetGroupArn = settings.get(
             AwsFortiGateAutoscaleSetting.AwsLoadBalancerTargetGroupArn
         ).value;
@@ -50,14 +51,19 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
                         );
                         return false;
                     }),
-                // attach instance to load balancer target group
-                this.platform
-                    .loadBalancerAttachVm(targetGroupArn, [targetVm.id])
-                    .then(() => true)
-                    .catch(err1 => {
-                        this.proxy.logForError('Unable to complete loadBalancerAttachVm.', err1);
-                        return false;
-                    })
+                // if enable external elb, attach instance to load balancer target group
+                (enableElb &&
+                    this.platform
+                        .loadBalancerAttachVm(targetGroupArn, [targetVm.id])
+                        .then(() => true)
+                        .catch(err1 => {
+                            this.proxy.logForError(
+                                'Unable to complete loadBalancerAttachVm.',
+                                err1
+                            );
+                            return false;
+                        })) ||
+                    Promise.resolve(true)
             ]);
             // create lifecycle hook item for launching
             await this.platform.createLifecycleItem(lifecycleItem);
