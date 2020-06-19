@@ -283,6 +283,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
         // list all record attached to a vm
         const records = await this.listRecord(this.vm);
         let failures = 0;
+        const detachedNicIdList: string[] = [];
         await Promise.all(
             records.map(async record => {
                 try {
@@ -292,6 +293,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
                     await this.platform.deleteNetworkInterface(record.nicId);
                     // delete attachment record
                     await this.platform.deleteNicAttachmentRecord(record.vmId, record.nicId);
+                    detachedNicIdList.push(record.nicId);
                 } catch (error) {
                     failures++;
                     this.proxy.logForError(
@@ -303,7 +305,10 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
             })
         );
         if (failures === 0) {
-            this.proxy.logAsInfo(`all secondary nics are detached from vm(id: ${this.vm}).`);
+            this.proxy.logAsInfo(
+                `all secondary nics are detached from vm(id: ${this.vm.id}).` +
+                    ` Detached eni: ${detachedNicIdList.join(', ')}.`
+            );
         } else {
             this.proxy.logAsWarning(`${failures} nics failed to detach. Cleanup may be required`);
         }

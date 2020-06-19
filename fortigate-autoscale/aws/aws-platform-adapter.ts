@@ -1234,7 +1234,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         return lifecycleItem;
     }
 
-    async getLifecycleItem(vmId: string): Promise<LifecycleItem | null> {
+    async getLifecycleItem(vmId: string): Promise<LifecycleItem> {
         this.proxy.logAsInfo('calling getLifecycleItem');
         const settings = await this.getSettings();
         const table = new AwsDBDef.AwsLifecycleItem(
@@ -1246,6 +1246,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 value: vmId
             }
         ]);
+        if (!dbItem) {
+            return null;
+        }
         const [actionResult] = Object.entries(LifecycleActionResult)
             .filter(([, value]) => {
                 return dbItem.actionResult === value;
@@ -1314,6 +1317,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         await this.adaptee.saveItemToDb<LifecycleItemDbItem>(table, dbItem, conditionExp);
         this.proxy.logAsInfo('called updateLifecycleItem');
     }
+
     async deleteLifecycleItem(vmId: string): Promise<void> {
         this.proxy.logAsInfo('calling deleteLifecycleItem');
         const settings = await this.getSettings();

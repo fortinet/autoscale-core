@@ -89,23 +89,21 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         // ASSERT: terget vm is available or throw error
         const lifecycleItem = await this.platform.getLifecycleItem(targetVm.id);
         if (lifecycleItem) {
-            // ASSERT: the associated lifecycle item is in Launching state.
-            // only complete the lifecycle of launching
+            // ASSERT: the associated lifecycle item is in launching state.
+            // only delete the lifecycle item of launching state
             if (lifecycleItem.state === LifecycleState.Launching) {
-                // complete the lifecycle action with a success
-                await this.platform.completeLifecycleAction(lifecycleItem, true);
+                // cleanup the lifecycle item because now the lifecycle hook is in launched state
+                await this.platform.deleteLifecycleItem(lifecycleItem.vmId);
             } else {
                 throw new Error(
-                    'Incorrec    t state found in attempting to complete a lifecycle ' +
-                        `of vm(id: ${targetVm.id}). ` +
-                        `Expected state: [${LifecycleState.Launching}], ` +
-                        `actual state: [${lifecycleItem.state}]`
+                    `Incorrect lifecycle item state (${lifecycleItem.state}) found in handling` +
+                        ` the terminated vm(id: ${targetVm.id}).` +
+                        ` Expected state is: [${LifecycleState.Launching}].`
                 );
             }
         } else {
             this.proxy.logAsWarning(
-                `Attempting to complete a (stete: ${LifecycleState.Launching}) ` +
-                    `lifecycle of vm(id: ${targetVm.id}). Lifecycle item not found.`
+                `A lifecycle item for vm(id: ${targetVm.id} isn't found in the LifecycleItem table.`
             );
         }
         this.proxy.logAsInfo('called AwsHybridScalingGroupStrategy.onLaunchedVm');
@@ -116,13 +114,18 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         const settings = await this.platform.getSettings();
         // update FGT source dest checking
         const targetVm = await this.platform.getTargetVm();
-        let reqDetail: { [key: string]: string };
+        let req: JSONable;
         try {
-            reqDetail = JSON.parse(this.platform.getReqAsString());
+            req = JSON.parse(this.platform.getReqAsString()) as JSONable;
         } catch (error) {
             this.proxy.logForError('Unable to convert request detail to JSON object.', error);
             throw new Error('Malformed request.');
         }
+        if (!req.detail) {
+            this.proxy.logAsError(`Request content: ${JSON.stringify(req)}`);
+            throw new Error("'detail' property not found on the request.");
+        }
+        const reqDetail = req.detail as JSONable;
         const lifecycleItem = this.platform.extractLifecycleItemFromRequest(reqDetail);
         lifecycleItem.vmId = targetVm.id;
         lifecycleItem.scalingGroupName = targetVm.scalingGroupName;
@@ -134,22 +137,36 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
                 AwsFortiGateAutoscaleSetting.AwsLoadBalancerTargetGroupArn
             ).value;
             await this.platform.loadBalancerDetachVm(targetGroupArn, [targetVm.id]);
-            // NOTE: TODO: REVIEW: is it possible to enter a terminating state while it is in
-            // another transitioning state such as launching?
 
             // check if any existing lifecycle item for the target vm (such as in launching)
             // then change to abandon it later.
             const existingLifecycleItem = await this.platform.getLifecycleItem(targetVm.id);
             if (existingLifecycleItem) {
-                Object.assign(lifecycleItem, existingLifecycleItem);
-                lifecycleItem.actionResult = LifecycleActionResult.Abandon;
-                await this.platform.updateLifecycleItem(lifecycleItem);
-            } else {
-                // NOTE: TODO: REVIEW: what if a vm is manually deleted externally, ie. termination
-                // not triggered by the scaling group? will the terminating hook be triggered as well?
-                // create lifecycle hook
-                await this.platform.createLifecycleItem(lifecycleItem);
+                // NOTE: REVIEW: is it possible to enter a terminating state while it is in
+                // another transitioning state such as launching?
+                // if the hook item state is launching, it means there's must be something wrong
+                // in the auto scaling group. try to abandon the lifecycle hook and delete the
+                // lifecycle item.
+                // NOTE: it may always be an inconsistent lifecycle item left in the db but its
+                // lifecycle hook doesn't exist, so calling the AWS api to abandon it will cause
+                // and error. should catch it.
+                existingLifecycleItem.actionResult = LifecycleActionResult.Abandon;
+                try {
+                    // call platform to complete the lifecycle hook.
+                    await this.platform.completeLifecycleAction(existingLifecycleItem, false);
+                } catch (error) {
+                    this.proxy.logAsWarning(
+                        `The corresponding lifecycle hook doesn't exist:${JSON.stringify(
+                            existingLifecycleItem
+                        )}`
+                    );
+                }
             }
+            // NOTE: TODO: REVIEW: what if a vm is manually deleted externally, ie. termination
+            // not triggered by the scaling group? will the terminating hook be triggered as well?
+            // create lifecycle hook
+            await this.platform.createLifecycleItem(lifecycleItem);
+            // call platform to complete the lifecycle hook.
             this.proxy.logAsInfo('called AwsHybridScalingGroupStrategy.onTerminatingVm');
             return Promise.resolve('');
         } catch (error) {
@@ -169,25 +186,82 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         const lifecycleItem = await this.platform.getLifecycleItem(targetVm.id);
         if (lifecycleItem) {
             // ASSERT: the associated lifecycle item is in terminating state.
-            // only complete the lifecycle of terminating
+            // only delete the lifecycle item of terminating state
             if (lifecycleItem.state === LifecycleState.Terminating) {
-                // complete the lifecycle action with a success
-                await this.platform.completeLifecycleAction(lifecycleItem, true);
+                // cleanup the lifecycle item because now the lifecycle hook is in terminated state
+                await this.platform.deleteLifecycleItem(lifecycleItem.vmId);
             } else {
                 throw new Error(
-                    'Incorrec    t state found in attempting to complete a lifecycle ' +
+                    `Incorrect lifecycle item state (${lifecycleItem.state}) found in handling` +
+                        ` the terminated vm(id: ${targetVm.id}).` +
+                        ` Expected state is: [${LifecycleState.Terminating}].`
+                );
+            }
+        } else {
+            this.proxy.logAsWarning(
+                `A lifecycle item for vm(id: ${targetVm.id} isn't found in the LifecycleItem table.`
+            );
+        }
+        this.proxy.logAsInfo('called AwsHybridScalingGroupStrategy.onTerminatedVm');
+        return Promise.resolve('');
+    }
+    async completeLaunching(success = true): Promise<string> {
+        this.proxy.logAsInfo(`calling completeLaunching (${success})`);
+        // get the current lifecycle item associated with the target vm
+        const targetVm = await this.platform.getTargetVm();
+        // ASSERT: terget vm is available or throw error
+        const lifecycleItem = await this.platform.getLifecycleItem(targetVm.id);
+        if (lifecycleItem) {
+            // ASSERT: the associated lifecycle item is in Launching state.
+            // only complete the lifecycle of launching
+            if (lifecycleItem.state === LifecycleState.Launching) {
+                // complete the lifecycle action with a success
+                await this.platform.completeLifecycleAction(lifecycleItem, success);
+                this.proxy.logAsInfo(`called completeLaunching (${success})`);
+            } else {
+                throw new Error(
+                    'Incorrect state found in attempting to complete a lifecycle ' +
                         `of vm(id: ${targetVm.id}). ` +
-                        `Expected state: [${LifecycleState.Terminating}], ` +
+                        `Expected state: [${LifecycleState.Launching}], ` +
                         `actual state: [${lifecycleItem.state}]`
                 );
             }
         } else {
             this.proxy.logAsWarning(
-                `Attempting to complete a (stete: ${LifecycleState.Terminating}) ` +
+                `Attempting to complete a (stete: ${LifecycleState.Launching}) ` +
                     `lifecycle of vm(id: ${targetVm.id}). Lifecycle item not found.`
             );
         }
-        this.proxy.logAsInfo('called AwsHybridScalingGroupStrategy.onTerminatedVm');
+        return Promise.resolve('');
+    }
+    async completeTerminating(success = true): Promise<string> {
+        this.proxy.logAsInfo(`calling completeTerminating (${success})`);
+        // get the current lifecycle item associated with the target vm
+        const targetVm = await this.platform.getTargetVm();
+        // ASSERT: terget vm is available or throw error
+        const lifecycleItem = await this.platform.getLifecycleItem(targetVm.id);
+        if (lifecycleItem) {
+            // ASSERT: the associated lifecycle item is in Launching state.
+            // only complete the lifecycle of launching
+            if (lifecycleItem.state === LifecycleState.Terminating) {
+                // complete the lifecycle action with a success
+                await this.platform.completeLifecycleAction(lifecycleItem, success);
+                this.proxy.logAsInfo(`called completeTerminating (${success})`);
+            } else {
+                throw new Error(
+                    'Incorrect state found in attempting to complete a lifecycle ' +
+                        `of vm(id: ${targetVm.id}). ` +
+                        `Expected state: [${LifecycleState.Launching}], ` +
+                        `actual state: [${lifecycleItem.state}]`
+                );
+            }
+        } else {
+            this.proxy.logAsWarning(
+                `Attempting to complete a (stete: ${LifecycleState.Launching}) ` +
+                    `lifecycle of vm(id: ${targetVm.id}). Lifecycle item not found.`
+            );
+            this.proxy.logAsInfo(`called completeTerminating (${success})`);
+        }
         return Promise.resolve('');
     }
 }

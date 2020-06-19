@@ -154,9 +154,6 @@ export class Autoscale implements AutoscaleCore {
     }
     async handleTerminatingVm(): Promise<string> {
         this.proxy.logAsInfo('calling handleTerminatingVm.');
-        this.scalingGroupStrategy.prepare(this.platform, this.proxy);
-        await this.scalingGroupStrategy.onTerminatingVm();
-        // ASSERT: this.scalingGroupStrategy.onTerminatingVm() creates a terminating lifecycle item
         // in terminating vm, should do:
         // 1. mark it as heartbeat out-of-sync to prevent it from syncing again.
         // load target vm
@@ -178,6 +175,10 @@ export class Autoscale implements AutoscaleCore {
             ];
             await this.handleTaggingAutoscaleVm(vmTaggings);
         }
+        // ASSERT: this.scalingGroupStrategy.onTerminatingVm() creates a terminating lifecycle item
+        this.scalingGroupStrategy.prepare(this.platform, this.proxy);
+        await this.scalingGroupStrategy.onTerminatingVm();
+        await this.scalingGroupStrategy.completeTerminating(true);
         this.proxy.logAsInfo('called handleTerminatingVm.');
         return '';
     }
@@ -224,11 +225,11 @@ export class Autoscale implements AutoscaleCore {
 
         const isFirstHeartbeat = this.heartbeatSyncStrategy.targetVmFirstHeartbeat;
 
-        // the 1st hb is also the indication of the the vm becoming in-service. The launching vm
-        // phase (in some platforms) should be done at this point. apply the launced vm strategy
+        // the 1st hb is also the indication of the the vm is fully configured and becoming
+        // in-service. Run the onVmFullyConfigured() hook. Platform specific class can override
+        // the hook to perform additional actions.
         if (isFirstHeartbeat) {
-            this.scalingGroupStrategy.prepare(this.platform, this.proxy);
-            await this.scalingGroupStrategy.onLaunchedVm();
+            await this.onVmFullyConfigured();
         }
 
         const heartbeatTiming = await this.heartbeatSyncStrategy.healthCheckResult;
@@ -566,6 +567,11 @@ export class Autoscale implements AutoscaleCore {
 
         await Promise.all(tasks);
         return errorTasks.length === 0;
+    }
+
+    onVmFullyConfigured(): Promise<void> {
+        this.proxy.logAsInfo(`Vm (id: ${this.env.targetVm.id}) is fully configured.`);
+        return Promise.resolve();
     }
 }
 
