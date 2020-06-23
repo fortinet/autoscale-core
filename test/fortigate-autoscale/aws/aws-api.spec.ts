@@ -425,14 +425,14 @@ describe('AWS api test', () => {
 
     it('Lambda APIs', async () => {
         let callCount: number;
-        const lambdaName = '';
+        const lambdaInvocable = '';
         const payload = {
             paramKey1: 'paramValue1',
             paramKey2: 'paramValue2'
         };
         // NOTE: test
         callCount = mockLambda.getStub('invoke').callCount;
-        await awsPlatformAdapter.invokeAutoscaleFunction(lambdaName, payload);
+        await awsPlatformAdapter.invokeAutoscaleFunction(lambdaInvocable, payload);
         Sinon.assert.match(mockLambda.getStub('invoke').callCount - callCount > 0, true);
     });
 });

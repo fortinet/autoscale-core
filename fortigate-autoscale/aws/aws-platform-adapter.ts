@@ -5,7 +5,6 @@ import { Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
 import { CloudFunctionProxyAdapter, ReqMethod, ReqType } from '../../cloud-function-proxy';
 import { NicAttachmentRecord } from '../../context-strategy/nic-attachment-context';
-import { VpnAttachmentContext } from '../../context-strategy/vpn-attachment-context';
 import {
     AutoscaleDbItem,
     CreateOrUpdate,
@@ -42,56 +41,18 @@ import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../../vir
 import {
     AwsApiGatewayEventProxy,
     AwsCloudFormationCustomResourceEventProxy,
+    AwsLambdaInvocationProxy,
     AwsScheduledEventProxy
 } from './aws-cloud-function-proxy';
 import { LifecycleItemDbItem } from './aws-db-definitions';
 import * as AwsDBDef from './aws-db-definitions';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
+import { AwsLambdaInvocationPayload } from './aws-lambda-invocable';
 import { AwsPlatformAdaptee } from './aws-platform-adaptee';
+import { AwsVpnAttachmentState, AwsVpnConnection } from './transit-gateway-context';
 
 export const TAG_KEY_RESOURCE_GROUP = 'tag:ResourceGroup';
 export const TAG_KEY_AUTOSCALE_ROLE = 'AutoscaleRole';
-/**
- * created based on aws ec2 TransitGatewayPropagationState
- */
-export enum AwsTgwVpnPropagationState {
-    Enabled = 'enabled',
-    Enabling = 'enabling',
-    Disabled = 'disabled',
-    Disabling = 'disabling'
-}
-
-export enum AwsVpnAttachmentState {
-    Available = 'available',
-    Deleting = 'deleting',
-    Failed = 'failed',
-    Failing = 'failing',
-    Initiating = 'initiating',
-    Modifying = 'modifying',
-    PendingAcceptance = 'pendingAcceptance',
-    RollingBack = 'rollingBack',
-    Pending = 'pending',
-    Rejected = 'rejected',
-    Rejecting = 'rejecting'
-}
-
-/**
- * To provide AWS Transit Gateway integration related logics
- */
-export type TransitGatewayContext = VpnAttachmentContext;
-export interface AwsCustomerGateway {
-    id: string;
-    type: string;
-}
-
-export interface AwsVpnConnection {
-    vmId: string;
-    ip: string;
-    vpnConnectionId: string;
-    customerGatewayId: string;
-    transitGatewayId?: string;
-    transitGatewayAttachmentId?: string;
-}
 
 export interface AwsDdbOperations {
     Expression: string;
@@ -228,6 +189,8 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                         `ServiceToken: [${body.ServiceToken}]`
                 );
             }
+        } else if (this.proxy instanceof AwsLambdaInvocationProxy) {
+            return Promise.resolve(ReqType.CloudFunctionPeerInvocation);
         } else {
             throw new Error('Unsupported CloudFunctionProxy.');
         }
@@ -1601,18 +1564,19 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called removeMasterRoleTag.');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    invokeAutoscaleFunction(invokableFunction: string, parameters: { [key: string]: any }): void {
+    createAutoscaleFunctionInvocationKey(functionName: string, payload: JSONable): string {
+        const psk = this.settings.get(AwsFortiGateAutoscaleSetting.FortiGatePskSecret).value;
+        return genChecksum(`${functionName}:${psk}:${JSON.stringify(payload)}`, 'sha256');
+    }
+
+    invokeAutoscaleFunction(invocable: string, parameters: JSONable): void {
         this.proxy.logAsInfo('calling invokeAwsLambda');
         const handlerName = this.settings.get(
             AwsFortiGateAutoscaleSetting.AwsTransitGatewayVpnHandlerName
         ).value;
-        const invocationSecretAccessKey = this.settings.get(
-            AwsFortiGateAutoscaleSetting.FortiGatePskSecret
-        ).value;
-        const payload = {
-            invokeMethod: invokableFunction,
-            invocationSecretKey: invocationSecretAccessKey
+        const payload: AwsLambdaInvocationPayload = {
+            invocable: invocable,
+            invocationSecretKey: this.createAutoscaleFunctionInvocationKey(handlerName, parameters)
         };
         Object.assign(payload, parameters);
         this.adaptee.invokeLambda(handlerName, JSON.stringify(payload)).then(() => {

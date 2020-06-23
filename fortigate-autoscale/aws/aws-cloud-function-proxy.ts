@@ -18,6 +18,7 @@ import {
 import { mapHttpMethod } from '../../autoscale-core';
 import { JSONable } from '../../jsonable';
 import * as AwsCfnResponse from './aws-cfn-response';
+import { InvocationRequest, InvocationResponse } from 'aws-sdk/clients/lambda';
 
 export class AwsScheduledEventProxy extends CloudFunctionProxy<
     ScheduledEvent,
@@ -208,5 +209,73 @@ export class AwsCloudFormationCustomResourceEventProxy extends CloudFunctionProx
     }
     getRemainingExecutionTime(): number {
         return this.context.getRemainingTimeInMillis();
+    }
+}
+
+export class AwsLambdaInvocationProxy extends CloudFunctionProxy<
+    InvocationRequest,
+    Context,
+    InvocationResponse
+> {
+    request: InvocationRequest;
+    context: Context;
+    log(message: string, level: LogLevel): void {
+        switch (level) {
+            case LogLevel.Debug:
+                console.debug(message);
+                break;
+            case LogLevel.Error:
+                console.error(message);
+                break;
+            case LogLevel.Info:
+                console.info(message);
+                break;
+            case LogLevel.Warn:
+                console.warn(message);
+                break;
+            default:
+                console.log(message);
+        }
+    }
+
+    /**
+     * return a formatted AWS Lambda handler response
+     * @param  {number} httpStatusCode http status code
+     * @param  {CloudFunctionResponseBody} body response body
+     * @param  {{}} headers response header
+     * @returns {InvocationResponse} response
+     */
+    formatResponse(
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        httpStatusCode: number,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        body: CloudFunctionResponseBody,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        headers: {}
+    ): InvocationResponse {
+        return {
+            StatusCode: httpStatusCode,
+            Payload: body
+        };
+    }
+
+    getRequestAsString(): string {
+        return JSON.stringify(this.request);
+    }
+
+    getRemainingExecutionTime(): number {
+        return this.context.getRemainingTimeInMillis();
+    }
+
+    getPayload(): JSONable {
+        try {
+            if (typeof this.request.Payload === 'string') {
+                return { ...JSON.parse(this.request.Payload) } as JSONable;
+            } else {
+                return null;
+            }
+        } catch (error) {
+            return null;
+        }
     }
 }

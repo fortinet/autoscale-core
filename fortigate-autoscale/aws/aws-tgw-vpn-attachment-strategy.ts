@@ -7,11 +7,13 @@ import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../../h
 import { ResourceTag, TgwVpnAttachmentRecord } from '../../platform-adapter';
 import { VirtualMachine } from '../../virtual-machine';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
+import { AwsPlatformAdapter } from './aws-platform-adapter';
 import {
-    AwsPlatformAdapter,
     AwsVpnAttachmentState,
-    AwsVpnConnection
-} from './aws-platform-adapter';
+    AwsVpnConnection,
+    AwsTgwVpnUpdateAttachmentRouteTableRequest
+} from './transit-gateway-context';
+import { AwsTgwLambdaInvocable } from './aws-lambda-invocable';
 
 export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
     protected vm: VirtualMachine;
@@ -50,7 +52,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
         } catch (error) {}
         let customerGatewayCreated = false;
         let vpnConnectionCreated = false;
-        const settings = this.platform.settings;
+        const settings = await this.platform.getSettings();
         const resourceTagPrefix = settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix)
             .value;
         const bgpAsn = Number(settings.get(AwsFortiGateAutoscaleSetting.VpnBgpAsn).value);
@@ -184,10 +186,12 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
         // invoke a tgw vpn handler Lambda function to continue the updating route tasks
         // in order to not block the main autoscale handler function process.
 
-        const request = {
+        const request: AwsTgwVpnUpdateAttachmentRouteTableRequest = {
             attachmentId: vpnConnection.transitGatewayAttachmentId
         };
-        this.platform.invokeAutoscaleFunction('updateTgwAttachmentRouteTable', request);
+        this.platform.invokeAutoscaleFunction(AwsTgwLambdaInvocable.UpdateTgwAttachmentRoutTable, {
+            ...request
+        });
 
         // save the tgw vpn attachment record
         try {
@@ -277,7 +281,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
         try {
             // wait for the transit gateway to become available
             await waitFor<AwsVpnAttachmentState>(emitter, checker, waitForInterval, this.proxy);
-            const settings = this.platform.settings;
+            const settings = await this.platform.getSettings();
             const outboutRouteTable = settings.get(
                 AwsFortiGateAutoscaleSetting.AwsTransitGatewayRouteTableOutbound
             ).value;
