@@ -1451,7 +1451,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         return record;
     }
 
-    async saveAwsTgwVpnAttachmentRecord(
+    async saveTgwVpnAttachmentRecord(
         vmId: string,
         ip: string,
         vpnConnectionId: string
@@ -1475,8 +1475,8 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called saveTgwVpnAttachmentRecord');
     }
 
-    async deleteAwsTgwVpnAttachmentRecord(vmId: string, ip: string): Promise<void> {
-        this.proxy.logAsInfo('calling deleteAwsTgwVpnAttachmentRecord');
+    async deleteTgwVpnAttachmentRecord(vmId: string, ip: string): Promise<void> {
+        this.proxy.logAsInfo('calling deleteTgwVpnAttachmentRecord');
         const settings = await this.getSettings();
         const table = new AwsDBDef.AwsVpnAttachment(
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
@@ -1488,7 +1488,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         await this.adaptee.deleteItemFromDb<VpnAttachmentDbItem>(table, item);
 
-        this.proxy.logAsInfo('called deleteAwsTgwVpnAttachmentRecord');
+        this.proxy.logAsInfo('called deleteTgwVpnAttachmentRecord');
     }
 
     async updateTgwVpnAttachmentRouting(
@@ -1533,7 +1533,11 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const attachment = await this.adaptee.describeTgwAttachment(attachmentId);
         if (!attachment) {
             throw new Error(`Transit gateway vpn attachmnt (id: ${attachmentId}) not found.`);
-        } else if (!(attachment.State in AwsVpnAttachmentState)) {
+        } else if (
+            !Object.values(AwsVpnAttachmentState)
+                .map(s => s as string)
+                .includes(attachment.State)
+        ) {
             throw new Error(
                 'Unexpected transit gateway vpn attachment state: ' +
                     `${attachment.State} of attachment (id: ${attachmentId}).`
@@ -1565,6 +1569,8 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     }
 
     createAutoscaleFunctionInvocationKey(functionName: string, payload: JSONable): string {
+        this.proxy.logAsInfo(functionName);
+        this.proxy.logAsInfo(JSON.stringify(payload));
         const psk = this.settings.get(AwsFortiGateAutoscaleSetting.FortiGatePskSecret).value;
         return genChecksum(`${functionName}:${psk}:${JSON.stringify(payload)}`, 'sha256');
     }
@@ -1574,14 +1580,14 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const handlerName = this.settings.get(
             AwsFortiGateAutoscaleSetting.AwsTransitGatewayVpnHandlerName
         ).value;
+        const secretKey = this.createAutoscaleFunctionInvocationKey(handlerName, parameters);
         const payload: AwsLambdaInvocationPayload = {
             invocable: invocable,
-            invocationSecretKey: this.createAutoscaleFunctionInvocationKey(handlerName, parameters)
+            invocationSecretKey: secretKey
         };
         Object.assign(payload, parameters);
-        this.adaptee.invokeLambda(handlerName, JSON.stringify(payload)).then(() => {
-            this.proxy.logAsInfo('called invokeAwsLambda');
-        });
+        this.adaptee.invokeLambda(handlerName, JSON.stringify(payload));
+        this.proxy.logAsInfo('called invokeAwsLambda');
     }
 
     async updateScalingGroupSize(

@@ -3,7 +3,12 @@ import {
     VpnAttachmentStrategy,
     VpnAttachmentStrategyResult
 } from '../../context-strategy/vpn-attachment-context';
-import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../../helper-function';
+import {
+    waitFor,
+    WaitForConditionChecker,
+    WaitForPromiseEmitter,
+    WaitForMaxCount
+} from '../../helper-function';
 import { ResourceTag, TgwVpnAttachmentRecord } from '../../platform-adapter';
 import { VirtualMachine } from '../../virtual-machine';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
@@ -195,9 +200,9 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
 
         // save the tgw vpn attachment record
         try {
-            await this.platform.saveAwsTgwVpnAttachmentRecord(
+            await this.platform.saveTgwVpnAttachmentRecord(
                 this.vm.id,
-                this.vm.primaryPrivateIpAddress,
+                this.vm.primaryPublicIpAddress,
                 vpnConnection.vpnConnectionId
             );
         } catch (error) {
@@ -233,7 +238,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
             await this.platform.deleteAwsCustomerGateway(vpnAttachmentRecord.customerGatewayId);
             this.proxy.logAsDebug('customer gateway deleted.');
             // delete vpn attachment record
-            await this.platform.deleteAwsTgwVpnAttachmentRecord(
+            await this.platform.deleteTgwVpnAttachmentRecord(
                 vpnAttachmentRecord.vmId,
                 vpnAttachmentRecord.ip
             );
@@ -272,7 +277,11 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
                         ` ${(callCount * waitForInterval) / 1000} seconds, have been reached.`
                 );
             }
-            if (!(state in AwsVpnAttachmentState)) {
+            if (
+                !Object.values(AwsVpnAttachmentState)
+                    .map(s => s as string)
+                    .includes(state)
+            ) {
                 throw new Error(`Unexpected state: ${state}.`);
             } else {
                 return Promise.resolve(state === AwsVpnAttachmentState.Available);
@@ -280,7 +289,13 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
         };
         try {
             // wait for the transit gateway to become available
-            await waitFor<AwsVpnAttachmentState>(emitter, checker, waitForInterval, this.proxy);
+            await waitFor<AwsVpnAttachmentState>(
+                emitter,
+                checker,
+                waitForInterval,
+                this.proxy,
+                WaitForMaxCount.NoMaxCount
+            );
             const settings = await this.platform.getSettings();
             const outboutRouteTable = settings.get(
                 AwsFortiGateAutoscaleSetting.AwsTransitGatewayRouteTableOutbound
@@ -319,7 +334,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
                     await this.platform.deleteAwsCustomerGateway(record.customerGatewayId);
                     this.proxy.logAsDebug('customer gateway deleted.');
                     // delete vpn attachment record
-                    await this.platform.deleteAwsTgwVpnAttachmentRecord(record.vmId, record.ip);
+                    await this.platform.deleteTgwVpnAttachmentRecord(record.vmId, record.ip);
                 } catch (error) {
                     this.proxy.logForError(
                         `Error in cleaning vpn for (vmId: ${record.vmId}, ` + `ip: ${record.ip})`,

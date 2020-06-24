@@ -18,7 +18,6 @@ import {
 import { mapHttpMethod } from '../../autoscale-core';
 import { JSONable } from '../../jsonable';
 import * as AwsCfnResponse from './aws-cfn-response';
-import { InvocationRequest, InvocationResponse } from 'aws-sdk/clients/lambda';
 
 export class AwsScheduledEventProxy extends CloudFunctionProxy<
     ScheduledEvent,
@@ -212,12 +211,8 @@ export class AwsCloudFormationCustomResourceEventProxy extends CloudFunctionProx
     }
 }
 
-export class AwsLambdaInvocationProxy extends CloudFunctionProxy<
-    InvocationRequest,
-    Context,
-    InvocationResponse
-> {
-    request: InvocationRequest;
+export class AwsLambdaInvocationProxy extends CloudFunctionProxy<JSONable, Context, void> {
+    request: JSONable;
     context: Context;
     log(message: string, level: LogLevel): void {
         switch (level) {
@@ -243,7 +238,6 @@ export class AwsLambdaInvocationProxy extends CloudFunctionProxy<
      * @param  {number} httpStatusCode http status code
      * @param  {CloudFunctionResponseBody} body response body
      * @param  {{}} headers response header
-     * @returns {InvocationResponse} response
      */
     formatResponse(
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -252,11 +246,22 @@ export class AwsLambdaInvocationProxy extends CloudFunctionProxy<
         body: CloudFunctionResponseBody,
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         headers: {}
-    ): InvocationResponse {
-        return {
-            StatusCode: httpStatusCode,
-            Payload: body
-        };
+    ): {} {
+        throw new Error('Not supposed to call the formatResponse method in this implementation.');
+    }
+
+    getReqBody(): JSONable {
+        try {
+            if (typeof this.request === 'string') {
+                return JSON.parse(this.request as string);
+            } else if (typeof this.request === 'object') {
+                return this.request;
+            } else {
+                return null;
+            }
+        } catch (error) {
+            return null;
+        }
     }
 
     getRequestAsString(): string {
@@ -265,17 +270,5 @@ export class AwsLambdaInvocationProxy extends CloudFunctionProxy<
 
     getRemainingExecutionTime(): number {
         return this.context.getRemainingTimeInMillis();
-    }
-
-    getPayload(): JSONable {
-        try {
-            if (typeof this.request.Payload === 'string') {
-                return { ...JSON.parse(this.request.Payload) } as JSONable;
-            } else {
-                return null;
-            }
-        } catch (error) {
-            return null;
-        }
     }
 }

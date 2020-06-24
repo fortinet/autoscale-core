@@ -1,5 +1,3 @@
-import * as HttpStatusCodes from 'http-status-codes';
-
 import { AutoscaleEnvironment } from '../../autoscale-environment';
 import { CloudFunctionProxyAdapter, ReqType } from '../../cloud-function-proxy';
 import {
@@ -32,9 +30,10 @@ import {
     TransitGatewayContext,
     AwsTgwVpnUpdateAttachmentRouteTableRequest
 } from './transit-gateway-context';
-import { AwsLambdaInvocationProxy } from './aws-cloud-function-proxy';
 import { AwsLambdaInvocationPayload, AwsTgwLambdaInvocable } from './aws-lambda-invocable';
-import { JSONable } from 'jsonable';
+import { JSONable } from '../../jsonable';
+import { AwsLambdaInvocationProxy } from './aws-cloud-function-proxy';
+import { Context } from 'aws-lambda';
 
 /** ./aws-fortigate-autoscale-lambda-invocable
  * AWS FortiGate Autoscale - class, with capabilities:
@@ -286,48 +285,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         await super.onVmFullyConfigured();
     }
 
-    async handleLambdaPeerInvocation(): Promise<void> {
-        this.proxy.logAsInfo('calling handleLambdaPeerInvocation.');
-        let responseBody: string;
-        try {
-            // init the platform. this step is important
-            await this.platform.init();
-            const requestType = await this.platform.getRequestType();
-            if (requestType === ReqType.CloudFunctionPeerInvocation) {
-                const proxy: AwsLambdaInvocationProxy = this.proxy as AwsLambdaInvocationProxy;
-                const payload: AwsLambdaInvocationPayload = {
-                    invocable: undefined,
-                    invocationSecretKey: undefined
-                };
-                Object.assign(payload, proxy.getPayload());
-                const invocable = payload.invocable;
-                const invocationSecretKey = payload.invocationSecretKey;
-                delete payload.invocable;
-                delete payload.invocationSecretKey;
-                const secretKey = this.platform.createAutoscaleFunctionInvocationKey(
-                    invocable,
-                    payload
-                );
-
-                // verify the invocation key
-                if (!invocationSecretKey || invocationSecretKey !== secretKey) {
-                    throw new Error('Invalid invocation payload: invocationSecretKey not matched');
-                }
-                if (invocable === AwsTgwLambdaInvocable.UpdateTgwAttachmentRoutTable) {
-                    await this.handleTgwAttachmentRouteTable(payload);
-                }
-            }
-            this.proxy.logAsInfo('called handleLambdaPeerInvocation.');
-            this.proxy.formatResponse(HttpStatusCodes.OK, responseBody, {});
-            return;
-        } catch (error) {
-            // ASSERT: error is always an instance of Error
-            this.proxy.logForError('called handleLambdaPeerInvocation.', error);
-            this.proxy.formatResponse(HttpStatusCodes.OK, responseBody, {});
-        }
-    }
-
-    private async handleTgwAttachmentRouteTable(payload: JSONable): Promise<void> {
+    async handleTgwAttachmentRouteTable(payload: JSONable): Promise<void> {
         this.proxy.logAsInfo('calling handleTgwAttachmentRouteTable.');
         const request: AwsTgwVpnUpdateAttachmentRouteTableRequest = {
             attachmentId: payload.attachmentId as string
@@ -359,5 +317,61 @@ export class AwsFortiGateAutoscaleTgw<TReq, TContext, TRes> extends AwsFortiGate
         this.setBootstrapConfigurationStrategy(new AwsFortiGateBootstrapTgwStrategy());
         // use AWS Transit Gateway VPN attachment strategy
         this.setVpnAttachmentStrategy(new AwsTgwVpnAttachmentStrategy());
+    }
+}
+
+export class AwsFortiGateAutoscaleLambdaInvocationHandler {
+    autoscale: AwsFortiGateAutoscale<JSONable, Context, void>;
+    constructor(autoscale: AwsFortiGateAutoscale<JSONable, Context, void>) {
+        this.autoscale = autoscale;
+    }
+    get proxy(): AwsLambdaInvocationProxy {
+        return this.autoscale.proxy as AwsLambdaInvocationProxy;
+    }
+
+    get platform(): AwsPlatformAdapter {
+        return this.autoscale.platform;
+    }
+
+    async handleLambdaPeerInvocation(): Promise<void> {
+        this.proxy.logAsInfo('calling handleLambdaPeerInvocation.');
+        try {
+            // init the platform. this step is important
+            await this.platform.init();
+            const requestType = await this.platform.getRequestType();
+            if (requestType === ReqType.CloudFunctionPeerInvocation) {
+                const proxy: AwsLambdaInvocationProxy = this.proxy as AwsLambdaInvocationProxy;
+                const body = proxy.getReqBody();
+                const payload: AwsLambdaInvocationPayload = {
+                    invocable: undefined,
+                    invocationSecretKey: undefined
+                };
+                if (!body) {
+                    throw new Error('Invalid request body.');
+                }
+                Object.assign(payload, proxy.getReqBody());
+                const invocable = payload.invocable;
+                const invocationSecretKey = payload.invocationSecretKey;
+                delete payload.invocable;
+                delete payload.invocationSecretKey;
+                const secretKey = this.platform.createAutoscaleFunctionInvocationKey(
+                    proxy.context.functionName,
+                    payload
+                );
+
+                // verify the invocation key
+                if (!invocationSecretKey || invocationSecretKey !== secretKey) {
+                    throw new Error('Invalid invocation payload: invocationSecretKey not matched');
+                }
+                if (invocable === AwsTgwLambdaInvocable.UpdateTgwAttachmentRoutTable) {
+                    await this.autoscale.handleTgwAttachmentRouteTable(payload);
+                }
+            }
+            this.proxy.logAsInfo('called handleLambdaPeerInvocation.');
+            return;
+        } catch (error) {
+            // ASSERT: error is always an instance of Error
+            this.proxy.logForError('called handleLambdaPeerInvocation.', error);
+        }
     }
 }
