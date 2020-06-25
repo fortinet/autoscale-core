@@ -38,6 +38,7 @@ export type PackmanConfigPackage = {
         name: string;
         copyFrom: string;
         saveTo: string;
+        includeSubDir?: boolean;
     }[];
     function: {
         name: string;
@@ -104,6 +105,10 @@ const defaultOptions: CodePackmanOptions = {
     printStdError: true,
     suppressError: false
 };
+
+export interface Stats extends fs.Stats {
+    name: string;
+}
 
 export class CodePackmanModule {
     private cpm: CodePackman;
@@ -592,11 +597,17 @@ export class CodePackman {
         }
     }
 
-    async cp(pathList: string[], dest: string, options?: CodePackmanOptions): Promise<ExitCode> {
+    async cp(
+        pathList: string[],
+        dest: string,
+        deepCopy = true,
+        options?: CodePackmanOptions
+    ): Promise<ExitCode> {
         const fList: string[] = [];
         const pList: string[] = [];
         let errorOccurred: boolean;
         let errorMessages = '';
+
         pathList.forEach(p => {
             if (this.safeDirCheck(p, options)) {
                 const pa = path.resolve(this.cwd, p);
@@ -604,8 +615,18 @@ export class CodePackman {
                     const stat = fs.statSync(pa);
                     if (stat.isFile()) {
                         fList.push(pa);
-                    } else {
-                        pList.push(pa);
+                    } else if (stat.isDirectory()) {
+                        // if deep copy, copy recursively
+                        if (deepCopy) {
+                            pList.push(pa);
+                        } else {
+                            ShellJs.ls('-l', [p]).forEach((s: unknown) => {
+                                const stat1: Stats = s as Stats;
+                                if (stat1.isFile()) {
+                                    fList.push(path.resolve(pa, stat1.name));
+                                }
+                            });
+                        }
                     }
                 } catch (error) {
                     pList.push(pa);
@@ -1116,7 +1137,8 @@ export class CodePackman {
         for (const staticFile of pkg.staticFile) {
             const fromPath = path.resolve(this.projectRoot, staticFile.copyFrom);
             const toPath = path.resolve(pkgDir, staticFile.saveTo);
-            await this.cp([fromPath], toPath);
+            await this.makeDir(toPath);
+            await this.cp([fromPath], toPath, staticFile.includeSubDir !== false);
         }
         // zip it
         const archiveInput: ArchiverInput = {
