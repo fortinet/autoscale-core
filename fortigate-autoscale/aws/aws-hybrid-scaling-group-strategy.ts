@@ -138,11 +138,15 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         lifecycleItem.state = LifecycleState.Terminating;
 
         try {
-            // detach instance from load balancer target group
+            // if enabled elb, detach instance from load balancer target group
+            const enableElb = settings.get(AwsFortiGateAutoscaleSetting.EnableExternalElb)
+                .truthValue;
             const targetGroupArn = settings.get(
                 AwsFortiGateAutoscaleSetting.AwsLoadBalancerTargetGroupArn
             ).value;
-            await this.platform.loadBalancerDetachVm(targetGroupArn, [targetVm.id]);
+            if (enableElb) {
+                await this.platform.loadBalancerDetachVm(targetGroupArn, [targetVm.id]);
+            }
 
             // check if any existing lifecycle item for the target vm (such as in launching)
             // then change to abandon it later.
@@ -263,7 +267,7 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
             }
         } else {
             this.proxy.logAsWarning(
-                `Attempting to complete a (stete: ${LifecycleState.Launching}) ` +
+                `Attempting to complete a (stete: ${LifecycleState.Terminating}) ` +
                     `lifecycle of vm(id: ${targetVm.id}). Lifecycle item not found.`
             );
             this.proxy.logAsInfo(`called completeTerminating (${success})`);

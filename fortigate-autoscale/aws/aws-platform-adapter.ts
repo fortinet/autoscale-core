@@ -52,7 +52,7 @@ import { AwsPlatformAdaptee } from './aws-platform-adaptee';
 import { AwsVpnAttachmentState, AwsVpnConnection } from './transit-gateway-context';
 
 export const TAG_KEY_RESOURCE_GROUP = 'tag:ResourceGroup';
-export const TAG_KEY_AUTOSCALE_ROLE = 'AutoscaleRole';
+export const TAG_KEY_AUTOSCALE_ROLE = 'tag:AutoscaleRole';
 
 export interface AwsDdbOperations {
     Expression: string;
@@ -1347,6 +1347,13 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called deleteAwsCustomerGateway');
     }
 
+    async listAwsCustomerGatewayIdByTags(tags: ResourceTag[]): Promise<string[]> {
+        this.proxy.logAsInfo('calling listAwsCustomerGatewayIdByTags.');
+        const cgwList = await this.adaptee.listCustomerGatewayByTags(tags);
+        this.proxy.logAsInfo('called listAwsCustomerGatewayIdByTags.');
+        return cgwList.map(cgw => cgw.CustomerGatewayId).filter(id => !!id);
+    }
+
     async createAwsTgwVpnConnection(
         bgpAsn: number,
         publicIpv4: string,
@@ -1403,6 +1410,13 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('calling deleteAwsVpnConnection.');
         await this.adaptee.deleteVpnConnection(vpnConnectionId);
         this.proxy.logAsInfo('called deleteAwsVpnConnection.');
+    }
+
+    async listAwsVpnConnectionIdByTags(tags: ResourceTag[]): Promise<string[]> {
+        this.proxy.logAsInfo('calling listAwsVpnConnectionIdByTags.');
+        const vpnList = await this.adaptee.listVpnConnectionByTags(tags);
+        this.proxy.logAsInfo('called listAwsVpnConnectionIdByTags.');
+        return vpnList.map(vpn => vpn.VpnConnectionId).filter(id => !!id);
     }
 
     async listTgwVpnAttachmentRecord(

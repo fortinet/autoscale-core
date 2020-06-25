@@ -174,7 +174,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
         const tagPrefix = settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value;
         return [
             {
-                key: 'FortiGateAutoscaleNicAttachment',
+                key: 'tag:FortiGateAutoscaleNicAttachment',
                 value: tagPrefix
             },
             {
@@ -182,7 +182,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
                 value: `${tagPrefix}-fortigate-autoscale-instance-nic2`
             },
             {
-                key: 'ResourceGroup',
+                key: 'tag:ResourceGroup',
                 value: tagPrefix
             }
         ];

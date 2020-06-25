@@ -20,6 +20,9 @@ import {
 } from './transit-gateway-context';
 import { AwsTgwLambdaInvocable } from './aws-lambda-invocable';
 
+const TAG_KEY_AUTOSCALE_TGW_VPN_RESOURCE = 'tag:AutoscaleTgwVpnResource';
+const TAG_KEY_RESOURCE_GROUP = 'tag:ResourceGroup';
+
 export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
     protected vm: VirtualMachine;
     protected platform: AwsPlatformAdapter;
@@ -36,6 +39,24 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
         this.proxy = proxy;
         this.bgpAsn = bgpAsn;
         return Promise.resolve();
+    }
+
+    async tags(): Promise<ResourceTag[]> {
+        const settings = await this.platform.getSettings();
+        const resourceTagPrefix = settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix)
+            .value;
+        const transitGatewayId = settings.get(AwsFortiGateAutoscaleSetting.AwsTransitGatewayId)
+            .value;
+        return [
+            {
+                key: TAG_KEY_AUTOSCALE_TGW_VPN_RESOURCE,
+                value: transitGatewayId
+            },
+            {
+                key: TAG_KEY_RESOURCE_GROUP,
+                value: resourceTagPrefix
+            }
+        ];
     }
 
     async attach(): Promise<VpnAttachmentStrategyResult> {
@@ -81,16 +102,8 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
             this.vm.id,
             this.vm.primaryPublicIpAddress
         ].join('-');
-        const tags: ResourceTag[] = [
-            {
-                key: 'AutoscaleTgwVpnResource',
-                value: transitGatewayId
-            },
-            {
-                key: 'ResourceGroup',
-                value: resourceTagPrefix
-            }
-        ];
+
+        const tags: ResourceTag[] = await this.tags();
         let customerGatewayId: string;
         let vpnConnection: AwsVpnConnection;
         try {
@@ -322,26 +335,44 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
 
     async cleanup(): Promise<number> {
         this.proxy.logAsInfo('calling AwsTgwVpnAttachmentStrategy.cleanup.');
-        const vpnAttachmentRecords = await this.platform.listTgwVpnAttachmentRecord([]);
         let errorCount = 0;
+        const tags: ResourceTag[] = await this.tags();
+        const [vpnIdList, cgwIdList] = await Promise.all([
+            this.platform.listAwsVpnConnectionIdByTags(tags),
+            this.platform.listAwsCustomerGatewayIdByTags(tags)
+        ]);
         await Promise.all(
-            vpnAttachmentRecords.map(async record => {
-                try {
-                    // delete vpn
-                    await this.platform.deleteAwsVpnConnection(record.vpnConnectionId);
-                    this.proxy.logAsDebug('vpn connection deleted.');
-                    // delete customer gateway
-                    await this.platform.deleteAwsCustomerGateway(record.customerGatewayId);
-                    this.proxy.logAsDebug('customer gateway deleted.');
-                    // delete vpn attachment record
-                    await this.platform.deleteTgwVpnAttachmentRecord(record.vmId, record.ip);
-                } catch (error) {
-                    this.proxy.logForError(
-                        `Error in cleaning vpn for (vmId: ${record.vmId}, ` + `ip: ${record.ip})`,
-                        error
-                    );
-                    errorCount++;
-                }
+            vpnIdList.map(vpnId => {
+                this.platform
+                    .deleteAwsVpnConnection(vpnId)
+                    .then(() => {
+                        return true;
+                    })
+                    .catch(vpnError => {
+                        this.proxy.logForError(
+                            `error in deleting vpn connection (id: ${vpnId})`,
+                            vpnError
+                        );
+                        errorCount++;
+                        return true;
+                    });
+            })
+        );
+        await Promise.all(
+            cgwIdList.map(cgwId => {
+                this.platform
+                    .deleteAwsCustomerGateway(cgwId)
+                    .then(() => {
+                        return true;
+                    })
+                    .catch(cgwError => {
+                        this.proxy.logForError(
+                            `error in deleting customer gateway (id: ${cgwId})`,
+                            cgwError
+                        );
+                        errorCount++;
+                        return true;
+                    });
             })
         );
         this.proxy.logAsInfo('called AwsTgwVpnAttachmentStrategy.cleanup.');
