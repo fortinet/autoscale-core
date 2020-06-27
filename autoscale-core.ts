@@ -390,6 +390,7 @@ export class Autoscale implements AutoscaleCore {
             election = await this.masterElectionStrategy.result();
         }
         // master election required? condition 2: has master record, but it's pending
+        // ASSERT: the existing master record voteEndTime > now if voteState is pending (it's a calculated state)
         else if (this.env.masterRecord.voteState === MasterRecordVoteState.Pending) {
             // if master election is pending, only need to know the current result. do not need
             // to redo the election.

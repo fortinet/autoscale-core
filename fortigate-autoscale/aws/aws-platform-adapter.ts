@@ -56,7 +56,7 @@ export const TAG_KEY_AUTOSCALE_ROLE = 'tag:AutoscaleRole';
 
 export interface AwsDdbOperations {
     Expression: string;
-    ExpressionAttributeValues?: { [key: string]: string };
+    ExpressionAttributeValues?: { [key: string]: string | number | boolean };
     type?: CreateOrUpdate;
 }
 
@@ -664,8 +664,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 Expression:
                     'attribute_not_exists(scalingGroupName) OR ' +
                     'attribute_exists(scalingGroupName) AND ' +
-                    `voteState = '${MasterRecordVoteState.Pending}' AND ` +
-                    `voteEndTime < ${item.voteEndTime}`
+                    'voteState = :voteState AND ' +
+                    'voteEndTime > :nowTime',
+                ExpressionAttributeValues: {
+                    ':voteState': MasterRecordVoteState.Pending,
+                    ':nowTime': Date.now()
+                }
             };
             await this.adaptee.saveItemToDb<MasterElectionDbItem>(table, item, conditionExp);
             this.proxy.logAsInfo('called updateMasterRecord.');
