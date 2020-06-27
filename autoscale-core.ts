@@ -374,6 +374,7 @@ export class Autoscale implements AutoscaleCore {
             newMaster: null,
             newMasterRecord: null,
             candidate: this.env.targetVm,
+            candidateHealthCheck: this.env.targetHealthCheckRecord || undefined,
             electionDuration: electionTimeout,
             signature: null
         };
