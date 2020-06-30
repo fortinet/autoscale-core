@@ -83,7 +83,14 @@ export class AwsApiGatewayEventProxy extends CloudFunctionProxy<
     log(message: string, level: LogLevel): void {
         switch (level) {
             case LogLevel.Debug:
-                console.debug(message);
+                if (process.env.DEBUG_MODE === 'true') {
+                    console.debug(message);
+                } else {
+                    console.debug(
+                        'Debug level log is disabled. To view debug level logs, please' +
+                            " add the process environment variable 'DEBUG_MODE' with value 'true'."
+                    );
+                }
                 break;
             case LogLevel.Error:
                 console.error(message);
@@ -158,7 +165,14 @@ export class AwsCloudFormationCustomResourceEventProxy extends CloudFunctionProx
     log(message: string, level: LogLevel): void {
         switch (level) {
             case LogLevel.Debug:
-                console.debug(message);
+                if (process.env.DEBUG_MODE === 'true') {
+                    console.debug(message);
+                } else {
+                    console.debug(
+                        'Debug level log is disabled. To view debug level logs, please' +
+                            " add the process environment variable 'DEBUG_MODE' with value 'true'."
+                    );
+                }
                 break;
             case LogLevel.Error:
                 console.error(message);
@@ -217,7 +231,14 @@ export class AwsLambdaInvocationProxy extends CloudFunctionProxy<JSONable, Conte
     log(message: string, level: LogLevel): void {
         switch (level) {
             case LogLevel.Debug:
-                console.debug(message);
+                if (process.env.DEBUG_MODE === 'true') {
+                    console.debug(message);
+                } else {
+                    console.debug(
+                        'Debug level log is disabled. To view debug level logs, please' +
+                            " add the process environment variable 'DEBUG_MODE' with value 'true'."
+                    );
+                }
                 break;
             case LogLevel.Error:
                 console.error(message);

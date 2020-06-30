@@ -56,7 +56,7 @@ export const TAG_KEY_AUTOSCALE_ROLE = 'tag:AutoscaleRole';
 
 export interface AwsDdbOperations {
     Expression: string;
-    ExpressionAttributeValues?: { [key: string]: string };
+    ExpressionAttributeValues?: { [key: string]: string | number | boolean };
     type?: CreateOrUpdate;
 }
 
@@ -290,9 +290,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         enis?: EC2.NetworkInterface[]
     ): VirtualMachine {
         const state: VirtualMachineState =
-            (instance.State === 'running' && VirtualMachineState.Running) ||
-            (instance.State === 'stopped' && VirtualMachineState.Stopped) ||
-            (instance.State === 'terminated' && VirtualMachineState.Terminated) ||
+            (instance.State.Name === 'running' && VirtualMachineState.Running) ||
+            (instance.State.Name === 'stopped' && VirtualMachineState.Stopped) ||
+            (instance.State.Name === 'terminated' && VirtualMachineState.Terminated) ||
             VirtualMachineState.Pending;
         const vm: VirtualMachine = {
             id: instance.InstanceId,
@@ -374,6 +374,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 masterRecord.scalingGroupName,
                 instance.NetworkInterfaces
             );
+            // NOTE: vm in terminated state can be still described. We should consider such vm as unavailable
+            if (vm.state === VirtualMachineState.Terminated) {
+                vm = null;
+            }
         }
         this.proxy.logAsInfo('called getMasterVm');
         return vm;
@@ -664,8 +668,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 Expression:
                     'attribute_not_exists(scalingGroupName) OR ' +
                     'attribute_exists(scalingGroupName) AND ' +
-                    `voteState = '${MasterRecordVoteState.Pending}' AND ` +
-                    `voteEndTime < ${item.voteEndTime}`
+                    'voteState = :voteState AND ' +
+                    'voteEndTime > :nowTime',
+                ExpressionAttributeValues: {
+                    ':voteState': MasterRecordVoteState.Pending,
+                    ':nowTime': Date.now()
+                }
             };
             await this.adaptee.saveItemToDb<MasterElectionDbItem>(table, item, conditionExp);
             this.proxy.logAsInfo('called updateMasterRecord.');

@@ -99,9 +99,11 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                     typeof item[attr.name] === 'object'
                         ? JSON.stringify(item[attr.name])
                         : item[attr.name];
-                attributeNames[`#${attr.name}`] = attr.name;
-                attributeValues[`:${attr.name}`] = value;
-                attributeExp.push(`#${attr.name} = :${attr.name}`);
+                if (value !== undefined && value !== null) {
+                    attributeNames[`#${attr.name}`] = attr.name;
+                    attributeValues[`:${attr.name}`] = value;
+                    attributeExp.push(`#${attr.name} = :${attr.name}`);
+                }
             });
 
             const updateItemInput: DocumentClient.UpdateItemInput = {

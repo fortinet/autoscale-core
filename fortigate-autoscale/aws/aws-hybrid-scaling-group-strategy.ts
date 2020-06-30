@@ -261,7 +261,7 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
                 throw new Error(
                     'Incorrect state found in attempting to complete a lifecycle ' +
                         `of vm(id: ${targetVm.id}). ` +
-                        `Expected state: [${LifecycleState.Launching}], ` +
+                        `Expected state: [${LifecycleState.Terminating}], ` +
                         `actual state: [${lifecycleItem.state}]`
                 );
             }

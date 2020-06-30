@@ -344,8 +344,7 @@ export abstract class MasterElection extends Table<MasterElectionDbItem> {
         {
             name: 'vmId',
             attrType: TypeRef.StringType,
-            isKey: true,
-            keyType: TypeRef.PrimaryKey
+            isKey: false
         },
         {
             name: 'id',
