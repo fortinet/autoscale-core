@@ -5,24 +5,26 @@
  * @enum {number}
  */
 export enum AutoscaleSetting {
+    AdditionalConfigSetNameList = 'additional-configset-name-list',
     AutoscaleHandlerUrl = 'autoscale-handler-url',
     AssetStorageContainer = 'asset-storage-name',
     AssetStorageDirectory = 'asset-storage-key-prefix',
     ByolScalingGroupName = 'byol-scaling-group-name',
+    CustomAssetContainer = 'custom-asset-container',
+    CustomAssetDirectory = 'custom-asset-directory',
     EnableNic2 = 'enable-second-nic',
     EnableInternalElb = 'enable-internal-elb',
     EnableFazIntegration = 'enable-fortianalyzer-integration',
     HeartbeatDelayAllowance = 'heartbeat-delay-allowance',
     HeartbeatInterval = 'heartbeat-interval',
     HeartbeatLossCount = 'heartbeat-loss-count',
-    HeartbeatSyncActionUnhealthyVm = 'heartbeat-sync-action-unhealthy-vm',
-    LicenseFIleDirectory = 'license-file-directory',
+    LicenseFileDirectory = 'license-file-directory',
     MasterElectionTimeout = 'master-election-timeout',
     MasterScalingGroupName = 'master-scaling-group-name',
     PaygScalingGroupName = 'payg-scaling-group-name',
-    RequiredConfigSet = 'required-configset',
     ResourceTagPrefix = 'resource-tag-prefix',
-    SubnetPair = 'subnet-pair'
+    SubnetPair = 'subnet-pair',
+    VpnBgpAsn = 'vpn-bgp-asn'
 }
 
 export interface SubnetPair {

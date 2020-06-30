@@ -380,7 +380,7 @@
                 "S": "N/A"
             },
             "settingKey": {
-                "S": "required-configset"
+                "S": "additional-configset-name-list"
             },
             "editable": {
                 "S": "false"
@@ -1009,7 +1009,7 @@
                 "S": ""
             },
             "settingKey": {
-                "S": "custom-configset-name"
+                "S": "additional-configset-name-list"
             },
             "editable": {
                 "S": "false"
