@@ -165,227 +165,202 @@ export interface SettingItemDictionary {
     [key: string]: SettingItemDefinition;
 }
 
-export const AutoscaleSettingItemDictionary: SettingItemDictionary = {};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.AdditionalConfigSetNameList] = {
-    keyName: AutoscaleSetting.AdditionalConfigSetNameList,
-    description:
-        'The comma-separated list of the name of a configset. These configsets' +
-        ' are required dependencies for the Autoscale to work for a certain ' +
-        ' deployment. Can be left empty.',
-    editable: false,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.AutoscaleHandlerUrl] = {
-    keyName: AutoscaleSetting.AutoscaleHandlerUrl,
-    description: 'The FortiGate Autoscale handler URL.',
-    editable: false,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.AssetStorageContainer] = {
-    keyName: AutoscaleSetting.AssetStorageContainer,
-    description: 'Asset storage name.',
-    editable: false,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.AssetStorageDirectory] = {
-    keyName: AutoscaleSetting.AssetStorageDirectory,
-    description: 'Asset storage key prefix.',
-    editable: false,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.ByolScalingGroupName] = {
-    keyName: AutoscaleSetting.ByolScalingGroupName,
-    description: 'The name of the BYOL auto scaling group.',
-    editable: true,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.ByolScalingGroupDesiredCapacity] = {
-    keyName: AutoscaleSetting.ByolScalingGroupDesiredCapacity,
-    description: 'BYOL Scaling group desired capacity.',
-    editable: true,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.ByolScalingGroupMinSize] = {
-    keyName: AutoscaleSetting.ByolScalingGroupMinSize,
-    description: 'BYOL Scaling group min size.',
-    editable: true,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.ByolScalingGroupMaxSize] = {
-    keyName: AutoscaleSetting.ByolScalingGroupMaxSize,
-    description: 'BYOL Scaling group max size.',
-    editable: true,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.CustomAssetContainer] = {
-    keyName: AutoscaleSetting.CustomAssetContainer,
-    description:
-        'The asset storage name for some user custom resources, such as: custom configset, license files, etc.',
-    editable: true,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.CustomAssetDirectory] = {
-    keyName: AutoscaleSetting.CustomAssetDirectory,
-    description: 'The sub directory to the user custom resources under the custom-asset-container.',
-    editable: true,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.EnableNic2] = {
-    keyName: AutoscaleSetting.EnableNic2,
-    description: 'Toggle ON / OFF the secondary eni creation on each FortiGate instance.',
-    editable: false,
-    jsonEncoded: false,
-    booleanType: true
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.EnableHybridLicensing] = {
-    keyName: AutoscaleSetting.EnableHybridLicensing,
-    description: 'Toggle ON / OFF the hybrid licensing feature.',
-    editable: false,
-    jsonEncoded: false,
-    booleanType: true
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.EnableInternalElb] = {
-    keyName: AutoscaleSetting.EnableInternalElb,
-    description:
-        'Toggle ON / OFF the internal elastic load balancing for the protected services by FortiGate.',
-    editable: false,
-    jsonEncoded: false,
-    booleanType: true
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.EnableVmInfoCache] = {
-    keyName: AutoscaleSetting.EnableVmInfoCache,
-    description:
-        'Toggle ON / OFF the vm info cache feature. It caches the ' +
-        'vm info in db to reduce API calls to query a vm from the platform.',
-    editable: false,
-    jsonEncoded: false,
-    booleanType: true
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.HeartbeatDelayAllowance] = {
-    keyName: AutoscaleSetting.HeartbeatDelayAllowance,
-    description: 'The FortiGate sync heartbeat delay allowance time in second.',
-    editable: true,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.HeartbeatInterval] = {
-    keyName: AutoscaleSetting.HeartbeatInterval,
-    description: 'The FortiGate sync heartbeat interval in second.',
-    editable: true,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.HeartbeatLossCount] = {
-    keyName: AutoscaleSetting.HeartbeatLossCount,
-    description: 'The FortiGate sync heartbeat loss count.',
-    editable: true,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.LicenseFileDirectory] = {
-    keyName: AutoscaleSetting.LicenseFileDirectory,
-    description: 'The sub directory for storing license files under the asset container.',
-    editable: true,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.MasterElectionTimeout] = {
-    keyName: AutoscaleSetting.MasterElectionTimeout,
-    description: 'The FortiGate master election timtout time in second.',
-    editable: true,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.MasterScalingGroupName] = {
-    keyName: AutoscaleSetting.MasterScalingGroupName,
-    description: 'The name of the master auto scaling group.',
-    editable: false,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.PaygScalingGroupName] = {
-    keyName: AutoscaleSetting.PaygScalingGroupName,
-    description: 'The name of the PAYG auto scaling group.',
-    editable: false,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.PaygScalingGroupDesiredCapacity] = {
-    keyName: AutoscaleSetting.PaygScalingGroupDesiredCapacity,
-    description: 'PAYG Scaling group desired capacity.',
-    editable: true,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.PaygScalingGroupMinSize] = {
-    keyName: AutoscaleSetting.PaygScalingGroupMinSize,
-    description: 'PAYG Scaling group min size.',
-    editable: true,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.PaygScalingGroupMaxSize] = {
-    keyName: AutoscaleSetting.PaygScalingGroupMaxSize,
-    description: 'PAYG Scaling group max size.',
-    editable: false,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.ResourceTagPrefix] = {
-    keyName: AutoscaleSetting.ResourceTagPrefix,
-    description: 'Resource tag prefix.',
-    editable: true,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.VpnBgpAsn] = {
-    keyName: AutoscaleSetting.VpnBgpAsn,
-    description: 'The BGP Autonomous System Number used with the VPN connections.',
-    editable: true,
-    jsonEncoded: false,
-    booleanType: false
-};
-
-AutoscaleSettingItemDictionary[AutoscaleSetting.VmInfoCacheTime] = {
-    keyName: AutoscaleSetting.VmInfoCacheTime,
-    description: 'The vm info cache time in seconds.',
-    editable: true,
-    jsonEncoded: false,
-    booleanType: false
+export const AutoscaleSettingItemDictionary: SettingItemDictionary = {
+    [AutoscaleSetting.AdditionalConfigSetNameList]: {
+        keyName: AutoscaleSetting.AdditionalConfigSetNameList,
+        description:
+            'The comma-separated list of the name of a configset. These configsets' +
+            ' are required dependencies for the Autoscale to work for a certain ' +
+            ' deployment. Can be left empty.',
+        editable: false,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.AutoscaleHandlerUrl]: {
+        keyName: AutoscaleSetting.AutoscaleHandlerUrl,
+        description: 'The FortiGate Autoscale handler URL.',
+        editable: false,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.AssetStorageContainer]: {
+        keyName: AutoscaleSetting.AssetStorageContainer,
+        description: 'Asset storage name.',
+        editable: false,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.AssetStorageDirectory]: {
+        keyName: AutoscaleSetting.AssetStorageDirectory,
+        description: 'Asset storage key prefix.',
+        editable: false,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.ByolScalingGroupName]: {
+        keyName: AutoscaleSetting.ByolScalingGroupName,
+        description: 'The name of the BYOL auto scaling group.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.ByolScalingGroupDesiredCapacity]: {
+        keyName: AutoscaleSetting.ByolScalingGroupDesiredCapacity,
+        description: 'BYOL Scaling group desired capacity.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.ByolScalingGroupMinSize]: {
+        keyName: AutoscaleSetting.ByolScalingGroupMinSize,
+        description: 'BYOL Scaling group min size.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.ByolScalingGroupMaxSize]: {
+        keyName: AutoscaleSetting.ByolScalingGroupMaxSize,
+        description: 'BYOL Scaling group max size.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.CustomAssetContainer]: {
+        keyName: AutoscaleSetting.CustomAssetContainer,
+        description:
+            'The asset storage name for some user custom resources, such as: custom configset, license files, etc.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.CustomAssetDirectory]: {
+        keyName: AutoscaleSetting.CustomAssetDirectory,
+        description:
+            'The sub directory to the user custom resources under the custom-asset-container.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.EnableNic2]: {
+        keyName: AutoscaleSetting.EnableNic2,
+        description: 'Toggle ON / OFF the secondary eni creation on each FortiGate instance.',
+        editable: false,
+        jsonEncoded: false,
+        booleanType: true
+    },
+    [AutoscaleSetting.EnableHybridLicensing]: {
+        keyName: AutoscaleSetting.EnableHybridLicensing,
+        description: 'Toggle ON / OFF the hybrid licensing feature.',
+        editable: false,
+        jsonEncoded: false,
+        booleanType: true
+    },
+    [AutoscaleSetting.EnableInternalElb]: {
+        keyName: AutoscaleSetting.EnableInternalElb,
+        description:
+            'Toggle ON / OFF the internal elastic load balancing for the protected services by FortiGate.',
+        editable: false,
+        jsonEncoded: false,
+        booleanType: true
+    },
+    [AutoscaleSetting.EnableVmInfoCache]: {
+        keyName: AutoscaleSetting.EnableVmInfoCache,
+        description:
+            'Toggle ON / OFF the vm info cache feature. It caches the ' +
+            'vm info in db to reduce API calls to query a vm from the platform.',
+        editable: false,
+        jsonEncoded: false,
+        booleanType: true
+    },
+    [AutoscaleSetting.HeartbeatDelayAllowance]: {
+        keyName: AutoscaleSetting.HeartbeatDelayAllowance,
+        description: 'The FortiGate sync heartbeat delay allowance time in second.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.HeartbeatInterval]: {
+        keyName: AutoscaleSetting.HeartbeatInterval,
+        description: 'The FortiGate sync heartbeat interval in second.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.HeartbeatLossCount]: {
+        keyName: AutoscaleSetting.HeartbeatLossCount,
+        description: 'The FortiGate sync heartbeat loss count.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.LicenseFileDirectory]: {
+        keyName: AutoscaleSetting.LicenseFileDirectory,
+        description: 'The sub directory for storing license files under the asset container.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.MasterElectionTimeout]: {
+        keyName: AutoscaleSetting.MasterElectionTimeout,
+        description: 'The FortiGate master election timtout time in second.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.MasterScalingGroupName]: {
+        keyName: AutoscaleSetting.MasterScalingGroupName,
+        description: 'The name of the master auto scaling group.',
+        editable: false,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.PaygScalingGroupName]: {
+        keyName: AutoscaleSetting.PaygScalingGroupName,
+        description: 'The name of the PAYG auto scaling group.',
+        editable: false,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.PaygScalingGroupDesiredCapacity]: {
+        keyName: AutoscaleSetting.PaygScalingGroupDesiredCapacity,
+        description: 'PAYG Scaling group desired capacity.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.PaygScalingGroupMinSize]: {
+        keyName: AutoscaleSetting.PaygScalingGroupMinSize,
+        description: 'PAYG Scaling group min size.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.PaygScalingGroupMaxSize]: {
+        keyName: AutoscaleSetting.PaygScalingGroupMaxSize,
+        description: 'PAYG Scaling group max size.',
+        editable: false,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.ResourceTagPrefix]: {
+        keyName: AutoscaleSetting.ResourceTagPrefix,
+        description: 'Resource tag prefix.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.VpnBgpAsn]: {
+        keyName: AutoscaleSetting.VpnBgpAsn,
+        description: 'The BGP Autonomous System Number used with the VPN connections.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.VmInfoCacheTime]: {
+        keyName: AutoscaleSetting.VmInfoCacheTime,
+        description: 'The vm info cache time in seconds.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    }
 };
