@@ -1,6 +1,10 @@
 /* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { AutoScaling, EC2, ELBv2, Lambda, S3 } from 'aws-sdk';
+import AutoScaling from 'aws-sdk/clients/autoscaling';
+import EC2 from 'aws-sdk/clients/ec2';
+import ELBv2 from 'aws-sdk/clients/elbv2';
+import Lambda from 'aws-sdk/clients/lambda';
+import S3 from 'aws-sdk/clients/s3';
 import { DocumentClient } from 'aws-sdk/clients/dynamodb';
 import fs from 'fs';
 import { describe, it } from 'mocha';
