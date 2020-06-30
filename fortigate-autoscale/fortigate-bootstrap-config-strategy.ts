@@ -278,6 +278,8 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
             this.settings.get(AwsFortiGateAutoscaleSetting.FortiGateSyncInterface).value || 'port1';
         const trafficPort =
             this.settings.get(AwsFortiGateAutoscaleSetting.FortiGateTrafficPort).value || '443';
+        const trafficProtocol =
+            this.settings.get(AwsFortiGateAutoscaleSetting.FortiGateTrafficProtocol).value || 'ALL';
         const adminPort =
             this.settings.get(AwsFortiGateAutoscaleSetting.FortiGateAdminPort).value || '8443';
         const intElbDns = this.settings.get(AwsFortiGateAutoscaleSetting.FortiGateInternalElbDns)
@@ -291,6 +293,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
             .replace(new RegExp('{INTERNAL_INTERFACE}', 'gm'), 'port2')
             .replace(new RegExp('{PSK_SECRET}', 'gm'), psksecret)
             .replace(new RegExp('{TRAFFIC_PORT}', 'gm'), trafficPort)
+            .replace(new RegExp('{TRAFFIC_PROTOCOL}', 'gm'), trafficProtocol.toUpperCase())
             .replace(new RegExp('{ADMIN_PORT}', 'gm'), adminPort)
             .replace(new RegExp('{INTERNAL_ELB_DNS}', 'gm'), intElbDns)
             .replace(new RegExp('{CALLBACK_URL}', 'gm'), hbCallbackUrl)
