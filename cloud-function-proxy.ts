@@ -13,7 +13,8 @@ export enum ReqType {
     TerminatedVm = 'TerminatedVm',
     BootstrapConfig = 'BootstrapConfig',
     HeartbeatSync = 'HeartbeatSync',
-    StatusMessage = 'StatusMessage'
+    StatusMessage = 'StatusMessage',
+    ServiceProviderRequest = 'ServiceProviderRequest'
 }
 
 export enum ReqMethod {

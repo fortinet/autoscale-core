@@ -1,30 +1,34 @@
 import { AutoscaleEnvironment } from '../../autoscale-environment';
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import {
-    PreferredGroupMasterElection,
-    ConstantIntervalHeartbeatSyncStrategy
+    ConstantIntervalHeartbeatSyncStrategy,
+    PreferredGroupMasterElection
 } from '../../context-strategy/autoscale-context';
+import { ReusableLicensingStrategy } from '../../context-strategy/licensing-context';
 import {
     NicAttachmentContext,
     NicAttachmentStrategy,
     NicAttachmentStrategyResult
 } from '../../context-strategy/nic-attachment-context';
 import {
+    NoopVpnAttachmentStrategy,
     VpnAttachmentStrategy,
-    VpnAttachmentStrategyResult,
-    NoopVpnAttachmentStrategy
+    VpnAttachmentStrategyResult
 } from '../../context-strategy/vpn-attachment-context';
 import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../../helper-function';
 import { FortiGateAutoscale } from '../fortigate-autoscale';
 import { FortiGateBootstrapConfigStrategy } from '../fortigate-bootstrap-config-strategy';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsPlatformAdapter, TransitGatewayContext } from './aws-platform-adapter';
-import { AwsNicAttachmentStrategy } from './aws-nic-attachment-strategy';
-import { AwsTgwVpnAttachmentStrategy } from './aws-tgw-vpn-attachment-strategy';
-import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strategy';
-import { AwsTaggingAutoscaleVmStrategy } from './aws-tagging-autoscale-vm-strategy';
 import { AwsFortiGateBootstrapTgwStrategy } from './aws-fortigate-bootstrap-config-strategy';
-import { ReusableLicensingStrategy } from '../../context-strategy/licensing-context';
+import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strategy';
+import { AwsNicAttachmentStrategy } from './aws-nic-attachment-strategy';
+import {
+    AwsPlatformAdapter,
+    TransitGatewayContext,
+    ScalingGroupState
+} from './aws-platform-adapter';
+import { AwsTaggingAutoscaleVmStrategy } from './aws-tagging-autoscale-vm-strategy';
+import { AwsTgwVpnAttachmentStrategy } from './aws-tgw-vpn-attachment-strategy';
 
 /**
  * AWS FortiGate Autoscale - class, with capabilities:
@@ -33,8 +37,8 @@ import { ReusableLicensingStrategy } from '../../context-strategy/licensing-cont
  * FortiGate hybrid licensing model
  * a secondary network interface
  */
-export class AwsFortiGateAutoscale<TReq, Tcontext, TRes>
-    extends FortiGateAutoscale<TReq, Tcontext, TRes>
+export class AwsFortiGateAutoscale<TReq, TContext, TRes>
+    extends FortiGateAutoscale<TReq, TContext, TRes>
     implements NicAttachmentContext, TransitGatewayContext {
     nicAttachmentStrategy: NicAttachmentStrategy;
     vpnAttachmentStrategy: VpnAttachmentStrategy;
@@ -126,6 +130,7 @@ export class AwsFortiGateAutoscale<TReq, Tcontext, TRes>
             return Promise.resolve(failureNum === 0);
         };
         try {
+            this.nicAttachmentStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
             await waitFor<number>(emitter, checker, 5000, this.proxy);
             this.proxy.logAsInfo('called cleanupUnusedNic');
             return NicAttachmentStrategyResult.Success;
@@ -151,6 +156,16 @@ export class AwsFortiGateAutoscale<TReq, Tcontext, TRes>
         const result = await this.vpnAttachmentStrategy.detach();
         this.proxy.logAsInfo('called handleVpnDetachment');
         return result;
+    }
+
+    async cleanupUnusedVpn(): Promise<VpnAttachmentStrategyResult> {
+        this.proxy.logAsInfo('calling cleanupUnusedVpn');
+        await this.vpnAttachmentStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
+        const errorCount = await this.vpnAttachmentStrategy.cleanup();
+        this.proxy.logAsInfo('called cleanupUnusedVpn');
+        return errorCount === 0
+            ? VpnAttachmentStrategyResult.Success
+            : VpnAttachmentStrategyResult.Failed;
     }
 
     /**
@@ -204,6 +219,45 @@ export class AwsFortiGateAutoscale<TReq, Tcontext, TRes>
         await super.handleTerminatingVm();
         return '';
     }
+
+    async stopScalingGroup(groupNames?: string[]): Promise<void> {
+        this.proxy.logAsInfo(
+            `calling stopScalingGroup (${(groupNames && groupNames.join(', ')) || 'unspecified'})`
+        );
+        const settings = await this.platform.getSettings();
+        if (!groupNames) {
+            groupNames = [
+                settings.get(AwsFortiGateAutoscaleSetting.ByolScalingGroupName).value,
+                settings.get(AwsFortiGateAutoscaleSetting.PaygScalingGroupName).value
+            ];
+            this.proxy.logAsInfo(
+                `added (${groupNames && groupNames.join(', ')}) to the group list.`
+            );
+        }
+        const emitter: WaitForPromiseEmitter<Map<string, ScalingGroupState>> = () => {
+            return this.platform.checkScalingGroupState(groupNames);
+        };
+        const checker: WaitForConditionChecker<Map<string, ScalingGroupState>> = (
+            stateMap,
+            callCount
+        ) => {
+            if (callCount > 12) {
+                throw new Error(`maximum amount of attempts ${callCount} have been reached.`);
+            }
+            const runningGroups = Array.from(stateMap.values()).filter(
+                state => state !== ScalingGroupState.Stopped
+            );
+            return Promise.resolve(runningGroups.length === 0);
+        };
+        // update each group and set cap and min size to 0 in order to fully stop the auto scaling group.
+        await Promise.all(
+            groupNames.map(name => {
+                return this.platform.updateScalingGroupSize(name, 0, 0);
+            })
+        );
+        await waitFor<Map<string, ScalingGroupState>>(emitter, checker, 5000, this.proxy);
+        this.proxy.logAsInfo(`called stopScalingGroup (${groupNames.join(', ')})`);
+    }
 }
 
 /**
@@ -214,9 +268,9 @@ export class AwsFortiGateAutoscale<TReq, Tcontext, TRes>
  * Single network interface
  * BGP VPN attachment for Transit Gateway Integration
  */
-export class AwsFortiGateAutoscaleTgw<TReq, Tcontext, TRes> extends AwsFortiGateAutoscale<
+export class AwsFortiGateAutoscaleTgw<TReq, TContext, TRes> extends AwsFortiGateAutoscale<
     TReq,
-    Tcontext,
+    TContext,
     TRes
 > {
     constructor(p: AwsPlatformAdapter, e: AutoscaleEnvironment, x: CloudFunctionProxyAdapter) {
