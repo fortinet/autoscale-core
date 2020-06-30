@@ -24,6 +24,7 @@ import { AwsTgwVpnAttachmentStrategy } from './aws-tgw-vpn-attachment-strategy';
 import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strategy';
 import { AwsTaggingAutoscaleVmStrategy } from './aws-tagging-autoscale-vm-strategy';
 import { AwsFortiGateBootstrapTgwStrategy } from './aws-fortigate-bootstrap-config-strategy';
+import { ReusableLicensingStrategy } from '../../context-strategy/licensing-context';
 
 /**
  * AWS FortiGate Autoscale - class, with capabilities:
@@ -55,6 +56,8 @@ export class AwsFortiGateAutoscale<TReq, Tcontext, TRes>
         this.setTaggingAutoscaleVmStrategy(new AwsTaggingAutoscaleVmStrategy());
         // use FortiGate bootstrap configuration strategy
         this.setBootstrapConfigurationStrategy(new FortiGateBootstrapConfigStrategy());
+        // use the Resuable licensing strategy
+        this.setLicensingStrategy(new ReusableLicensingStrategy());
         // use the secondary nic attachment strategy to create and attach an additional nic
         // during launching
         this.setNicAttachmentStrategy(new AwsNicAttachmentStrategy());

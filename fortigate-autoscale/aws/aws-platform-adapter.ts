@@ -1,7 +1,6 @@
 import { ExpressionAttributeValueMap } from 'aws-sdk/clients/dynamodb';
 import EC2 from 'aws-sdk/clients/ec2';
 import path from 'path';
-import process from 'process';
 
 import { Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
@@ -413,7 +412,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
 
     async getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord> {
         this.proxy.logAsInfo('calling getHealthCheckRecord');
-        const table = new AwsDBDef.AwsAutoscale(process.env.RESOURCE_TAG_PREFIX || '');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsAutoscale(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+        );
         const dbItem = await this.adaptee.getItemFromDb<AutoscaleDbItem>(table, [
             {
                 key: table.primaryKey.name,
@@ -467,7 +469,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     }
     async getMasterRecord(filters?: KeyValue[]): Promise<MasterRecord> {
         this.proxy.logAsInfo('calling getMasterRecord');
-        const table = new AwsDBDef.AwsMasterElection(process.env.RESOURCE_TAG_PREFIX || '');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsMasterElection(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+        );
         const filterExp: AwsDdbOperations = {
             Expression: ''
         };
@@ -509,7 +514,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     }
     async createHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
         this.proxy.logAsInfo('calling createHealthCheckRecord');
-        const table = new AwsDBDef.AwsAutoscale(process.env.RESOURCE_TAG_PREFIX || '');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsAutoscale(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+        );
         const [syncStateString] = Object.entries(HealthCheckSyncState)
             .filter(([, value]) => {
                 return rec.syncState === value;
@@ -535,7 +543,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     }
     async updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
         this.proxy.logAsInfo('calling updateHealthCheckRecord');
-        const table = new AwsDBDef.AwsAutoscale(process.env.RESOURCE_TAG_PREFIX || '');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsAutoscale(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+        );
         const [syncStateString] = Object.entries(HealthCheckSyncState)
             .filter(([, value]) => {
                 return rec.syncState === value;
@@ -562,7 +573,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async createMasterRecord(rec: MasterRecord, oldRec: MasterRecord | null): Promise<void> {
         this.proxy.log('calling createMasterRecord.', LogLevel.Log);
         try {
-            const table = new AwsDBDef.AwsMasterElection(process.env.RESOURCE_TAG_PREFIX || '');
+            const settings = await this.getSettings();
+            const table = new AwsDBDef.AwsMasterElection(
+                settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+            );
             const item: MasterElectionDbItem = {
                 id: rec.id,
                 scalingGroupName: rec.scalingGroupName,
@@ -658,7 +672,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 const algorithm = 'sha256';
                 const licenseFile: LicenseFile = {
                     fileName: blob.fileName,
-                    checksum: genChecksum(blob.content, algorithm),
+                    checksum: genChecksum(content, algorithm),
                     algorithm: algorithm,
                     content: content
                 };
@@ -669,8 +683,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
 
     async listLicenseStock(productName: string): Promise<LicenseStockRecord[]> {
         this.proxy.logAsInfo('calling listLicenseStock');
+        const settings = await this.getSettings();
         const table = new AwsDBDef.AwsLicenseStock(
-            this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
         const dbItems = await this.adaptee.listItemFromDb<LicenseStockDbItem>(table);
         const mapItems = dbItems
@@ -687,8 +702,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     }
     async listLicenseUsage(productName: string): Promise<LicenseUsageRecord[]> {
         this.proxy.logAsInfo('calling listLicenseUsage');
+        const settings = await this.getSettings();
         const table = new AwsDBDef.AwsLicenseUsage(
-            this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
         const dbItems = await this.adaptee.listItemFromDb<LicenseUsageDbItem>(table);
         const mapItems = dbItems
@@ -698,6 +714,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     fileName: item.fileName,
                     checksum: item.checksum,
                     algorithm: item.algorithm,
+                    productName: item.productName,
                     vmId: item.vmId,
                     scalingGroupName: item.scalingGroupName,
                     assignedTime: item.assignedTime,
@@ -709,15 +726,18 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     }
     async updateLicenseStock(records: LicenseStockRecord[]): Promise<void> {
         this.proxy.logAsInfo('calling updateLicenseStock');
+        const settings = await this.getSettings();
         const table = new AwsDBDef.AwsLicenseStock(
-            this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
+        // load all license stock records in the db
         const items = new Map<string, LicenseStockDbItem>(
             (await this.adaptee.listItemFromDb<LicenseStockDbItem>(table)).map(item => {
                 return [item.checksum, item];
             })
         );
         let errorCount = 0;
+        const stockRecordChecksums = Array.from(items.keys());
         await Promise.all(
             records.map(record => {
                 const item: LicenseStockDbItem = {
@@ -732,6 +752,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 let typeText: string;
                 // recrod exisit, update it
                 if (items.has(record.checksum)) {
+                    stockRecordChecksums.splice(stockRecordChecksums.indexOf(record.checksum), 1);
                     conditionExp.type = CreateOrUpdate.UpdateExisting;
                     typeText =
                         `update existing item (filename: ${record.fileName},` +
@@ -750,6 +771,19 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     });
             })
         );
+        // remove those records which don't have a corresponding license file.
+        await Promise.all(
+            stockRecordChecksums.map(checksum => {
+                const item = items.get(checksum);
+                return this.adaptee.deleteItemFromDb<LicenseStockDbItem>(table, item).catch(err => {
+                    this.proxy.logForError(
+                        `Failed to delete item (filename: ${item.fileName}) from db.`,
+                        err
+                    );
+                    errorCount++;
+                });
+            })
+        );
         if (errorCount > 0) {
             this.proxy.logAsInfo('called updateLicenseStock');
 
@@ -759,8 +793,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     }
     async updateLicenseUsage(records: LicenseUsageRecord[]): Promise<void> {
         this.proxy.logAsInfo('calling updateLicenseUsage');
+        const settings = await this.getSettings();
         const table = new AwsDBDef.AwsLicenseUsage(
-            this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
         const items = new Map<string, LicenseUsageDbItem>(
             (await this.adaptee.listItemFromDb<LicenseUsageDbItem>(table)).map(item => {
@@ -820,8 +855,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
 
     async listNicAttachmentRecord(): Promise<NicAttachmentRecord[]> {
         this.proxy.logAsInfo('calling listNicAttachmentRecord');
+        const settings = await this.getSettings();
         const table = new AwsDBDef.AwsNicAttachment(
-            this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
         const records = await this.adaptee.listItemFromDb<NicAttachmentDbItem>(table);
         const nicRecords: NicAttachmentRecord[] =
@@ -839,8 +875,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async updateNicAttachmentRecord(vmId: string, nicId: string, status: string): Promise<void> {
         this.proxy.logAsInfo('calling updateNicAttachmentRecord');
         try {
+            const settings = await this.getSettings();
             const table = new AwsDBDef.AwsNicAttachment(
-                this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
+                settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
             );
             const item: NicAttachmentDbItem = {
                 vmId: vmId,
@@ -862,8 +899,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async deleteNicAttachmentRecord(vmId: string, nicId: string): Promise<void> {
         this.proxy.logAsInfo('calling deleteNicAttachmentRecord');
         try {
+            const settings = await this.getSettings();
             const table = new AwsDBDef.AwsNicAttachment(
-                this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
+                settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
             );
             const item: NicAttachmentDbItem = {
                 vmId: vmId,
@@ -1067,7 +1105,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
 
     async getLifecycleItem(vmId: string): Promise<LifecycleItem | null> {
         this.proxy.logAsInfo('calling getLifecycleItem');
-        const table = new AwsDBDef.AwsLifecycleItem(process.env.RESOURCE_TAG_PREFIX || '');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsLifecycleItem(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+        );
         const dbItem = await this.adaptee.getItemFromDb<LifecycleItemDbItem>(table, [
             {
                 key: table.primaryKey.name,
@@ -1098,7 +1139,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     }
     async createLifecycleItem(item: LifecycleItem): Promise<void> {
         this.proxy.logAsInfo('calling createLifecycleItem');
-        const table = new AwsDBDef.AwsLifecycleItem(process.env.RESOURCE_TAG_PREFIX || '');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsLifecycleItem(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+        );
         // ASSERT: item is vliad
         const dbItem: LifecycleItemDbItem = {
             vmId: item.vmId,
@@ -1118,7 +1162,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     }
     async updateLifecycleItem(item: LifecycleItem): Promise<void> {
         this.proxy.logAsInfo('calling updateLifecycleItem');
-        const table = new AwsDBDef.AwsLifecycleItem(process.env.RESOURCE_TAG_PREFIX || '');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsLifecycleItem(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+        );
         // ASSERT: item is vliad
         const dbItem: LifecycleItemDbItem = {
             vmId: item.vmId,
@@ -1138,7 +1185,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     }
     async deleteLifecycleItem(vmId: string): Promise<void> {
         this.proxy.logAsInfo('calling deleteLifecycleItem');
-        const table = new AwsDBDef.AwsLifecycleItem(process.env.RESOURCE_TAG_PREFIX || '');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsLifecycleItem(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+        );
         const item: LifecycleItemDbItem = {
             vmId: vmId,
             // the value of the properties below aren't used.
@@ -1259,7 +1309,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
 
     async getTgwVpnAttachmentRecord(vmId: string, ip: string): Promise<TgwVpnAttachmentRecord> {
         this.proxy.logAsInfo('calling getTgwVpnAttachmentRecord');
-        const table = new AwsDBDef.AwsVpnAttachment(process.env.RESOURCE_TAG_PREFIX || '');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsVpnAttachment(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+        );
         const [record] = await (
             await this.adaptee.listItemFromDb<VpnAttachmentDbItem>(table)
         ).filter(item => {
@@ -1295,7 +1348,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         vpnConnectionId: string
     ): Promise<void> {
         this.proxy.logAsInfo('calling saveTgwVpnAttachmentRecord');
-        const table = new AwsDBDef.AwsVpnAttachment(process.env.RESOURCE_TAG_PREFIX || '');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsVpnAttachment(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+        );
         // ASSERT: item is vliad
         const dbItem: VpnAttachmentDbItem = {
             vmId: vmId,
@@ -1312,7 +1368,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
 
     async deleteAwsTgwVpnAttachmentRecord(vmId: string, ip: string): Promise<void> {
         this.proxy.logAsInfo('calling deleteAwsTgwVpnAttachmentRecord');
-        const table = new AwsDBDef.AwsVpnAttachment(process.env.RESOURCE_TAG_PREFIX || '');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsVpnAttachment(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+        );
         const item: VpnAttachmentDbItem = {
             vmId: vmId,
             ip: ip,

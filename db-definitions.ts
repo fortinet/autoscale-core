@@ -732,7 +732,7 @@ export abstract class LicenseUsage extends Table<LicenseUsageDbItem> {
             checksum: this.typeConvert.valueToString(record.checksum),
             fileName: this.typeConvert.valueToString(record.fileName),
             algorithm: this.typeConvert.valueToString(record.algorithm),
-            productName: this.typeConvert.valueToString(record.product),
+            productName: this.typeConvert.valueToString(record.productName),
             vmId: this.typeConvert.valueToString(record.vmId),
             scalingGroupName: this.typeConvert.valueToString(record.scalingGroupName),
             assignedTime: this.typeConvert.valueToNumber(record.assignedTime),
