@@ -68,6 +68,9 @@ export class AwsScheduledEventProxy extends CloudFunctionProxy<
     getRequestAsString(): string {
         return JSON.stringify(this.request);
     }
+    getRemainingExecutionTime(): number {
+        return this.context.getRemainingTimeInMillis();
+    }
 }
 
 export class AwsApiGatewayEventProxy extends CloudFunctionProxy<
@@ -131,6 +134,9 @@ export class AwsApiGatewayEventProxy extends CloudFunctionProxy<
     }
     getReqMethod(): ReqMethod {
         return mapHttpMethod(this.request.httpMethod);
+    }
+    getRemainingExecutionTime(): number {
+        return this.context.getRemainingTimeInMillis();
     }
 }
 
@@ -199,5 +205,8 @@ export class AwsCloudFormationCustomResourceEventProxy extends CloudFunctionProx
                 AwsCfnResponse.ResponseStatus.FAILED,
             data || {}
         );
+    }
+    getRemainingExecutionTime(): number {
+        return this.context.getRemainingTimeInMillis();
     }
 }

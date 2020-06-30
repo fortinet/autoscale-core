@@ -6,7 +6,10 @@ import { NicAttachmentStrategyResult } from '../../context-strategy/nic-attachme
 import { VpnAttachmentStrategyResult } from '../../context-strategy/vpn-attachment-context';
 import { AwsCloudFormationCustomResourceEventProxy } from './aws-cloud-function-proxy';
 import { AwsFortiGateAutoscale } from './aws-fortigate-autoscale';
-import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
+import {
+    AwsFortiGateAutoscaleSetting,
+    AwsFortiGateAutoscaleSettingItemDictionary
+} from './aws-fortigate-autoscale-settings';
 import { AwsPlatformAdapter } from './aws-platform-adapter';
 
 export type AwsFortiGateAutoscaleServiceEvent =
@@ -59,7 +62,6 @@ export class AwsFortiGateAutoscaleServiceProvider implements AutoscaleServicePro
     async handleServiceRequest(): Promise<void> {
         this.proxy.logAsInfo('calling handleServiceRequest');
         try {
-            await this.autoscale.init();
             const reqType: ReqType = await this.platform.getRequestType();
             const serviceEventType: string = this.proxy.getReqBody().RequestType;
             const serviceEvent: AwsFortiGateAutoscaleServiceEvent = {
@@ -77,6 +79,7 @@ export class AwsFortiGateAutoscaleServiceProvider implements AutoscaleServicePro
                         switch (serviceEvent.ServiceType) {
                             case 'initiateAutoscale':
                             case 'startAutoscale':
+                                await this.autoscale.init();
                                 await this.startAutoscale();
                                 break;
                             case 'saveSettings':
@@ -106,6 +109,7 @@ export class AwsFortiGateAutoscaleServiceProvider implements AutoscaleServicePro
                                 );
                                 break;
                             case 'stopAutoscale':
+                                await this.autoscale.init();
                                 await this.stopAutoscale();
                                 break;
                             case undefined:
@@ -240,7 +244,7 @@ export class AwsFortiGateAutoscaleServiceProvider implements AutoscaleServicePro
         const props: { [key: string]: string } = { ...event };
         delete props.ServiceToken;
         delete props.ServiceType;
-        await this.autoscale.saveSettings(props);
+        await this.autoscale.saveSettings(props, AwsFortiGateAutoscaleSettingItemDictionary);
         this.proxy.logAsInfo('called SaveAutoscaleSettings');
         return true;
     }

@@ -43,7 +43,9 @@ export class AwsTaggingAutoscaleVmStrategy implements TaggingVmStrategy {
             if (newMasterTagging) {
                 const vmIds: string[] = await this.platform.listMasterRoleVmId();
                 // delete Autoscale role tag from those vms
-                await this.platform.removeMasterRoleTag(vmIds);
+                if (vmIds.length > 0) {
+                    await this.platform.removeMasterRoleTag(vmIds);
+                }
             }
             // add necessary tags to each new vm.
             const ResTagPrefix = this.platform.settings.get(

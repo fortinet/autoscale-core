@@ -1,4 +1,3 @@
-import { ExpressionAttributeValueMap } from 'aws-sdk/clients/dynamodb';
 import EC2 from 'aws-sdk/clients/ec2';
 import path from 'path';
 
@@ -39,7 +38,7 @@ import {
     ResourceTag,
     TgwVpnAttachmentRecord
 } from '../../platform-adapter';
-import { NetworkInterface, VirtualMachine } from '../../virtual-machine';
+import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../../virtual-machine';
 import {
     AwsApiGatewayEventProxy,
     AwsCloudFormationCustomResourceEventProxy,
@@ -96,7 +95,7 @@ export interface AwsVpnConnection {
 
 export interface AwsDdbOperations {
     Expression: string;
-    ExpressionAttributeValues?: ExpressionAttributeValueMap;
+    ExpressionAttributeValues?: { [key: string]: string };
     type?: CreateOrUpdate;
 }
 
@@ -311,7 +310,6 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             AwsFortiGateAutoscaleSetting.FortiGateSyncInterface,
             AwsFortiGateAutoscaleSetting.FortiGateTrafficPort,
             AwsFortiGateAutoscaleSetting.FortiGateAdminPort,
-            AwsFortiGateAutoscaleSetting.FortiGateInternalElbDns,
             AwsFortiGateAutoscaleSetting.HeartbeatInterval,
             AwsFortiGateAutoscaleSetting.ByolScalingGroupName,
             AwsFortiGateAutoscaleSetting.PaygScalingGroupName
@@ -328,6 +326,11 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         scalingGroupName: string,
         enis?: EC2.NetworkInterface[]
     ): VirtualMachine {
+        const state: VirtualMachineState =
+            (instance.State === 'running' && VirtualMachineState.Running) ||
+            (instance.State === 'stopped' && VirtualMachineState.Stopped) ||
+            (instance.State === 'terminated' && VirtualMachineState.Terminated) ||
+            VirtualMachineState.Pending;
         const vm: VirtualMachine = {
             id: instance.InstanceId,
             scalingGroupName: scalingGroupName,
@@ -343,7 +346,8 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             }),
             networkInterfaces: (enis && enis.map(this.eniToNic)) || undefined,
             networkInterfaceIds: instance.NetworkInterfaces.map(eni => eni.NetworkInterfaceId),
-            sourceData: {}
+            sourceData: {},
+            state: state
         };
         Object.assign(vm.sourceData, instance);
         return vm;
@@ -364,24 +368,32 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     async getTargetVm(): Promise<VirtualMachine> {
         this.proxy.logAsInfo('calling getTargetVm');
         const instance = await this.adaptee.describeInstance(this.getReqVmId());
-        const byolGroupName = this.settings.get(AwsFortiGateAutoscaleSetting.ByolScalingGroupName)
-            .value;
-        const paygGroupName = this.settings.get(AwsFortiGateAutoscaleSetting.PaygScalingGroupName)
-            .value;
-        const scalingGroups = await this.adaptee.describeAutoScalingGroups([
-            byolGroupName,
-            paygGroupName
-        ]);
-        // get scaling group name
-        // ASSERT: the instance can only locate in 1 scaling group
-        const [scalingGroupName] = scalingGroups
-            .filter(group => {
-                return (
-                    group.Instances.filter(ins => ins.InstanceId === instance.InstanceId).length > 0
-                );
-            })
-            .map(group => group.AutoScalingGroupName);
-        const vm = this.instanceToVm(instance, scalingGroupName, instance.NetworkInterfaces);
+        let vm: VirtualMachine;
+        if (instance) {
+            const byolGroupName = this.settings.get(
+                AwsFortiGateAutoscaleSetting.ByolScalingGroupName
+            ).value;
+            const paygGroupName = this.settings.get(
+                AwsFortiGateAutoscaleSetting.PaygScalingGroupName
+            ).value;
+            const scalingGroups = await this.adaptee.describeAutoScalingGroups([
+                byolGroupName,
+                paygGroupName
+            ]);
+
+            // get scaling group name
+            // ASSERT: the instance can only locate in 1 scaling group
+            const [scalingGroupName] = scalingGroups
+                .filter(group => {
+                    return (
+                        group.Instances.filter(ins => ins.InstanceId === instance.InstanceId)
+                            .length > 0
+                    );
+                })
+                .map(group => group.AutoScalingGroupName);
+            vm = this.instanceToVm(instance, scalingGroupName, instance.NetworkInterfaces);
+        }
+
         this.proxy.logAsInfo('called getTargetVm');
         return vm;
     }
@@ -392,11 +404,14 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             return null;
         }
         const instance = await this.adaptee.describeInstance(masterRecord.vmId);
-        const vm = this.instanceToVm(
-            instance,
-            masterRecord.scalingGroupName,
-            instance.NetworkInterfaces
-        );
+        let vm: VirtualMachine;
+        if (instance) {
+            vm = this.instanceToVm(
+                instance,
+                masterRecord.scalingGroupName,
+                instance.NetworkInterfaces
+            );
+        }
         this.proxy.logAsInfo('called getMasterVm');
         return vm;
     }
@@ -451,8 +466,16 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             key: TAG_KEY_AUTOSCALE_ROLE,
             value: 'master'
         });
-        const instances = await this.adaptee.listInstancesByTags(tags);
-        return instances.map(instance => instance.InstanceId);
+        try {
+            const instances = await this.adaptee.listInstancesByTags(tags);
+            return instances.map(instance => instance.InstanceId);
+        } catch (error) {
+            if (error.code && error.code === 'InvalidParameterValue') {
+                return [];
+            } else {
+                throw error;
+            }
+        }
     }
 
     async getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord> {
@@ -641,12 +664,17 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             if (oldRec) {
                 conditionExp.Expression =
                     `${conditionExp.Expression} OR ` +
-                    `attribute_exists(scalingGroupName) AND id = '${oldRec.id}'`;
+                    'attribute_exists(scalingGroupName) AND id = :id';
+                conditionExp.ExpressionAttributeValues = {};
+                conditionExp.ExpressionAttributeValues[':id'] = oldRec.id;
             }
 
             await this.adaptee.saveItemToDb<MasterElectionDbItem>(table, item, conditionExp);
             this.proxy.logAsInfo('called createMasterRecord.');
         } catch (error) {
+            if (error.code && error.code === 'ConditionalCheckFailedException') {
+                this.proxy.logAsInfo('Master record exists');
+            }
             this.proxy.logForError('called createMasterRecord.', error);
             throw error;
         }
@@ -954,7 +982,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             };
             const conditionExp: AwsDdbOperations = {
                 Expression: '',
-                type: CreateOrUpdate.UpdateExisting
+                type: CreateOrUpdate.CreateOrReplace
             };
             await this.adaptee.saveItemToDb<NicAttachmentDbItem>(table, item, conditionExp);
         } catch (error) {
@@ -1033,10 +1061,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         }
         // attach nic
         const eni = await this.adaptee.describeNetworkInterface(nicId);
-        // eni is able to attach
+        // eni is able to attach ?
         if (['available', 'attaching', 'pending'].includes(eni.Status)) {
             // not attaching yet? attach it.
-            if (eni.Status === 'available') {
+            if (eni.Status === 'available' && !eni.Attachment) {
                 await this.adaptee.attachNetworkInterface(
                     vmId,
                     nicId,
@@ -1051,14 +1079,14 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 if (callCount > 12) {
                     throw new Error(`maximum amount of attempts ${callCount} have been reached.`);
                 }
-                if (nic.Status === 'attached') {
+                if (nic.Attachment.Status === 'attached') {
                     return Promise.resolve(true);
                 } else {
                     return Promise.resolve(false);
                 }
             };
             await waitFor<EC2.NetworkInterface>(emitter, checker, 5000, this.proxy);
-        } else if (eni.Status !== 'attached') {
+        } else {
             throw new Error(
                 `nic (id: ${nicId}) is in state '${eni.Status}'` + ' which cannot perform attaching'
             );
@@ -1131,8 +1159,29 @@ export class AwsPlatformAdapter implements PlatformAdapter {
 
     async updateVmSourceDestinationChecking(vmId: string, enable?: boolean): Promise<void> {
         this.proxy.logAsInfo('calling updateVmSourceDestinationChecking');
-        await this.adaptee.updateInstanceSrcDestChecking(vmId, enable);
+        const instance = await this.adaptee.describeInstance(vmId);
+        let results: boolean[] = [];
+        if (instance) {
+            results = await Promise.all(
+                instance.NetworkInterfaces.map(eni => {
+                    return this.adaptee
+                        .updateNetworkInterfaceSrcDestChecking(eni.NetworkInterfaceId, enable)
+                        .then(() => true)
+                        .catch(error => {
+                            this.proxy.logForError(
+                                'Failed to update source dest check on network ' +
+                                    `interface (id:${eni.NetworkInterfaceId}).`,
+                                error
+                            );
+                            return false;
+                        });
+                })
+            );
+        }
         this.proxy.logAsInfo('called updateVmSourceDestinationChecking');
+        if (results.filter(r => !r).length > 0) {
+            throw new Error('Failed to update source dest check. Please see the error log above.');
+        }
     }
     async loadBalancerAttachVm(elbId: string, vmIds: string[]): Promise<void> {
         this.proxy.logAsInfo('calling loadBalancerAttachVm');

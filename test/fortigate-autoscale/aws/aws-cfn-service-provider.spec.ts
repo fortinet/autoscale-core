@@ -311,8 +311,7 @@ describe('FortiGate Autoscale AWS CloudFormation service provider.', () => {
 
             const settingsToSave: { [key: string]: string } = {};
             Object.values({ ...AwsFortiGateAutoscaleSetting }).forEach(value => {
-                const settingKey = value.toLowerCase().replace(new RegExp('-', 'g'), '');
-                settingsToSave[settingKey] = value;
+                settingsToSave[value] = value;
                 return settingsToSave;
             });
 

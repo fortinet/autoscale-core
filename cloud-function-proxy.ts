@@ -56,6 +56,13 @@ export interface CloudFunctionProxyAdapter {
      */
     logForError(messagePrefix: string, error: Error): void;
     getRequestAsString(): string;
+    /**
+     * return the remaining execution time (in millisecond) of the current cloud function process.
+     *
+     * @returns {number}
+     * @memberof CloudFunctionProxyAdapter
+     */
+    getRemainingExecutionTime(): number;
 }
 
 export abstract class CloudFunctionProxy<TReq, TContext, TRes>
@@ -91,4 +98,5 @@ export abstract class CloudFunctionProxy<TReq, TContext, TRes>
         headers: {}
     ): TRes;
     abstract getRequestAsString(): string;
+    abstract getRemainingExecutionTime(): number;
 }
