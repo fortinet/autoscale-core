@@ -35,6 +35,10 @@ export type WaitForConditionChecker<TInput> = (
     ...args
 ) => Promise<boolean>;
 
+export enum WaitForMaxCount {
+    NoMaxCount = 0,
+    Count30 = 30
+}
 /**
  * A repeatedly running function that periodically takes a custom action, checks the result
  * against a condition, and stops once the condition is met.
@@ -47,8 +51,8 @@ export type WaitForConditionChecker<TInput> = (
  * @param {number} interval milliseconds interval between each calling emitter.
  * @param {CloudFunctionProxyAdapter} [proxy] a proxy (if provided) that prints logs withing the
  * waitFor process.
- * @param {number} maxCount a new max count to override the default max count (30). Set to 0 if you
- * prefer to control the stopping of this function by the condition checker and only.
+ * @param {WaitForMaxCount} maxCount a new max count to override the default max count (30).
+ * use NoMaxCount if you prefer to control the stopping of this function by the condition checker and only.
  * @returns {Promise<TResult>} the returning result of the emitter
  */
 export async function waitFor<TResult>(
@@ -56,10 +60,10 @@ export async function waitFor<TResult>(
     conditionChecker: WaitForConditionChecker<TResult>,
     interval: number,
     proxy?: CloudFunctionProxyAdapter,
-    maxCount?: number
+    maxCount?: WaitForMaxCount
 ): Promise<TResult> {
     let count = 0;
-    maxCount = (maxCount === undefined && 30) || maxCount;
+    maxCount = (maxCount === undefined && WaitForMaxCount.Count30) || maxCount;
     if (interval <= 0) {
         interval = 5000; // soft default to 5 seconds
     }
@@ -73,7 +77,7 @@ export async function waitFor<TResult>(
             result = await promiseEmitter();
             complete = await conditionChecker(result, ++count, proxy || undefined);
             if (!complete) {
-                if (maxCount > 0 && count >= maxCount) {
+                if (maxCount !== WaitForMaxCount.NoMaxCount && count >= maxCount) {
                     throw new Error(
                         `It reached the default maximum number (${maxCount}) of attempts.` +
                             'Providing a new maxCount or bypass it with setting maxCount to 0.'

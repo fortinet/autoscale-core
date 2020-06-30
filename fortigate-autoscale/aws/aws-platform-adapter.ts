@@ -5,7 +5,6 @@ import { Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
 import { CloudFunctionProxyAdapter, ReqMethod, ReqType } from '../../cloud-function-proxy';
 import { NicAttachmentRecord } from '../../context-strategy/nic-attachment-context';
-import { VpnAttachmentContext } from '../../context-strategy/vpn-attachment-context';
 import {
     AutoscaleDbItem,
     CreateOrUpdate,
@@ -42,56 +41,18 @@ import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../../vir
 import {
     AwsApiGatewayEventProxy,
     AwsCloudFormationCustomResourceEventProxy,
+    AwsLambdaInvocationProxy,
     AwsScheduledEventProxy
 } from './aws-cloud-function-proxy';
 import { LifecycleItemDbItem } from './aws-db-definitions';
 import * as AwsDBDef from './aws-db-definitions';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
+import { AwsLambdaInvocationPayload } from './aws-lambda-invocable';
 import { AwsPlatformAdaptee } from './aws-platform-adaptee';
+import { AwsVpnAttachmentState, AwsVpnConnection } from './transit-gateway-context';
 
 export const TAG_KEY_RESOURCE_GROUP = 'tag:ResourceGroup';
-export const TAG_KEY_AUTOSCALE_ROLE = 'AutoscaleRole';
-/**
- * created based on aws ec2 TransitGatewayPropagationState
- */
-export enum AwsTgwVpnPropagationState {
-    Enabled = 'enabled',
-    Enabling = 'enabling',
-    Disabled = 'disabled',
-    Disabling = 'disabling'
-}
-
-export enum AwsVpnAttachmentState {
-    Available = 'available',
-    Deleting = 'deleting',
-    Failed = 'failed',
-    Failing = 'failing',
-    Initiating = 'initiating',
-    Modifying = 'modifying',
-    PendingAcceptance = 'pendingAcceptance',
-    RollingBack = 'rollingBack',
-    Pending = 'pending',
-    Rejected = 'rejected',
-    Rejecting = 'rejecting'
-}
-
-/**
- * To provide AWS Transit Gateway integration related logics
- */
-export type TransitGatewayContext = VpnAttachmentContext;
-export interface AwsCustomerGateway {
-    id: string;
-    type: string;
-}
-
-export interface AwsVpnConnection {
-    vmId: string;
-    ip: string;
-    vpnConnectionId: string;
-    customerGatewayId: string;
-    transitGatewayId?: string;
-    transitGatewayAttachmentId?: string;
-}
+export const TAG_KEY_AUTOSCALE_ROLE = 'tag:AutoscaleRole';
 
 export interface AwsDdbOperations {
     Expression: string;
@@ -228,6 +189,8 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                         `ServiceToken: [${body.ServiceToken}]`
                 );
             }
+        } else if (this.proxy instanceof AwsLambdaInvocationProxy) {
+            return Promise.resolve(ReqType.CloudFunctionPeerInvocation);
         } else {
             throw new Error('Unsupported CloudFunctionProxy.');
         }
@@ -1384,6 +1347,13 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called deleteAwsCustomerGateway');
     }
 
+    async listAwsCustomerGatewayIdByTags(tags: ResourceTag[]): Promise<string[]> {
+        this.proxy.logAsInfo('calling listAwsCustomerGatewayIdByTags.');
+        const cgwList = await this.adaptee.listCustomerGatewayByTags(tags);
+        this.proxy.logAsInfo('called listAwsCustomerGatewayIdByTags.');
+        return cgwList.map(cgw => cgw.CustomerGatewayId).filter(id => !!id);
+    }
+
     async createAwsTgwVpnConnection(
         bgpAsn: number,
         publicIpv4: string,
@@ -1442,6 +1412,13 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called deleteAwsVpnConnection.');
     }
 
+    async listAwsVpnConnectionIdByTags(tags: ResourceTag[]): Promise<string[]> {
+        this.proxy.logAsInfo('calling listAwsVpnConnectionIdByTags.');
+        const vpnList = await this.adaptee.listVpnConnectionByTags(tags);
+        this.proxy.logAsInfo('called listAwsVpnConnectionIdByTags.');
+        return vpnList.map(vpn => vpn.VpnConnectionId).filter(id => !!id);
+    }
+
     async listTgwVpnAttachmentRecord(
         filters: { vmId: string; ip: string }[] = []
     ): Promise<TgwVpnAttachmentRecord[]> {
@@ -1488,7 +1465,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         return record;
     }
 
-    async saveAwsTgwVpnAttachmentRecord(
+    async saveTgwVpnAttachmentRecord(
         vmId: string,
         ip: string,
         vpnConnectionId: string
@@ -1512,8 +1489,8 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called saveTgwVpnAttachmentRecord');
     }
 
-    async deleteAwsTgwVpnAttachmentRecord(vmId: string, ip: string): Promise<void> {
-        this.proxy.logAsInfo('calling deleteAwsTgwVpnAttachmentRecord');
+    async deleteTgwVpnAttachmentRecord(vmId: string, ip: string): Promise<void> {
+        this.proxy.logAsInfo('calling deleteTgwVpnAttachmentRecord');
         const settings = await this.getSettings();
         const table = new AwsDBDef.AwsVpnAttachment(
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
@@ -1525,7 +1502,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         await this.adaptee.deleteItemFromDb<VpnAttachmentDbItem>(table, item);
 
-        this.proxy.logAsInfo('called deleteAwsTgwVpnAttachmentRecord');
+        this.proxy.logAsInfo('called deleteTgwVpnAttachmentRecord');
     }
 
     async updateTgwVpnAttachmentRouting(
@@ -1570,7 +1547,11 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const attachment = await this.adaptee.describeTgwAttachment(attachmentId);
         if (!attachment) {
             throw new Error(`Transit gateway vpn attachmnt (id: ${attachmentId}) not found.`);
-        } else if (!(attachment.State in AwsVpnAttachmentState)) {
+        } else if (
+            !Object.values(AwsVpnAttachmentState)
+                .map(s => s as string)
+                .includes(attachment.State)
+        ) {
             throw new Error(
                 'Unexpected transit gateway vpn attachment state: ' +
                     `${attachment.State} of attachment (id: ${attachmentId}).`
@@ -1601,23 +1582,26 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called removeMasterRoleTag.');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    invokeAutoscaleFunction(invokableFunction: string, parameters: { [key: string]: any }): void {
+    createAutoscaleFunctionInvocationKey(functionName: string, payload: JSONable): string {
+        this.proxy.logAsInfo(functionName);
+        this.proxy.logAsInfo(JSON.stringify(payload));
+        const psk = this.settings.get(AwsFortiGateAutoscaleSetting.FortiGatePskSecret).value;
+        return genChecksum(`${functionName}:${psk}:${JSON.stringify(payload)}`, 'sha256');
+    }
+
+    invokeAutoscaleFunction(invocable: string, parameters: JSONable): void {
         this.proxy.logAsInfo('calling invokeAwsLambda');
         const handlerName = this.settings.get(
             AwsFortiGateAutoscaleSetting.AwsTransitGatewayVpnHandlerName
         ).value;
-        const invocationSecretAccessKey = this.settings.get(
-            AwsFortiGateAutoscaleSetting.FortiGatePskSecret
-        ).value;
-        const payload = {
-            invokeMethod: invokableFunction,
-            invocationSecretKey: invocationSecretAccessKey
+        const secretKey = this.createAutoscaleFunctionInvocationKey(handlerName, parameters);
+        const payload: AwsLambdaInvocationPayload = {
+            invocable: invocable,
+            invocationSecretKey: secretKey
         };
         Object.assign(payload, parameters);
-        this.adaptee.invokeLambda(handlerName, JSON.stringify(payload)).then(() => {
-            this.proxy.logAsInfo('called invokeAwsLambda');
-        });
+        this.adaptee.invokeLambda(handlerName, JSON.stringify(payload));
+        this.proxy.logAsInfo('called invokeAwsLambda');
     }
 
     async updateScalingGroupSize(

@@ -1,5 +1,5 @@
 import { AutoscaleEnvironment } from '../../autoscale-environment';
-import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
+import { CloudFunctionProxyAdapter, ReqType } from '../../cloud-function-proxy';
 import {
     ConstantIntervalHeartbeatSyncStrategy,
     PreferredGroupMasterElection
@@ -23,15 +23,19 @@ import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings
 import { AwsFortiGateBootstrapTgwStrategy } from './aws-fortigate-bootstrap-config-strategy';
 import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strategy';
 import { AwsNicAttachmentStrategy } from './aws-nic-attachment-strategy';
-import {
-    AwsPlatformAdapter,
-    ScalingGroupState,
-    TransitGatewayContext
-} from './aws-platform-adapter';
+import { AwsPlatformAdapter, ScalingGroupState } from './aws-platform-adapter';
 import { AwsTaggingAutoscaleVmStrategy } from './aws-tagging-autoscale-vm-strategy';
 import { AwsTgwVpnAttachmentStrategy } from './aws-tgw-vpn-attachment-strategy';
+import {
+    TransitGatewayContext,
+    AwsTgwVpnUpdateAttachmentRouteTableRequest
+} from './transit-gateway-context';
+import { AwsLambdaInvocationPayload, AwsTgwLambdaInvocable } from './aws-lambda-invocable';
+import { JSONable } from '../../jsonable';
+import { AwsLambdaInvocationProxy } from './aws-cloud-function-proxy';
+import { Context } from 'aws-lambda';
 
-/**
+/** ./aws-fortigate-autoscale-lambda-invocable
  * AWS FortiGate Autoscale - class, with capabilities:
  * inherited capabilities and
  * FortiGate bootstrap configuration
@@ -280,6 +284,18 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         await this.scalingGroupStrategy.completeLaunching(true);
         await super.onVmFullyConfigured();
     }
+
+    async handleTgwAttachmentRouteTable(payload: JSONable): Promise<void> {
+        this.proxy.logAsInfo('calling handleTgwAttachmentRouteTable.');
+        const request: AwsTgwVpnUpdateAttachmentRouteTableRequest = {
+            attachmentId: payload.attachmentId as string
+        };
+        const strategy: AwsTgwVpnAttachmentStrategy = this
+            .vpnAttachmentStrategy as AwsTgwVpnAttachmentStrategy;
+        strategy.prepare(this.platform, this.proxy, null);
+        await strategy.updateTgwAttachmentRouteTable(request.attachmentId);
+        this.proxy.logAsInfo('called handleTgwAttachmentRouteTable.');
+    }
 }
 
 /**
@@ -301,5 +317,61 @@ export class AwsFortiGateAutoscaleTgw<TReq, TContext, TRes> extends AwsFortiGate
         this.setBootstrapConfigurationStrategy(new AwsFortiGateBootstrapTgwStrategy());
         // use AWS Transit Gateway VPN attachment strategy
         this.setVpnAttachmentStrategy(new AwsTgwVpnAttachmentStrategy());
+    }
+}
+
+export class AwsFortiGateAutoscaleLambdaInvocationHandler {
+    autoscale: AwsFortiGateAutoscale<JSONable, Context, void>;
+    constructor(autoscale: AwsFortiGateAutoscale<JSONable, Context, void>) {
+        this.autoscale = autoscale;
+    }
+    get proxy(): AwsLambdaInvocationProxy {
+        return this.autoscale.proxy as AwsLambdaInvocationProxy;
+    }
+
+    get platform(): AwsPlatformAdapter {
+        return this.autoscale.platform;
+    }
+
+    async handleLambdaPeerInvocation(): Promise<void> {
+        this.proxy.logAsInfo('calling handleLambdaPeerInvocation.');
+        try {
+            // init the platform. this step is important
+            await this.platform.init();
+            const requestType = await this.platform.getRequestType();
+            if (requestType === ReqType.CloudFunctionPeerInvocation) {
+                const proxy: AwsLambdaInvocationProxy = this.proxy as AwsLambdaInvocationProxy;
+                const body = proxy.getReqBody();
+                const payload: AwsLambdaInvocationPayload = {
+                    invocable: undefined,
+                    invocationSecretKey: undefined
+                };
+                if (!body) {
+                    throw new Error('Invalid request body.');
+                }
+                Object.assign(payload, proxy.getReqBody());
+                const invocable = payload.invocable;
+                const invocationSecretKey = payload.invocationSecretKey;
+                delete payload.invocable;
+                delete payload.invocationSecretKey;
+                const secretKey = this.platform.createAutoscaleFunctionInvocationKey(
+                    proxy.context.functionName,
+                    payload
+                );
+
+                // verify the invocation key
+                if (!invocationSecretKey || invocationSecretKey !== secretKey) {
+                    throw new Error('Invalid invocation payload: invocationSecretKey not matched');
+                }
+                if (invocable === AwsTgwLambdaInvocable.UpdateTgwAttachmentRoutTable) {
+                    await this.autoscale.handleTgwAttachmentRouteTable(payload);
+                }
+            }
+            this.proxy.logAsInfo('called handleLambdaPeerInvocation.');
+            return;
+        } catch (error) {
+            // ASSERT: error is always an instance of Error
+            this.proxy.logForError('called handleLambdaPeerInvocation.', error);
+        }
     }
 }

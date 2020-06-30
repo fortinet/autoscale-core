@@ -350,11 +350,10 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
     async listNetworkInterfacesByTags(tags: ResourceTag[]): Promise<EC2.NetworkInterface[]> {
         const request: EC2.DescribeNetworkInterfacesRequest = {
             Filters: tags.map(tag => {
-                const filter: EC2.Filter = {
-                    Name: `tag:${tag.key}`,
+                return {
+                    Name: tag.key,
                     Values: [tag.value]
                 };
-                return filter;
             })
         };
         const result = await this.ec2.describeNetworkInterfaces(request).promise();
@@ -553,6 +552,19 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         await this.ec2.deleteCustomerGateway(request).promise();
     }
 
+    async listCustomerGatewayByTags(tags: ResourceTag[]): Promise<EC2.CustomerGateway[]> {
+        const request: EC2.DescribeCustomerGatewaysRequest = {
+            Filters: tags.map(tag => {
+                return {
+                    Name: tag.key,
+                    Values: [tag.value]
+                };
+            })
+        };
+        const result = await this.ec2.describeCustomerGateways(request).promise();
+        return result.CustomerGateways || [];
+    }
+
     async createVpnConnection(
         vpnType: string,
         bgpAsn: number,
@@ -596,6 +608,19 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         const result = await this.ec2.describeVpnConnections(request).promise();
         const [connection] = result.VpnConnections;
         return connection;
+    }
+
+    async listVpnConnectionByTags(tags: ResourceTag[]): Promise<EC2.VpnConnection[]> {
+        const request: EC2.DescribeVpnConnectionsRequest = {
+            Filters: tags.map(tag => {
+                return {
+                    Name: tag.key,
+                    Values: [tag.value]
+                };
+            })
+        };
+        const result = await this.ec2.describeVpnConnections(request).promise();
+        return result.VpnConnections || [];
     }
 
     async describeTransitGatewayAttachment(

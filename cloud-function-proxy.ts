@@ -7,14 +7,15 @@ export enum LogLevel {
 }
 
 export enum ReqType {
-    LaunchingVm = 'LaunchingVm',
-    LaunchedVm = 'LaunchedVm',
-    TerminatingVm = 'TerminatingVm',
-    TerminatedVm = 'TerminatedVm',
     BootstrapConfig = 'BootstrapConfig',
+    CloudFunctionPeerInvocation = 'PeerFunctionInvocation',
     HeartbeatSync = 'HeartbeatSync',
+    LaunchedVm = 'LaunchedVm',
+    LaunchingVm = 'LaunchingVm',
+    ServiceProviderRequest = 'ServiceProviderRequest',
     StatusMessage = 'StatusMessage',
-    ServiceProviderRequest = 'ServiceProviderRequest'
+    TerminatedVm = 'TerminatedVm',
+    TerminatingVm = 'TerminatingVm'
 }
 
 export enum ReqMethod {

@@ -210,3 +210,65 @@ export class AwsCloudFormationCustomResourceEventProxy extends CloudFunctionProx
         return this.context.getRemainingTimeInMillis();
     }
 }
+
+export class AwsLambdaInvocationProxy extends CloudFunctionProxy<JSONable, Context, void> {
+    request: JSONable;
+    context: Context;
+    log(message: string, level: LogLevel): void {
+        switch (level) {
+            case LogLevel.Debug:
+                console.debug(message);
+                break;
+            case LogLevel.Error:
+                console.error(message);
+                break;
+            case LogLevel.Info:
+                console.info(message);
+                break;
+            case LogLevel.Warn:
+                console.warn(message);
+                break;
+            default:
+                console.log(message);
+        }
+    }
+
+    /**
+     * return a formatted AWS Lambda handler response
+     * @param  {number} httpStatusCode http status code
+     * @param  {CloudFunctionResponseBody} body response body
+     * @param  {{}} headers response header
+     */
+    formatResponse(
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        httpStatusCode: number,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        body: CloudFunctionResponseBody,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        headers: {}
+    ): {} {
+        throw new Error('Not supposed to call the formatResponse method in this implementation.');
+    }
+
+    getReqBody(): JSONable {
+        try {
+            if (typeof this.request === 'string') {
+                return JSON.parse(this.request as string);
+            } else if (typeof this.request === 'object') {
+                return this.request;
+            } else {
+                return null;
+            }
+        } catch (error) {
+            return null;
+        }
+    }
+
+    getRequestAsString(): string {
+        return JSON.stringify(this.request);
+    }
+
+    getRemainingExecutionTime(): number {
+        return this.context.getRemainingTimeInMillis();
+    }
+}
