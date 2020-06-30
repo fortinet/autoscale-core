@@ -176,9 +176,11 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
      * @override FortiGateAutoscale
      */
     async handleLaunchingVm(): Promise<string> {
+        this.proxy.logAsInfo('calling handleLaunchingVm');
         await super.handleLaunchingVm();
         this.env.targetVm = await this.platform.getTargetVm();
         const settings = await this.platform.getSettings();
+        const lifecycleItem = await this.platform.getLifecycleItem(this.env.targetVm.id);
         // handle nic attachment
         if (settings.get(AwsFortiGateAutoscaleSetting.EnableNic2).truthValue) {
             const nicAttachmentResult = await this.handleNicAttachment();
@@ -186,7 +188,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
                 // should abandon this lifecycle
                 // REVIEW: does abandonning the lifecycle hook trigger a terminating event fom the
                 // auto scaling group? so that it can go into the terminatingvm() workflow afterwards
-                const lifecycleItem = await this.platform.getLifecycleItem(this.env.targetVm.id);
+                this.proxy.logAsInfo('called handleLaunchingVm');
                 await this.platform.completeLifecycleAction(lifecycleItem, false);
                 return '';
             }
@@ -198,11 +200,14 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
                 // should abandon this lifecycle
                 // REVIEW: does abandonning the lifecycle hook trigger a terminating event fom the
                 // auto scaling group? so that it can go into the terminatingvm() workflow afterwards
-                const lifecycleItem = await this.platform.getLifecycleItem(this.env.targetVm.id);
                 await this.platform.completeLifecycleAction(lifecycleItem, false);
+                this.proxy.logAsInfo('called handleLaunchingVm');
                 return '';
             }
         }
+        // NOTE: do not need to complete the lifecycle hook here. When fgt is fully configured,
+        // it will complete the lifecycle hook.
+        this.proxy.logAsInfo('called handleLaunchingVm');
         return '';
     }
 
@@ -210,6 +215,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
      * @override FortiGateAutoscale
      */
     async handleTerminatingVm(): Promise<string> {
+        this.proxy.logAsInfo('calling handleTerminatingVm');
         this.env.targetVm = await this.platform.getTargetVm();
         const settings = await this.platform.getSettings();
         // handle nic detachment
@@ -221,6 +227,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
             await this.handleVpnDetachment();
         }
         await super.handleTerminatingVm();
+        this.proxy.logAsInfo('called handleTerminatingVm');
         return '';
     }
 
@@ -261,6 +268,17 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         );
         await waitFor<Map<string, ScalingGroupState>>(emitter, checker, 5000, this.proxy, 0);
         this.proxy.logAsInfo(`called stopScalingGroup (${groupNames.join(', ')})`);
+    }
+
+    /**
+     * @override FortiGateAutoscale
+     */
+    async onVmFullyConfigured(): Promise<void> {
+        // the 1st hb is also the indication of the the vm becoming in-service.
+        // complete the scaling group launching strategy
+        this.scalingGroupStrategy.prepare(this.platform, this.proxy);
+        await this.scalingGroupStrategy.completeLaunching(true);
+        await super.onVmFullyConfigured();
     }
 }
 
