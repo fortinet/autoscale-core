@@ -483,14 +483,17 @@ export class Autoscale implements AutoscaleCore {
             throw error;
         }
         const settings = await this.platform.getSettings();
-        let assetStorageDir = settings.get(AutoscaleSetting.CustomAssetContainer).value;
+        let customAssetContainer = settings.get(AutoscaleSetting.CustomAssetContainer).value;
         // assume to use the custom asset container as the storage directory for license files.
         // if such container isn't set, use the asset storage directory of the deployment stack.
-        if (!assetStorageDir) {
-            assetStorageDir = settings.get(AutoscaleSetting.AssetStorageDirectory).value;
+        const assetDirectory =
+            (customAssetContainer && settings.get(AutoscaleSetting.CustomAssetDirectory).value) ||
+            settings.get(AutoscaleSetting.AssetStorageDirectory).value;
+        if (!customAssetContainer) {
+            customAssetContainer = settings.get(AutoscaleSetting.AssetStorageDirectory).value;
         }
         const licenseDir: string = path.join(
-            assetStorageDir,
+            assetDirectory,
             settings.get(AutoscaleSetting.LicenseFileDirectory).value,
             productName
         );
@@ -499,7 +502,7 @@ export class Autoscale implements AutoscaleCore {
             this.proxy,
             this.env.targetVm,
             productName,
-            settings.get(AutoscaleSetting.AssetStorageContainer).value,
+            customAssetContainer || settings.get(AutoscaleSetting.AssetStorageContainer).value,
             licenseDir
         );
         let result: LicensingStrategyResult;
