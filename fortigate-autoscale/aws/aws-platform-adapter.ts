@@ -775,7 +775,8 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 return {
                     fileName: item.fileName,
                     checksum: item.checksum,
-                    algorithm: item.algorithm
+                    algorithm: item.algorithm,
+                    productName: item.productName
                 } as LicenseStockRecord;
             });
         this.proxy.logAsInfo('called listLicenseStock');
