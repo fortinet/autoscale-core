@@ -775,7 +775,8 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 return {
                     fileName: item.fileName,
                     checksum: item.checksum,
-                    algorithm: item.algorithm
+                    algorithm: item.algorithm,
+                    productName: item.productName
                 } as LicenseStockRecord;
             });
         this.proxy.logAsInfo('called listLicenseStock');
@@ -878,6 +879,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const table = new AwsDBDef.AwsLicenseUsage(
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
+        // get all records from the db as a snapshot
         const items = new Map<string, LicenseUsageDbItem>(
             (await this.adaptee.listItemFromDb<LicenseUsageDbItem>(table)).map(item => {
                 return [item.checksum, item];
@@ -900,30 +902,66 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     Expression: ''
                 };
                 let typeText: string;
-                // recrod exisit, update it
+                // update if record exists
                 if (items.has(record.checksum)) {
+                    const oldItem = items.get(record.checksum);
                     conditionExp.type = CreateOrUpdate.UpdateExisting;
+                    // the conditional expression ensures the consistency of the DB system (ACID)
+                    conditionExp.Expression =
+                        'attribute_exists(checksum) AND vmId = :vmId' +
+                        ' scalingGroupName = :scalingGroupName' +
+                        ' AND productName = :productName AND algorithm = :algorithm';
+                    conditionExp.ExpressionAttributeValues = {
+                        ':vmId': oldItem.vmId,
+                        ':scalingGroupName': oldItem.scalingGroupName,
+                        ':productName': oldItem.productName,
+                        ':algorithm': oldItem.algorithm
+                    };
                     typeText =
-                        `update existing item (filename: ${record.fileName},` +
-                        ` checksum: ${record.checksum})`;
-                } else {
-                    conditionExp.type = CreateOrUpdate.CreateOrReplace;
-                    typeText =
-                        `create new item (filename: ${record.fileName},` +
-                        ` checksum: ${record.checksum})`;
+                        `update existing item (checksum: ${oldItem.checksum}). ` +
+                        `Old values (filename: ${oldItem.fileName}, vmId: ${oldItem.vmId}, ` +
+                        `scalingGroupName: ${oldItem.scalingGroupName}, ` +
+                        `productName: ${oldItem.productName}, algorithm: ${oldItem.algorithm}).` +
+                        `New values (filename: ${item.fileName}, vmId: ${item.vmId}, ` +
+                        `scalingGroupName: ${item.scalingGroupName}, ` +
+                        `productName: ${item.productName}, algorithm: ${item.algorithm})`;
+                    return this.adaptee
+                        .saveItemToDb<LicenseUsageDbItem>(table, item, conditionExp)
+                        .then(() => {
+                            this.proxy.logAsInfo(typeText);
+                        })
+                        .catch(err => {
+                            this.proxy.logForError(`Failed to ${typeText}.`, err);
+                            errorCount++;
+                        });
                 }
-                return this.adaptee
-                    .saveItemToDb<LicenseUsageDbItem>(table, item, conditionExp)
-                    .catch(err => {
-                        this.proxy.logForError(`Failed to ${typeText}.`, err);
-                        errorCount++;
-                    });
+                // create if record not exists
+                else {
+                    conditionExp.type = CreateOrUpdate.CreateOrReplace;
+                    // the conditional expression ensures the consistency of the DB system (ACID)
+                    conditionExp.Expression = 'attribute_not_exists(checksum)';
+                    typeText =
+                        `create new item (checksum: ${record.checksum})` +
+                        `New values (filename: ${item.fileName}, vmId: ${item.vmId}, ` +
+                        `scalingGroupName: ${item.scalingGroupName}, ` +
+                        `productName: ${item.productName}, algorithm: ${item.algorithm})`;
+                    return this.adaptee
+                        .saveItemToDb<LicenseUsageDbItem>(table, item, conditionExp)
+                        .then(() => {
+                            this.proxy.logAsInfo(typeText);
+                        })
+                        .catch(err => {
+                            this.proxy.logForError(`Failed to ${typeText}.`, err);
+                            errorCount++;
+                        });
+                }
             })
         );
         if (errorCount > 0) {
             this.proxy.logAsInfo('called updateLicenseUsage');
-
-            throw new Error('updateLicenseUsage unsuccessfully.');
+            throw new Error(
+                `${errorCount} license usage record error occured. Please find the detailed logs above.`
+            );
         }
         this.proxy.logAsInfo('called updateLicenseUsage');
     }
