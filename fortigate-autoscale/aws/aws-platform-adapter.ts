@@ -628,12 +628,13 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 Expression: 'attribute_not_exists(scalingGroupName)',
                 type: CreateOrUpdate.CreateOrReplace
             };
+            // if specified an old rec to purge, use a strict conditional expression to replace.
             if (oldRec) {
-                conditionExp.Expression =
-                    `${conditionExp.Expression} OR ` +
-                    'attribute_exists(scalingGroupName) AND id = :id';
-                conditionExp.ExpressionAttributeValues = {};
-                conditionExp.ExpressionAttributeValues[':id'] = oldRec.id;
+                this.proxy.logAsInfo(`purging existing record (id: ${oldRec.id})`);
+                conditionExp.Expression = 'attribute_exists(scalingGroupName) AND id = :id';
+                conditionExp.ExpressionAttributeValues = {
+                    ':id': oldRec.id
+                };
             }
 
             await this.adaptee.saveItemToDb<MasterElectionDbItem>(table, item, conditionExp);
