@@ -8,7 +8,8 @@ import { ReusableLicensingStrategy } from '../../context-strategy/licensing-cont
 import {
     NicAttachmentContext,
     NicAttachmentStrategy,
-    NicAttachmentStrategyResult
+    NicAttachmentStrategyResult,
+    NoopNicAttachmentStrategy
 } from '../../context-strategy/nic-attachment-context';
 import {
     NoopVpnAttachmentStrategy,
@@ -317,6 +318,8 @@ export class AwsFortiGateAutoscaleTgw<TReq, TContext, TRes> extends AwsFortiGate
         this.setBootstrapConfigurationStrategy(new AwsFortiGateBootstrapTgwStrategy());
         // use AWS Transit Gateway VPN attachment strategy
         this.setVpnAttachmentStrategy(new AwsTgwVpnAttachmentStrategy());
+        // use Noop Nic attachment strategy
+        this.setNicAttachmentStrategy(new NoopNicAttachmentStrategy());
     }
 }
 
