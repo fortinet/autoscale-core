@@ -254,7 +254,7 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
             // pick the first one, lock the license in order to prevent it from being picked at the
             // same time, and return as unused license
             let index = 0;
-            const emitter: WaitForPromiseEmitter<LicenseStockRecord> = async () => {
+            const unusedLicenseEmitter: WaitForPromiseEmitter<LicenseStockRecord> = async () => {
                 const usageRecord: LicenseUsageRecord = {
                     fileName: unusedArray[index].fileName,
                     checksum: unusedArray[index].checksum,
@@ -269,7 +269,7 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
                 return result && unusedArray[index];
             };
 
-            const checker: WaitForConditionChecker<LicenseStockRecord> = rec => {
+            const unusedLicenseChecker: WaitForConditionChecker<LicenseStockRecord> = rec => {
                 if (rec) {
                     return Promise.resolve(true);
                 } else if (index < unusedArray.length - 1) {
@@ -285,8 +285,8 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
 
             try {
                 licenseStockRecord = await waitFor<LicenseStockRecord>(
-                    emitter,
-                    checker,
+                    unusedLicenseEmitter,
+                    unusedLicenseChecker,
                     5000,
                     this.proxy
                 );
@@ -311,7 +311,7 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
             // set a loop to pick the next available license by updating the usage record
             // if sucessfully updated one record, that record can then be used.
             let maxTries = 0;
-            const emitter1: WaitForPromiseEmitter<LicenseUsageRecord> = async () => {
+            const usedLicenseEmitter: WaitForPromiseEmitter<LicenseUsageRecord> = async () => {
                 outOfSyncArray = await this.listOutOfSyncRecord();
                 // determine the maximum number of tries before giving up
                 maxTries = Math.max(maxTries, outOfSyncArray.length);
@@ -322,7 +322,10 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
                     null
                 );
             };
-            const checker1: WaitForConditionChecker<LicenseUsageRecord> = (rec, callCount) => {
+            const usedLicenseChecker: WaitForConditionChecker<LicenseUsageRecord> = (
+                rec,
+                callCount
+            ) => {
                 if (rec) {
                     return Promise.resolve(true);
                 } else if (outOfSyncArray.length === 0) {
@@ -334,8 +337,8 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
                 }
             };
             const licenseRecord = await waitFor<LicenseUsageRecord>(
-                emitter1,
-                checker1,
+                usedLicenseEmitter,
+                usedLicenseChecker,
                 5000,
                 this.proxy
             );
