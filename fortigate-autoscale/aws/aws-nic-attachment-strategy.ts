@@ -178,10 +178,6 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
                 value: tagPrefix
             },
             {
-                key: 'Name',
-                value: `${tagPrefix}-fortigate-autoscale-instance-nic2`
-            },
-            {
                 key: 'tag:ResourceGroup',
                 value: tagPrefix
             }
@@ -192,6 +188,10 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
         // tag the nic
         try {
             const tags = await this.tags();
+            tags.push({
+                key: 'Name',
+                value: 'fortigate-autoscale-instance-nic2'
+            });
             await this.platform.tagNetworkInterface(nic.id, tags);
         } catch (error) {
             this.proxy.logAsError(`faild to add tag to nic(id: ${nic.id})`);
