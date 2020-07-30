@@ -144,3 +144,10 @@ export const compare = (anyA: any): { isEqualTo: (anyB: any) => boolean } => {
         }
     };
 };
+
+export function isIpV4(input: string, includeHostAddress = true): boolean {
+    const host = (includeHostAddress && '{1}') || '?';
+    const exp = `^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]).){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(/([0-9]|[1-2][0-9]|3[0-2]))${host}$`;
+    const matches = input.match(new RegExp(exp, 'i'));
+    return matches && matches[0] === input;
+}

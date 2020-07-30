@@ -11,6 +11,7 @@ import { PlatformAdapter } from '../platform-adapter';
 import { CloudFunctionProxyAdapter, LogLevel } from '../cloud-function-proxy';
 import { VirtualMachine } from '../virtual-machine';
 import { waitFor, WaitForPromiseEmitter, WaitForConditionChecker } from '../helper-function';
+import { AutoscaleEnvironment } from '../autoscale-environment';
 
 /**
  * To provide Autoscale basic logics
@@ -22,6 +23,8 @@ export interface AutoscaleContext {
     handleHeartbeatSync(): Promise<string>;
     setTaggingAutoscaleVmStrategy(strategy: TaggingVmStrategy): void;
     handleTaggingAutoscaleVm(taggings: VmTagging[]): Promise<void>;
+    setRoutingEgressTrafficStrategy(strategy: RoutingEgressTrafficStrategy): void;
+    handleEgressTrafficRoute(): Promise<void>;
     onVmFullyConfigured(): Promise<void>;
 }
 
@@ -390,6 +393,15 @@ export interface TaggingVmStrategy {
     apply(): Promise<void>;
 }
 
+export interface RoutingEgressTrafficStrategy {
+    prepare(
+        platform: PlatformAdapter,
+        proxy: CloudFunctionProxyAdapter,
+        env: AutoscaleEnvironment
+    ): Promise<void>;
+    apply(): Promise<void>;
+}
+
 export class NoopTaggingVmStrategy implements TaggingVmStrategy {
     private proxy: CloudFunctionProxyAdapter;
     prepare(
@@ -405,6 +417,25 @@ export class NoopTaggingVmStrategy implements TaggingVmStrategy {
     apply(): Promise<void> {
         this.proxy.logAsInfo('calling NoopTaggingVmStrategy.apply.');
         this.proxy.logAsInfo('called NoopTaggingVmStrategy.apply.');
+        return Promise.resolve();
+    }
+}
+
+export class NoopRoutingEgressTrafficStrategy implements RoutingEgressTrafficStrategy {
+    private proxy: CloudFunctionProxyAdapter;
+    prepare(
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        platform: PlatformAdapter,
+        proxy: CloudFunctionProxyAdapter,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        env: AutoscaleEnvironment
+    ): Promise<void> {
+        this.proxy = proxy;
+        return Promise.resolve();
+    }
+    apply(): Promise<void> {
+        this.proxy.logAsInfo('calling NoopRoutingEgressTrafficStrategy.apply.');
+        this.proxy.logAsInfo('called NoopRoutingEgressTrafficStrategy.apply.');
         return Promise.resolve();
     }
 }

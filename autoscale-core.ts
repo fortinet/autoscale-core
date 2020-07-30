@@ -8,7 +8,8 @@ import {
     HeartbeatSyncStrategy,
     MasterElectionStrategy,
     TaggingVmStrategy,
-    VmTagging
+    VmTagging,
+    RoutingEgressTrafficStrategy
 } from './context-strategy/autoscale-context';
 import {
     LicensingModelContext,
@@ -110,6 +111,7 @@ export class Autoscale implements AutoscaleCore {
     env: AutoscaleEnvironment;
     settings: Settings;
     taggingAutoscaleVmStrategy: TaggingVmStrategy;
+    routingEgressTrafficStrategy: RoutingEgressTrafficStrategy;
     scalingGroupStrategy: ScalingGroupStrategy;
     heartbeatSyncStrategy: HeartbeatSyncStrategy;
     masterElectionStrategy: MasterElectionStrategy;
@@ -130,6 +132,9 @@ export class Autoscale implements AutoscaleCore {
     }
     setTaggingAutoscaleVmStrategy(strategy: TaggingVmStrategy): void {
         this.taggingAutoscaleVmStrategy = strategy;
+    }
+    setRoutingEgressTrafficStrategy(strategy: RoutingEgressTrafficStrategy): void {
+        this.routingEgressTrafficStrategy = strategy;
     }
     setLicensingStrategy(strategy: LicensingStrategy): void {
         this.licensingStrategy = strategy;
@@ -266,9 +271,6 @@ export class Autoscale implements AutoscaleCore {
 
         const masterElection = await this.handleMasterElection();
 
-        // TODO: need to update egress traffic route when master role has changed.
-        // egress traffic route table is set in in EgressTrafficRouteTableList
-
         // handle unhealthy vm
 
         // target not healthy?
@@ -344,6 +346,12 @@ export class Autoscale implements AutoscaleCore {
         ) {
             needToUpdateHealthCheckRecord = true;
             updatedMasterIp = masterElection.oldMaster.primaryPrivateIpAddress;
+        }
+
+        if (masterElection.newMaster) {
+            // need to update egress traffic route when master role has changed.
+            // egress traffic route table is set in in EgressTrafficRouteTableList
+            await this.handleEgressTrafficRoute();
         }
 
         // need to update the health check record again due to master ip changes.
@@ -577,6 +585,13 @@ export class Autoscale implements AutoscaleCore {
     onVmFullyConfigured(): Promise<void> {
         this.proxy.logAsInfo(`Vm (id: ${this.env.targetVm.id}) is fully configured.`);
         return Promise.resolve();
+    }
+
+    async handleEgressTrafficRoute(): Promise<void> {
+        this.proxy.logAsInfo('calling handleEgressTrafficRoute.');
+        this.routingEgressTrafficStrategy.prepare(this.platform, this.proxy, this.env);
+        await this.routingEgressTrafficStrategy.apply();
+        this.proxy.logAsInfo('called handleEgressTrafficRoute.');
     }
 }
 

@@ -1753,4 +1753,36 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             throw error;
         }
     }
+
+    async updateVpcRouteTableRoute(
+        routeTableId: string,
+        destination: string,
+        nicId: string
+    ): Promise<boolean> {
+        // try create-route first
+        try {
+            await this.adaptee.createVpcRouteTableRoute(routeTableId, destination, nicId);
+            return true;
+        } catch (error) {
+            // if failed bacause of existing route
+            // TODO: check the error details for whether it is because of exsting route or not
+            // in order to run replace-route or throw error
+        }
+
+        try {
+            this.proxy.logAsWarning(
+                `Existing route detected. routeTableId: ${routeTableId}` +
+                    `, destination: ${destination}. Trying to replace this route.`
+            );
+            await this.adaptee.replaceVpcRouteTableRoute(routeTableId, destination, nicId);
+            return true;
+        } catch (error) {
+            this.proxy.logForError(
+                `Cannot replace route in route table. routeTableId: ${routeTableId}` +
+                    `, destination: ${destination}.`,
+                error
+            );
+            return false;
+        }
+    }
 }

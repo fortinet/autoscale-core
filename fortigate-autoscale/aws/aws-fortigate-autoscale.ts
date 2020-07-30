@@ -2,7 +2,8 @@ import { AutoscaleEnvironment } from '../../autoscale-environment';
 import { CloudFunctionProxyAdapter, ReqType } from '../../cloud-function-proxy';
 import {
     ConstantIntervalHeartbeatSyncStrategy,
-    PreferredGroupMasterElection
+    PreferredGroupMasterElection,
+    NoopRoutingEgressTrafficStrategy
 } from '../../context-strategy/autoscale-context';
 import { ReusableLicensingStrategy } from '../../context-strategy/licensing-context';
 import {
@@ -35,6 +36,7 @@ import { AwsLambdaInvocationPayload, AwsTgwLambdaInvocable } from './aws-lambda-
 import { JSONable } from '../../jsonable';
 import { AwsLambdaInvocationProxy } from './aws-cloud-function-proxy';
 import { Context } from 'aws-lambda';
+import { AwsRoutingEgressTrafficViaMasterVmStrategy } from './aws-routing-egress-traffic-via-master-vm-strategy';
 
 /** ./aws-fortigate-autoscale-lambda-invocable
  * AWS FortiGate Autoscale - class, with capabilities:
@@ -73,6 +75,8 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         this.setNicAttachmentStrategy(new AwsNicAttachmentStrategy());
         // use Noop vpn attachment strategy
         this.setVpnAttachmentStrategy(new NoopVpnAttachmentStrategy());
+        // use the routing egress traffic via master vm strategy
+        this.setRoutingEgressTrafficStrategy(new AwsRoutingEgressTrafficViaMasterVmStrategy());
     }
     setNicAttachmentStrategy(strategy: NicAttachmentStrategy): void {
         this.nicAttachmentStrategy = strategy;
@@ -320,6 +324,8 @@ export class AwsFortiGateAutoscaleTgw<TReq, TContext, TRes> extends AwsFortiGate
         this.setVpnAttachmentStrategy(new AwsTgwVpnAttachmentStrategy());
         // use Noop Nic attachment strategy
         this.setNicAttachmentStrategy(new NoopNicAttachmentStrategy());
+        // use the Noop routing egress traffic strategy
+        this.setRoutingEgressTrafficStrategy(new NoopRoutingEgressTrafficStrategy());
     }
 }
 
