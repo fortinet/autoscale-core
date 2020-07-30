@@ -743,4 +743,31 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         }
         await this.autoscaling.updateAutoScalingGroup(request).promise();
     }
+
+    async createVpcRouteTableRoute(
+        routeTableId: string,
+        destination: string,
+        nicId
+    ): Promise<EC2.CreateRouteResult> {
+        const request: EC2.CreateRouteRequest = {
+            DestinationCidrBlock: destination,
+            RouteTableId: routeTableId,
+            NetworkInterfaceId: nicId
+        };
+        return await this.ec2.createRoute(request).promise();
+    }
+
+    async replaceVpcRouteTableRoute(
+        routeTableId: string,
+        destination: string,
+        nicId
+    ): Promise<boolean> {
+        const request: EC2.ReplaceRouteRequest = {
+            DestinationCidrBlock: destination,
+            RouteTableId: routeTableId,
+            NetworkInterfaceId: nicId
+        };
+        const result = await this.ec2.replaceRoute(request).promise();
+        return JSON.stringify(result) === '{}';
+    }
 }
