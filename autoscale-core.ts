@@ -349,6 +349,16 @@ export class Autoscale implements AutoscaleCore {
         }
 
         if (masterElection.newMaster) {
+            // add master tag to the new master
+            const vmTaggings: VmTagging[] = [
+                {
+                    vmId: masterElection.newMaster.id,
+                    newVm: false, // ASSERT: vm making heartbeat sync request isn't a new vm
+                    newMasterRole: true
+                }
+            ];
+            await this.handleTaggingAutoscaleVm(vmTaggings);
+
             // need to update egress traffic route when master role has changed.
             // egress traffic route table is set in in EgressTrafficRouteTableList
             await this.handleEgressTrafficRoute();
