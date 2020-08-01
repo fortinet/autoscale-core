@@ -19,7 +19,7 @@ import { PlatformAdaptee } from '../../autoscale-core';
 import { SettingItem, Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
 import { CreateOrUpdate, KeyValue, SettingsDbItem, Table } from '../../db-definitions';
-import { ResourceTag } from '../../platform-adapter';
+import { ResourceFilter } from '../../platform-adapter';
 import * as AwsDBDef from './aws-db-definitions';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsDdbOperations } from './aws-platform-adapter';
@@ -273,16 +273,18 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         }
     }
 
-    async listInstancesByTags(tags: ResourceTag[]): Promise<EC2.Instance[]> {
+    async listInstances(filters: ResourceFilter[]): Promise<EC2.Instance[]> {
         const request: EC2.DescribeInstancesRequest = {
-            Filters: tags.map(tag => {
+            Filters: filters.map(filter => {
                 return {
-                    Name: tag.key,
-                    Values: [tag.value]
+                    Name: filter.isTag ? `tag:${filter.key}` : filter.key,
+                    Values: [filter.value]
                 };
             })
         };
+        console.log(`listInstances request: ${JSON.stringify(request)}`);
         const result = await this.ec2.describeInstances(request).promise();
+        console.log(`listInstances result: ${JSON.stringify(result)}`);
         const instances: Map<string, EC2.Instance> = new Map();
         result.Reservations.forEach(reservation => {
             reservation.Instances.forEach(instance => {
@@ -291,6 +293,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 }
             });
         });
+        console.log(`listInstances instances: ${JSON.stringify(instances.values())}`);
         return Array.from(instances.values());
     }
 
@@ -307,11 +310,11 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
     }
 
     async describeInstance(instanceId: string): Promise<EC2.Instance> {
-        const tag: ResourceTag = {
+        const filter: ResourceFilter = {
             key: 'instance-id',
             value: instanceId
         };
-        const instances = await this.listInstancesByTags([tag]);
+        const instances = await this.listInstances([filter]);
         return instances.find(instance => instance.InstanceId === instanceId);
     }
 
@@ -349,12 +352,12 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         await this.ec2.deleteNetworkInterface(request).promise();
     }
 
-    async listNetworkInterfacesByTags(tags: ResourceTag[]): Promise<EC2.NetworkInterface[]> {
+    async listNetworkInterfaces(filters: ResourceFilter[]): Promise<EC2.NetworkInterface[]> {
         const request: EC2.DescribeNetworkInterfacesRequest = {
-            Filters: tags.map(tag => {
+            Filters: filters.map(filter => {
                 return {
-                    Name: tag.key,
-                    Values: [tag.value]
+                    Name: filter.isTag ? `tag:${filter.key}` : filter.key,
+                    Values: [filter.value]
                 };
             })
         };
@@ -363,11 +366,11 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
     }
 
     async listNetworkInterfacesByInstanceId(instanceId: string): Promise<EC2.NetworkInterface[]> {
-        const tag: ResourceTag = {
+        const filter: ResourceFilter = {
             key: 'attachment.instance-id',
             value: instanceId
         };
-        return await this.listNetworkInterfacesByTags([tag]);
+        return await this.listNetworkInterfaces([filter]);
     }
 
     async listNetworkInterfacesById(nicIds: string[]): Promise<EC2.NetworkInterface[]> {
@@ -420,7 +423,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         await this.ec2.detachNetworkInterface(request).promise();
     }
 
-    async tagResource(resIds: string[], tags: ResourceTag[]): Promise<void> {
+    async tagResource(resIds: string[], tags: ResourceFilter[]): Promise<void> {
         const request: EC2.CreateTagsRequest = {
             Resources: resIds,
             Tags: tags.map(tag => {
@@ -429,7 +432,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         };
         await this.ec2.createTags(request).promise();
     }
-    async untagResource(resIds: string[], tags: ResourceTag[]): Promise<void> {
+    async untagResource(resIds: string[], tags: ResourceFilter[]): Promise<void> {
         const request: EC2.DeleteTagsRequest = {
             Resources: resIds,
             Tags: tags.map(tag => {
@@ -554,12 +557,12 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         await this.ec2.deleteCustomerGateway(request).promise();
     }
 
-    async listCustomerGatewayByTags(tags: ResourceTag[]): Promise<EC2.CustomerGateway[]> {
+    async listCustomerGateways(filters: ResourceFilter[]): Promise<EC2.CustomerGateway[]> {
         const request: EC2.DescribeCustomerGatewaysRequest = {
-            Filters: tags.map(tag => {
+            Filters: filters.map(filter => {
                 return {
-                    Name: tag.key,
-                    Values: [tag.value]
+                    Name: filter.isTag ? `tag:${filter.key}` : filter.key,
+                    Values: [filter.value]
                 };
             })
         };
@@ -612,12 +615,12 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         return connection;
     }
 
-    async listVpnConnectionByTags(tags: ResourceTag[]): Promise<EC2.VpnConnection[]> {
+    async listVpnConnections(filters: ResourceFilter[]): Promise<EC2.VpnConnection[]> {
         const request: EC2.DescribeVpnConnectionsRequest = {
-            Filters: tags.map(tag => {
+            Filters: filters.map(filter => {
                 return {
-                    Name: tag.key,
-                    Values: [tag.value]
+                    Name: filter.isTag ? `tag:${filter.key}` : filter.key,
+                    Values: [filter.value]
                 };
             })
         };

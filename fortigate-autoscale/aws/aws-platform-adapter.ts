@@ -34,7 +34,7 @@ import {
     LicenseStockRecord,
     LicenseUsageRecord,
     PlatformAdapter,
-    ResourceTag,
+    ResourceFilter,
     TgwVpnAttachmentRecord
 } from '../../platform-adapter';
 import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../../virtual-machine';
@@ -51,8 +51,8 @@ import { AwsLambdaInvocationPayload } from './aws-lambda-invocable';
 import { AwsPlatformAdaptee } from './aws-platform-adaptee';
 import { AwsVpnAttachmentState, AwsVpnConnection } from './transit-gateway-context';
 
-export const TAG_KEY_RESOURCE_GROUP = 'tag:ResourceGroup';
-export const TAG_KEY_AUTOSCALE_ROLE = 'tag:AutoscaleRole';
+export const TAG_KEY_RESOURCE_GROUP = 'ResourceGroup';
+export const TAG_KEY_AUTOSCALE_ROLE = 'AutoscaleRole';
 
 export interface AwsDdbOperations {
     Expression: string;
@@ -388,11 +388,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         listNic?: boolean
     ): Promise<VirtualMachine[]> {
         this.proxy.logAsInfo('calling listAutoscaleVm');
-        const tag: ResourceTag = {
+        const filter: ResourceFilter = {
             key: TAG_KEY_RESOURCE_GROUP,
-            value: this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
+            value: this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value,
+            isTag: true
         };
-        const instances = await this.adaptee.listInstancesByTags([tag]);
+        const instances = await this.adaptee.listInstances([filter]);
         let scalingGroupMap = new Map<string, string>();
         if (identifyScalingGroup) {
             scalingGroupMap = await this.adaptee.identifyInstanceScalingGroup(
@@ -422,21 +423,24 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     }
 
     async listMasterRoleVmId(): Promise<string[]> {
-        const tags: ResourceTag[] = [];
+        const filters: ResourceFilter[] = [];
         // list vm with resource group tag
-        tags.push({
+        filters.push({
             key: TAG_KEY_RESOURCE_GROUP,
-            value: this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
+            value: this.settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value,
+            isTag: true
         });
         // list vm with autoscale role tag
-        tags.push({
+        filters.push({
             key: TAG_KEY_AUTOSCALE_ROLE,
-            value: 'master'
+            value: 'master',
+            isTag: true
         });
         try {
-            const instances = await this.adaptee.listInstancesByTags(tags);
+            const instances = await this.adaptee.listInstances(filters);
             return instances.map(instance => instance.InstanceId);
         } catch (error) {
+            this.proxy.logAsDebug(`listMasterRoleVmId Error: ${JSON.stringify(error)}`);
             if (error.code && error.code === 'InvalidParameterValue') {
                 return [];
             } else {
@@ -1155,9 +1159,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         }
         this.proxy.logAsInfo('called detachNetworkInterface');
     }
-    async listNetworkInterface(tags: ResourceTag[], status?: string): Promise<NetworkInterface[]> {
-        this.proxy.logAsInfo('calling listNetworkInterface');
-        const enis = await this.adaptee.listNetworkInterfacesByTags(tags);
+    async listNetworkInterfaces(
+        filters: ResourceFilter[],
+        status?: string
+    ): Promise<NetworkInterface[]> {
+        this.proxy.logAsInfo('calling listNetworkInterfaces');
+        const enis = await this.adaptee.listNetworkInterfaces(filters);
         const nics: NetworkInterface[] = enis
             .filter(e => status === undefined || e.Status === status)
             .map(eni => {
@@ -1171,11 +1178,11 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 };
                 return nic;
             });
-        this.proxy.logAsInfo('called listNetworkInterface');
+        this.proxy.logAsInfo('called listNetworkInterfaces');
         return nics;
     }
 
-    async tagNetworkInterface(nicId: string, tags: ResourceTag[]): Promise<void> {
+    async tagNetworkInterface(nicId: string, tags: ResourceFilter[]): Promise<void> {
         this.proxy.logAsInfo('calling tagNetworkInterface');
         await this.adaptee.tagResource([nicId], tags);
         this.proxy.logAsInfo('called tagNetworkInterface');
@@ -1394,10 +1401,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called deleteAwsCustomerGateway');
     }
 
-    async listAwsCustomerGatewayIdByTags(tags: ResourceTag[]): Promise<string[]> {
-        this.proxy.logAsInfo('calling listAwsCustomerGatewayIdByTags.');
-        const cgwList = await this.adaptee.listCustomerGatewayByTags(tags);
-        this.proxy.logAsInfo('called listAwsCustomerGatewayIdByTags.');
+    async listAwsCustomerGatewayIds(filters: ResourceFilter[]): Promise<string[]> {
+        this.proxy.logAsInfo('calling listAwsCustomerGatewayIds.');
+        const cgwList = await this.adaptee.listCustomerGateways(filters);
+        this.proxy.logAsInfo('called listAwsCustomerGatewayIds.');
         return cgwList.map(cgw => cgw.CustomerGatewayId).filter(id => !!id);
     }
 
@@ -1459,10 +1466,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called deleteAwsVpnConnection.');
     }
 
-    async listAwsVpnConnectionIdByTags(tags: ResourceTag[]): Promise<string[]> {
-        this.proxy.logAsInfo('calling listAwsVpnConnectionIdByTags.');
-        const vpnList = await this.adaptee.listVpnConnectionByTags(tags);
-        this.proxy.logAsInfo('called listAwsVpnConnectionIdByTags.');
+    async listAwsVpnConnectionIds(filters: ResourceFilter[]): Promise<string[]> {
+        this.proxy.logAsInfo('calling listAwsVpnConnectionIds.');
+        const vpnList = await this.adaptee.listVpnConnections(filters);
+        this.proxy.logAsInfo('called listAwsVpnConnectionIds.');
         return vpnList.map(vpn => vpn.VpnConnectionId).filter(id => !!id);
     }
 
@@ -1613,7 +1620,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         return state;
     }
 
-    async tagResource(resourceIds: string[], tags: ResourceTag[]): Promise<void> {
+    async tagResource(resourceIds: string[], tags: ResourceFilter[]): Promise<void> {
         this.proxy.logAsInfo('calling tagResource.');
         await this.adaptee.tagResource(resourceIds, tags);
         this.proxy.logAsInfo('called tagResource.');
@@ -1621,7 +1628,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
 
     async removeMasterRoleTag(vmIds: string[]): Promise<void> {
         this.proxy.logAsInfo('calling removeMasterRoleTag.');
-        const tag: ResourceTag = {
+        const tag: ResourceFilter = {
             key: TAG_KEY_AUTOSCALE_ROLE,
             value: 'master'
         };

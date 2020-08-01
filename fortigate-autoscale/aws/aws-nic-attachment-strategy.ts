@@ -6,7 +6,7 @@ import {
     NicAttachmentStrategy,
     NicAttachmentStrategyResult
 } from '../../context-strategy/nic-attachment-context';
-import { ResourceTag } from '../../platform-adapter';
+import { ResourceFilter } from '../../platform-adapter';
 import { NetworkInterface, VirtualMachine } from '../../virtual-machine';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsPlatformAdapter } from './aws-platform-adapter';
@@ -169,17 +169,19 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
         return Promise.resolve(subnets[0] && subnets[0].pairIdList[index]);
     }
 
-    protected async tags(): Promise<ResourceTag[]> {
+    protected async tags(): Promise<ResourceFilter[]> {
         const settings = await this.platform.getSettings();
         const tagPrefix = settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value;
         return [
             {
-                key: 'tag:FortiGateAutoscaleNicAttachment',
-                value: tagPrefix
+                key: 'FortiGateAutoscaleNicAttachment',
+                value: tagPrefix,
+                isTag: true
             },
             {
-                key: 'tag:ResourceGroup',
-                value: tagPrefix
+                key: 'ResourceGroup',
+                value: tagPrefix,
+                isTag: true
             }
         ];
     }
@@ -321,7 +323,7 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
     async cleanUp(): Promise<number> {
         this.proxy.logAsInfo('calling AwsNicAttachmentStrategy.cleanUp');
         const tags = await this.tags();
-        const nics = await this.platform.listNetworkInterface(tags, 'available');
+        const nics = await this.platform.listNetworkInterfaces(tags, 'available');
         const failures: string[] = [];
         this.proxy.logAsInfo(`Unused nics: ${nics.length} found.`);
         await Promise.all(

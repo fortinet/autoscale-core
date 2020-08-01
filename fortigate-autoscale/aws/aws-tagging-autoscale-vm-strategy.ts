@@ -1,6 +1,6 @@
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import { TaggingVmStrategy, VmTagging } from '../../context-strategy/autoscale-context';
-import { ResourceTag } from '../../platform-adapter';
+import { ResourceFilter } from '../../platform-adapter';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import {
     AwsPlatformAdapter,
@@ -40,8 +40,10 @@ export class AwsTaggingAutoscaleVmStrategy implements TaggingVmStrategy {
             // if there's a vm with new master role flag, delete the master role tag from any other
             // vm in autoscale, then add master role tag to the new master vm
             const newMasterTagging = taggings.find(tagging => tagging.newMasterRole);
+            this.proxy.logAsDebug(`newMasterTagging: ${JSON.stringify(newMasterTagging)}`);
             if (newMasterTagging) {
                 const vmIds: string[] = await this.platform.listMasterRoleVmId();
+                this.proxy.logAsDebug(`vmIds: ${vmIds}`);
                 // delete Autoscale role tag from those vms
                 if (vmIds.length > 0) {
                     await this.platform.removeMasterRoleTag(vmIds);
@@ -51,7 +53,7 @@ export class AwsTaggingAutoscaleVmStrategy implements TaggingVmStrategy {
             const ResTagPrefix = this.platform.settings.get(
                 AwsFortiGateAutoscaleSetting.ResourceTagPrefix
             ).value;
-            const tags: ResourceTag[] = [
+            const tags: ResourceFilter[] = [
                 {
                     key: TAG_KEY_RESOURCE_GROUP,
                     value: ResTagPrefix
@@ -59,7 +61,7 @@ export class AwsTaggingAutoscaleVmStrategy implements TaggingVmStrategy {
             ];
             await Promise.all(
                 taggings.map(tagging => {
-                    const allTags: ResourceTag[] = [...tags];
+                    const allTags: ResourceFilter[] = [...tags];
                     if (tagging.newVm) {
                         allTags.push({
                             key: 'Name',

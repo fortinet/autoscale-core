@@ -21,7 +21,7 @@ import { AwsFortiGateAutoscaleSetting } from '../../../fortigate-autoscale/aws/a
 import { AwsPlatformAdaptee } from '../../../fortigate-autoscale/aws/aws-platform-adaptee';
 import { AwsPlatformAdapter } from '../../../fortigate-autoscale/aws/aws-platform-adapter';
 import { compare } from '../../../helper-function';
-import { ResourceTag } from '../../../platform-adapter';
+import { ResourceFilter } from '../../../platform-adapter';
 import {
     AwsTestMan,
     MockAutoScaling,
@@ -136,7 +136,7 @@ describe('AWS api test', () => {
         let instance: any;
         let eni: any;
         let result: any;
-        let tags: ResourceTag[];
+        let filters: ResourceFilter[];
         let ids: string[];
         const instanceId = 'i-0c6cb881aad1a8d79';
         const nicId = 'eni-0fd3e92c4188f7243';
@@ -179,13 +179,13 @@ describe('AWS api test', () => {
         json = await readFileAsJson(
             path.resolve(mockAwsApiDir, 'ec2', 'describe-network-interfaces')
         );
-        tags = [
+        filters = [
             {
                 key: '',
                 value: ''
             }
         ];
-        result = await awsPlatformAdaptee.listNetworkInterfacesByTags(tags);
+        result = await awsPlatformAdaptee.listNetworkInterfaces(filters);
         Sinon.assert.match(compare(result).isEqualTo(json.NetworkInterfaces), true);
 
         // NOTE: test

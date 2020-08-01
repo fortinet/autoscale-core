@@ -36,7 +36,7 @@ import {
     LicenseStockRecord,
     LicenseUsageRecord,
     PlatformAdapter,
-    ResourceTag
+    ResourceFilter
 } from '../platform-adapter';
 import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../virtual-machine';
 import { compare } from '../helper-function';
@@ -159,10 +159,10 @@ class TestPlatformAdapter implements PlatformAdapter {
     detachNetworkInterface(vmId: string, nicId: string): Promise<void> {
         throw new Error('Method not implemented.');
     }
-    listNetworkInterface(tags: ResourceTag[], status?: string): Promise<NetworkInterface[]> {
+    listNetworkInterfaces(filters: ResourceFilter[], status?: string): Promise<NetworkInterface[]> {
         throw new Error('Method not implemented.');
     }
-    tagNetworkInterface(nicId: string, tags: ResourceTag[]): Promise<void> {
+    tagNetworkInterface(nicId: string, tags: ResourceFilter[]): Promise<void> {
         throw new Error('Method not implemented.');
     }
     createNetworkInterface(
