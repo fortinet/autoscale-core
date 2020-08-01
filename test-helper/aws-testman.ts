@@ -464,6 +464,16 @@ export class MockEC2 extends TestFixture {
         this.setFakeCall('associateTransitGatewayRouteTable', args => {
             return this.associateTransitGatewayRouteTable(args);
         });
+        // NOTE: stub
+        this.setStub('createRoute', Sinon.stub(this.ec2, 'createRoute'));
+        this.setFakeCall('createRoute', args => {
+            return this.createRoute(args);
+        });
+        // NOTE: stub
+        this.setStub('replaceRoute', Sinon.stub(this.ec2, 'replaceRoute'));
+        this.setFakeCall('replaceRoute', args => {
+            return this.replaceRoute(args);
+        });
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -688,6 +698,16 @@ export class MockEC2 extends TestFixture {
             const data = await readFileAsJson(filePath);
             this.clearSubPath();
             return data;
+        });
+    }
+    createRoute(request: EC2.CreateRouteRequest): ApiResult {
+        return CreateApiResult(() => {
+            return;
+        });
+    }
+    replaceRoute(request: EC2.ReplaceRouteRequest): ApiResult {
+        return CreateApiResult(() => {
+            return true;
         });
     }
 }

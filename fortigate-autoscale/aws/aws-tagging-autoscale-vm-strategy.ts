@@ -1,6 +1,6 @@
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import { TaggingVmStrategy, VmTagging } from '../../context-strategy/autoscale-context';
-import { ResourceTag } from '../../platform-adapter';
+import { ResourceFilter } from '../../platform-adapter';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import {
     AwsPlatformAdapter,
@@ -51,7 +51,7 @@ export class AwsTaggingAutoscaleVmStrategy implements TaggingVmStrategy {
             const ResTagPrefix = this.platform.settings.get(
                 AwsFortiGateAutoscaleSetting.ResourceTagPrefix
             ).value;
-            const tags: ResourceTag[] = [
+            const tags: ResourceFilter[] = [
                 {
                     key: TAG_KEY_RESOURCE_GROUP,
                     value: ResTagPrefix
@@ -59,7 +59,7 @@ export class AwsTaggingAutoscaleVmStrategy implements TaggingVmStrategy {
             ];
             await Promise.all(
                 taggings.map(tagging => {
-                    const allTags: ResourceTag[] = [...tags];
+                    const allTags: ResourceFilter[] = [...tags];
                     if (tagging.newVm) {
                         allTags.push({
                             key: 'Name',
