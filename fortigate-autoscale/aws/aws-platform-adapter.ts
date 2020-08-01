@@ -440,7 +440,6 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             const instances = await this.adaptee.listInstances(filters);
             return instances.map(instance => instance.InstanceId);
         } catch (error) {
-            this.proxy.logAsDebug(`listMasterRoleVmId Error: ${JSON.stringify(error)}`);
             if (error.code && error.code === 'InvalidParameterValue') {
                 return [];
             } else {

@@ -40,10 +40,8 @@ export class AwsTaggingAutoscaleVmStrategy implements TaggingVmStrategy {
             // if there's a vm with new master role flag, delete the master role tag from any other
             // vm in autoscale, then add master role tag to the new master vm
             const newMasterTagging = taggings.find(tagging => tagging.newMasterRole);
-            this.proxy.logAsDebug(`newMasterTagging: ${JSON.stringify(newMasterTagging)}`);
             if (newMasterTagging) {
                 const vmIds: string[] = await this.platform.listMasterRoleVmId();
-                this.proxy.logAsDebug(`vmIds: ${vmIds}`);
                 // delete Autoscale role tag from those vms
                 if (vmIds.length > 0) {
                     await this.platform.removeMasterRoleTag(vmIds);
