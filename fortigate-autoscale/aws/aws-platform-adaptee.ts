@@ -23,6 +23,7 @@ import { ResourceFilter } from '../../platform-adapter';
 import * as AwsDBDef from './aws-db-definitions';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsDdbOperations } from './aws-platform-adapter';
+import { AWSError } from 'aws-sdk/lib/error';
 
 export class AwsPlatformAdaptee implements PlatformAdaptee {
     protected docClient: DocumentClient;
@@ -667,11 +668,25 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             TransitGatewayAttachmentId: attachmentId,
             TransitGatewayRouteTableId: routeTableId
         };
-        // TODO: KNOWN ISSUE: if attempt to enable one which was already enabled, will throw an error
+        // if attempt to enable one which was already enabled, will throw an error
         // TransitGatewayRouteTablePropagation.Duplicate
-        // this error should be caught and ignored.
-        const result = await this.ec2.enableTransitGatewayRouteTablePropagation(request).promise();
-        return result.Propagation.State;
+        // this error will be caught and ignored.
+        try {
+            const result = await this.ec2
+                .enableTransitGatewayRouteTablePropagation(request)
+                .promise();
+            return result.Propagation.State;
+        } catch (error) {
+            if (
+                (error as AWSError).message.includes(
+                    'TransitGatewayRouteTablePropagation.Duplicate'
+                )
+            ) {
+                return '';
+            } else {
+                throw error;
+            }
+        }
     }
 
     async updateTgwRouteTableAssociation(
@@ -682,11 +697,19 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             TransitGatewayAttachmentId: attachmentId,
             TransitGatewayRouteTableId: routeTableId
         };
-        // TODO: KNOWN ISSUE: if attempt to associate one which was already associated, will throw an error
+        // if attempt to associate one which was already associated, will throw an error
         // Resource.AlreadyAssociated
-        // this error should be caught and ignored.
-        const result = await this.ec2.associateTransitGatewayRouteTable(request).promise();
-        return result.Association.State;
+        // this error will be caught and ignored.
+        try {
+            const result = await this.ec2.associateTransitGatewayRouteTable(request).promise();
+            return result.Association.State;
+        } catch (error) {
+            if ((error as AWSError).message.includes('Resource.AlreadyAssociated')) {
+                return '';
+            } else {
+                throw error;
+            }
+        }
     }
 
     async describeTgwAttachment(attachmentId: string): Promise<EC2.TransitGatewayAttachment> {

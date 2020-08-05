@@ -34,10 +34,6 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             this.env = env;
             this.proxy.logAsInfo('calling handleAutoscaleRequest.');
             this.proxy.logAsInfo('request integrity check.');
-            // TODO: check whether all necessary request information are all there or not using
-            // the platform checkRequestIntegrity() method. temporarily disable this checking from
-            // the next line for now.
-            // await this.platform.checkRequestIntegrity();
 
             // init the platform. this step is important
             await this.platform.init();
@@ -90,10 +86,6 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             this.env = env;
             this.proxy.logAsInfo('calling handleLicenseRequest.');
             this.proxy.logAsInfo('request integrity check.');
-            // TODO: check whether all necessary request information are all there or not using
-            // the platform checkRequestIntegrity() method. temporarily disable this checking from
-            // the next line for now.
-            // await this.platform.checkRequestIntegrity();
 
             // init the platform. this step is important
             await this.platform.init();
