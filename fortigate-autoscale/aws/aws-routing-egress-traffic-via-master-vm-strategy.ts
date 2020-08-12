@@ -59,21 +59,22 @@ export class AwsRoutingEgressTrafficViaMasterVmStrategy implements RoutingEgress
         // use the 1st nic as the target
         let networkInterfaceId: string;
         if (enableNic2 && enableNic2.truthValue) {
-            // find the nic on index 1
-            if (this.env.masterVm.networkInterfaces.length > 1) {
-                networkInterfaceId = this.env.masterVm.networkInterfaces[1].id;
-            } else {
-                this.proxy.logAsWarning(
-                    'Nic2 is enabled but the actual eni1 not found. Use eni0 instead.'
-                );
-                networkInterfaceId = this.env.masterVm.networkInterfaces[0].id;
+            // find the nic that has  DeviceIndex === 1 (property and value set by AWS EC2)
+            if (this.env.masterVm.networkInterfaces.length >= 1) {
+                [networkInterfaceId] = this.env.masterVm.networkInterfaces
+                    .filter(eni => eni.index === 1)
+                    .map(eni => eni.id);
             }
-        } else if (this.env.masterVm.networkInterfaces.length === 1) {
-            // ASSERT: every vm has at list 1 eni
-            networkInterfaceId = this.env.masterVm.networkInterfaces[0].id;
+            if (!networkInterfaceId) {
+                throw new Error(
+                    'The Autoscale settings indicate Nic2 is enabled and the eni on DeviceIndex 1' +
+                        ' is expected available. However, no matching eni found. This is a fatal error.'
+                );
+            }
         } else {
-            this.proxy.logAsError(
-                `No network interface found on the master vm (id: ${this.env.masterVm.id})`
+            throw new Error(
+                `No network interface found on the master vm (id: ${this.env.masterVm.id}).` +
+                    ' This is a fatal error and an impposible situation!'
             );
         }
 
