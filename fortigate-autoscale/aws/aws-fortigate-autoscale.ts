@@ -59,24 +59,26 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
     constructor(p: AwsPlatformAdapter, e: AutoscaleEnvironment, x: CloudFunctionProxyAdapter) {
         super(p, e, x);
         // use AWS Hybrid scaling group strategy
-        this.setScalingGroupStrategy(new AwsHybridScalingGroupStrategy());
+        this.setScalingGroupStrategy(new AwsHybridScalingGroupStrategy(p, x));
         // use peferred group master election for Hybrid licensing model
-        this.setMasterElectionStrategy(new PreferredGroupMasterElection());
+        this.setMasterElectionStrategy(new PreferredGroupMasterElection(p, x));
         // use a constant interval heartbeat sync strategy
-        this.setHeartbeatSyncStrategy(new ConstantIntervalHeartbeatSyncStrategy());
+        this.setHeartbeatSyncStrategy(new ConstantIntervalHeartbeatSyncStrategy(p, x));
         // use AWS resource tagging strategy
-        this.setTaggingAutoscaleVmStrategy(new AwsTaggingAutoscaleVmStrategy());
+        this.setTaggingAutoscaleVmStrategy(new AwsTaggingAutoscaleVmStrategy(p, x));
         // use FortiGate bootstrap configuration strategy
-        this.setBootstrapConfigurationStrategy(new FortiGateBootstrapConfigStrategy());
+        this.setBootstrapConfigurationStrategy(new FortiGateBootstrapConfigStrategy(p, x, e));
         // use the Resuable licensing strategy
-        this.setLicensingStrategy(new ReusableLicensingStrategy());
+        this.setLicensingStrategy(new ReusableLicensingStrategy(p, x));
         // use the secondary nic attachment strategy to create and attach an additional nic
         // during launching
-        this.setNicAttachmentStrategy(new AwsNicAttachmentStrategy());
+        this.setNicAttachmentStrategy(new AwsNicAttachmentStrategy(p, x));
         // use Noop vpn attachment strategy
-        this.setVpnAttachmentStrategy(new NoopVpnAttachmentStrategy());
+        this.setVpnAttachmentStrategy(new NoopVpnAttachmentStrategy(p, x));
         // use the routing egress traffic via master vm strategy
-        this.setRoutingEgressTrafficStrategy(new AwsRoutingEgressTrafficViaMasterVmStrategy());
+        this.setRoutingEgressTrafficStrategy(
+            new AwsRoutingEgressTrafficViaMasterVmStrategy(p, x, e)
+        );
     }
     setNicAttachmentStrategy(strategy: NicAttachmentStrategy): void {
         this.nicAttachmentStrategy = strategy;
@@ -89,7 +91,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         if (!this.env.targetVm || this.env.targetVm.state === VirtualMachineState.Terminated) {
             return NicAttachmentStrategyResult.ShouldTerminateVm;
         }
-        this.nicAttachmentStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
+        this.nicAttachmentStrategy.prepare(this.env.targetVm);
         try {
             const result = await this.nicAttachmentStrategy.attach();
             // ASSERT: the result is either Failed or Success
@@ -111,7 +113,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
     }
     async handleNicDetachment(): Promise<NicAttachmentStrategyResult> {
         this.proxy.logAsInfo('calling handleNicDetachment');
-        this.nicAttachmentStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
+        this.nicAttachmentStrategy.prepare(this.env.targetVm);
         try {
             const result = await this.nicAttachmentStrategy.detach();
             // ASSERT: the result is either Failed or Success
@@ -143,7 +145,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
             return Promise.resolve(failureNum === 0);
         };
         try {
-            this.nicAttachmentStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
+            this.nicAttachmentStrategy.prepare(this.env.targetVm);
             await waitFor<number>(emitter, checker, 5000, this.proxy);
             this.proxy.logAsInfo('called cleanupUnusedNic');
             return NicAttachmentStrategyResult.Success;
@@ -158,14 +160,14 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
     }
     async handleVpnAttachment(): Promise<VpnAttachmentStrategyResult> {
         this.proxy.logAsInfo('calling handleVpnAttachment');
-        await this.vpnAttachmentStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
+        await this.vpnAttachmentStrategy.prepare(this.env.targetVm);
         const result = await this.vpnAttachmentStrategy.attach();
         this.proxy.logAsInfo('called handleVpnAttachment');
         return result;
     }
     async handleVpnDetachment(): Promise<VpnAttachmentStrategyResult> {
         this.proxy.logAsInfo('calling handleVpnDetachment');
-        await this.vpnAttachmentStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
+        await this.vpnAttachmentStrategy.prepare(this.env.targetVm);
         const result = await this.vpnAttachmentStrategy.detach();
         this.proxy.logAsInfo('called handleVpnDetachment');
         return result;
@@ -173,7 +175,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
 
     async cleanupUnusedVpn(): Promise<VpnAttachmentStrategyResult> {
         this.proxy.logAsInfo('calling cleanupUnusedVpn');
-        await this.vpnAttachmentStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
+        await this.vpnAttachmentStrategy.prepare(this.env.targetVm);
         const errorCount = await this.vpnAttachmentStrategy.cleanup();
         this.proxy.logAsInfo('called cleanupUnusedVpn');
         return errorCount === 0
@@ -285,7 +287,6 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
     async onVmFullyConfigured(): Promise<void> {
         // the 1st hb is also the indication of the the vm becoming in-service.
         // complete the scaling group launching strategy
-        this.scalingGroupStrategy.prepare(this.platform, this.proxy);
         await this.scalingGroupStrategy.completeLaunching(true);
         await super.onVmFullyConfigured();
     }
@@ -297,7 +298,6 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         };
         const strategy: AwsTgwVpnAttachmentStrategy = this
             .vpnAttachmentStrategy as AwsTgwVpnAttachmentStrategy;
-        strategy.prepare(this.platform, this.proxy, null);
         await strategy.updateTgwAttachmentRouteTable(request.attachmentId);
         this.proxy.logAsInfo('called handleTgwAttachmentRouteTable.');
     }
@@ -319,19 +319,32 @@ export class AwsFortiGateAutoscaleTgw<TReq, TContext, TRes> extends AwsFortiGate
     constructor(p: AwsPlatformAdapter, e: AutoscaleEnvironment, x: CloudFunctionProxyAdapter) {
         super(p, e, x);
         // use FortiGate bootstrap configuration strategy
-        this.setBootstrapConfigurationStrategy(new AwsFortiGateBootstrapTgwStrategy());
+        this.setBootstrapConfigurationStrategy(new AwsFortiGateBootstrapTgwStrategy(p, x, e));
         // use AWS Transit Gateway VPN attachment strategy
-        this.setVpnAttachmentStrategy(new AwsTgwVpnAttachmentStrategy());
+        this.setVpnAttachmentStrategy(new AwsTgwVpnAttachmentStrategy(p, x));
         // use Noop Nic attachment strategy
-        this.setNicAttachmentStrategy(new NoopNicAttachmentStrategy());
+        this.setNicAttachmentStrategy(new NoopNicAttachmentStrategy(p, x));
         // use the Noop routing egress traffic strategy
         this.setRoutingEgressTrafficStrategy(new NoopRoutingEgressTrafficStrategy());
     }
+
+    get vpnAttachmentStrategy(): AwsTgwVpnAttachmentStrategy {
+        return this.vpnAttachmentStrategy;
+    }
+
+    async handleTgwAttachmentRouteTable(payload: JSONable): Promise<void> {
+        this.proxy.logAsInfo('calling handleTgwAttachmentRouteTable.');
+        const request: AwsTgwVpnUpdateAttachmentRouteTableRequest = {
+            attachmentId: payload.attachmentId as string
+        };
+        await this.vpnAttachmentStrategy.updateTgwAttachmentRouteTable(request.attachmentId);
+        this.proxy.logAsInfo('called handleTgwAttachmentRouteTable.');
+    }
 }
 
-export class AwsFortiGateAutoscaleLambdaInvocationHandler {
-    autoscale: AwsFortiGateAutoscale<JSONable, Context, void>;
-    constructor(autoscale: AwsFortiGateAutoscale<JSONable, Context, void>) {
+export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler {
+    autoscale: AwsFortiGateAutoscaleTgw<JSONable, Context, void>;
+    constructor(autoscale: AwsFortiGateAutoscaleTgw<JSONable, Context, void>) {
         this.autoscale = autoscale;
     }
     get proxy(): AwsLambdaInvocationProxy {
@@ -349,8 +362,7 @@ export class AwsFortiGateAutoscaleLambdaInvocationHandler {
             await this.platform.init();
             const requestType = await this.platform.getRequestType();
             if (requestType === ReqType.CloudFunctionPeerInvocation) {
-                const proxy: AwsLambdaInvocationProxy = this.proxy as AwsLambdaInvocationProxy;
-                const body = proxy.getReqBody();
+                const body = this.proxy.getReqBody();
                 const payload: AwsLambdaInvocationPayload = {
                     invocable: undefined,
                     invocationSecretKey: undefined
@@ -358,13 +370,13 @@ export class AwsFortiGateAutoscaleLambdaInvocationHandler {
                 if (!body) {
                     throw new Error('Invalid request body.');
                 }
-                Object.assign(payload, proxy.getReqBody());
+                Object.assign(payload, body);
                 const invocable = payload.invocable;
                 const invocationSecretKey = payload.invocationSecretKey;
                 delete payload.invocable;
                 delete payload.invocationSecretKey;
                 const secretKey = this.platform.createAutoscaleFunctionInvocationKey(
-                    proxy.context.functionName,
+                    this.proxy.context.functionName,
                     payload
                 );
 

@@ -3,31 +3,26 @@ import { RoutingEgressTrafficStrategy } from '../../context-strategy/autoscale-c
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AutoscaleEnvironment } from '../../autoscale-environment';
 import { Settings, SettingItem } from '../../autoscale-setting';
-import { PlatformAdapter } from '../../platform-adapter';
 import { isIpV4 } from '../../helper-function';
 import { AwsPlatformAdapter } from './aws-platform-adapter';
 
 /**
  * This strategy updates the route table associated with the private subnets which need outgoing
- * trffic capability. It adds/replace the route to the master FortiGate vm in the Autoscale cluster
+ * traffic capability. It adds/replace the route to the master FortiGate vm in the Autoscale cluster
  * so the FortiGate can handle such egress traffic.
  */
 export class AwsRoutingEgressTrafficViaMasterVmStrategy implements RoutingEgressTrafficStrategy {
     protected platform: AwsPlatformAdapter;
     protected proxy: CloudFunctionProxyAdapter;
     protected env: AutoscaleEnvironment;
-    prepare(
-        platform: PlatformAdapter,
+    constructor(
+        platform: AwsPlatformAdapter,
         proxy: CloudFunctionProxyAdapter,
         env: AutoscaleEnvironment
-    ): Promise<void> {
-        if (!(platform instanceof AwsPlatformAdapter)) {
-            throw new Error('Wrong PlatformAdapter instance. Expected AwsPlatformAdapter.');
-        }
-        this.platform = platform as AwsPlatformAdapter;
+    ) {
+        this.platform = platform;
         this.proxy = proxy;
         this.env = env;
-        return Promise.resolve();
     }
     async apply(): Promise<void> {
         this.proxy.logAsInfo('calling RoutingEgressTrafficViaMasterVmStrategy.apply');

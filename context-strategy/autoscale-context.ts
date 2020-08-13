@@ -29,11 +29,7 @@ export interface AutoscaleContext {
 }
 
 export interface MasterElectionStrategy {
-    prepare(
-        election: MasterElection,
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter
-    ): Promise<void>;
+    prepare(election: MasterElection): Promise<void>;
     result(): Promise<MasterElection>;
     apply(): Promise<MasterElectionStrategyResult>;
     readonly applied: boolean;
@@ -50,14 +46,12 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
     res: MasterElection;
     proxy: CloudFunctionProxyAdapter;
     private _applied: boolean;
-    prepare(
-        env: MasterElection,
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter
-    ): Promise<void> {
-        this.env = env;
+    constructor(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter) {
         this.platform = platform;
         this.proxy = proxy;
+    }
+    prepare(env: MasterElection): Promise<void> {
+        this.env = env;
         this.res = {
             oldMaster: this.env.oldMaster,
             oldMasterRecord: this.env.oldMasterRecord,
@@ -178,11 +172,7 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
 }
 
 export interface HeartbeatSyncStrategy {
-    prepare(
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        vm: VirtualMachine
-    ): Promise<void>;
+    prepare(vm: VirtualMachine): Promise<void>;
     apply(): Promise<HealthCheckResult>;
     /**
      * Force the target vm to go into 'out-of-sync' state. Autoscale will stop accepting its
@@ -208,13 +198,11 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
     protected firstHeartbeat = false;
     protected result: HealthCheckResult;
     protected _targetHealthCheckRecord: HealthCheckRecord;
-    prepare(
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        targetVm: VirtualMachine
-    ): Promise<void> {
+    constructor(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter) {
         this.platform = platform;
         this.proxy = proxy;
+    }
+    prepare(targetVm: VirtualMachine): Promise<void> {
         this.targetVm = targetVm;
         return Promise.resolve();
     }
@@ -385,33 +373,21 @@ export interface VmTagging {
 }
 
 export interface TaggingVmStrategy {
-    prepare(
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        taggings: VmTagging[]
-    ): Promise<void>;
+    prepare(taggings: VmTagging[]): Promise<void>;
     apply(): Promise<void>;
 }
 
 export interface RoutingEgressTrafficStrategy {
-    prepare(
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        env: AutoscaleEnvironment
-    ): Promise<void>;
     apply(): Promise<void>;
 }
 
 export class NoopTaggingVmStrategy implements TaggingVmStrategy {
     private proxy: CloudFunctionProxyAdapter;
-    prepare(
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        taggings: VmTagging[]
-    ): Promise<void> {
+    constructor(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter) {
         this.proxy = proxy;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    prepare(taggings: VmTagging[]): Promise<void> {
         return Promise.resolve();
     }
     apply(): Promise<void> {

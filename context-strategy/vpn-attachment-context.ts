@@ -19,17 +19,14 @@ export enum VpnAttachmentStrategyResult {
 }
 
 export interface VpnAttachmentStrategy {
-    prepare(
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        vm: VirtualMachine
-    ): Promise<void>;
+    prepare(vm: VirtualMachine): Promise<void>;
     attach(): Promise<VpnAttachmentStrategyResult>;
     detach(): Promise<VpnAttachmentStrategyResult>;
     cleanup(): Promise<number>;
 }
 
 export class NoopVpnAttachmentStrategy implements VpnAttachmentStrategy {
+    constructor(readonly platform: PlatformAdapter, readonly proxy: CloudFunctionProxyAdapter) {}
     cleanup(): Promise<number> {
         return Promise.resolve(0);
     }
@@ -40,10 +37,6 @@ export class NoopVpnAttachmentStrategy implements VpnAttachmentStrategy {
         return Promise.resolve(VpnAttachmentStrategyResult.ShouldContinue);
     }
     prepare(
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        platform: PlatformAdapter,
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        proxy: CloudFunctionProxyAdapter,
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         vm: VirtualMachine
     ): Promise<void> {

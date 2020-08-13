@@ -26,8 +26,6 @@ export interface LicensingModelContext {
 
 export interface LicensingStrategy {
     prepare(
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
         vm: VirtualMachine,
         productName: string,
         storageContainerName: string,
@@ -43,15 +41,15 @@ export class NoopLicensingStrategy implements LicensingStrategy {
     vm: VirtualMachine;
     storageContainerName: string;
     licenseDirectoryName: string;
+    constructor(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter) {
+        this.platform = platform;
+        this.proxy = proxy;
+    }
     prepare(
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
         vm: VirtualMachine,
         storageContainerName: string,
         licenseDirectoryName: string
     ): Promise<void> {
-        this.platform = platform;
-        this.proxy = proxy;
         this.vm = vm;
         this.storageContainerName = storageContainerName;
         this.licenseDirectoryName = licenseDirectoryName;
@@ -80,16 +78,16 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
     licenseRecord: LicenseStockRecord | null;
     private licenseFile: LicenseFile;
     productName: string;
+    constructor(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter) {
+        this.platform = platform;
+        this.proxy = proxy;
+    }
     prepare(
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
         vm: VirtualMachine,
         productName: string,
         storageContainerName: string,
         licenseDirectoryName: string
     ): Promise<void> {
-        this.platform = platform;
-        this.proxy = proxy;
         this.vm = vm;
         this.productName = productName;
         this.storageContainerName = storageContainerName;
