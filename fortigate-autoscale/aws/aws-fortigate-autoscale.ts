@@ -329,11 +329,11 @@ export class AwsFortiGateAutoscaleTgw<TReq, TContext, TRes> extends AwsFortiGate
     }
 
     get vpnAttachmentStrategy(): AwsTgwVpnAttachmentStrategy {
-        return this.vpnAttachmentStrategy;
+        return super.vpnAttachmentStrategy as AwsTgwVpnAttachmentStrategy;
     }
 
     set vpnAttachmentStrategy(strategy: AwsTgwVpnAttachmentStrategy) {
-        this.vpnAttachmentStrategy = strategy;
+        super.vpnAttachmentStrategy = strategy;
     }
 
     async handleTgwAttachmentRouteTable(payload: JSONable): Promise<void> {
