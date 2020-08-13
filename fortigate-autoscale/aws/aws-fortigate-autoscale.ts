@@ -290,17 +290,6 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         await this.scalingGroupStrategy.completeLaunching(true);
         await super.onVmFullyConfigured();
     }
-
-    async handleTgwAttachmentRouteTable(payload: JSONable): Promise<void> {
-        this.proxy.logAsInfo('calling handleTgwAttachmentRouteTable.');
-        const request: AwsTgwVpnUpdateAttachmentRouteTableRequest = {
-            attachmentId: payload.attachmentId as string
-        };
-        const strategy: AwsTgwVpnAttachmentStrategy = this
-            .vpnAttachmentStrategy as AwsTgwVpnAttachmentStrategy;
-        await strategy.updateTgwAttachmentRouteTable(request.attachmentId);
-        this.proxy.logAsInfo('called handleTgwAttachmentRouteTable.');
-    }
 }
 
 /**
@@ -328,20 +317,13 @@ export class AwsFortiGateAutoscaleTgw<TReq, TContext, TRes> extends AwsFortiGate
         this.setRoutingEgressTrafficStrategy(new NoopRoutingEgressTrafficStrategy());
     }
 
-    get vpnAttachmentStrategy(): AwsTgwVpnAttachmentStrategy {
-        return super.vpnAttachmentStrategy as AwsTgwVpnAttachmentStrategy;
-    }
-
-    set vpnAttachmentStrategy(strategy: AwsTgwVpnAttachmentStrategy) {
-        super.vpnAttachmentStrategy = strategy;
-    }
-
     async handleTgwAttachmentRouteTable(payload: JSONable): Promise<void> {
         this.proxy.logAsInfo('calling handleTgwAttachmentRouteTable.');
         const request: AwsTgwVpnUpdateAttachmentRouteTableRequest = {
             attachmentId: payload.attachmentId as string
         };
-        await this.vpnAttachmentStrategy.updateTgwAttachmentRouteTable(request.attachmentId);
+        const strategy = this.vpnAttachmentStrategy as AwsTgwVpnAttachmentStrategy;
+        await strategy.updateTgwAttachmentRouteTable(request.attachmentId);
         this.proxy.logAsInfo('called handleTgwAttachmentRouteTable.');
     }
 }

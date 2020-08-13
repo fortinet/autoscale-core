@@ -18,6 +18,10 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
         return super.platform as AwsPlatformAdapter;
     }
 
+    set platform(p: AwsPlatformAdapter) {
+        super.platform = p;
+    }
+
     /**
      * load the configset content for setting up the VPN attachment
      * @param  {VirtualMachine} targetVm the target vm which the VPN(s) are attached to
