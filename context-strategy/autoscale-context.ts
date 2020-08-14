@@ -399,14 +399,13 @@ export class NoopTaggingVmStrategy implements TaggingVmStrategy {
 
 export class NoopRoutingEgressTrafficStrategy implements RoutingEgressTrafficStrategy {
     private proxy: CloudFunctionProxyAdapter;
+    constructor(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter) {
+        this.proxy = proxy;
+    }
     prepare(
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         env: AutoscaleEnvironment
     ): Promise<void> {
-        this.proxy = proxy;
         return Promise.resolve();
     }
     apply(): Promise<void> {

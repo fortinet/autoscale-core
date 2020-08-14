@@ -314,7 +314,7 @@ export class AwsFortiGateAutoscaleTgw<TReq, TContext, TRes> extends AwsFortiGate
         // use Noop Nic attachment strategy
         this.setNicAttachmentStrategy(new NoopNicAttachmentStrategy(p, x));
         // use the Noop routing egress traffic strategy
-        this.setRoutingEgressTrafficStrategy(new NoopRoutingEgressTrafficStrategy());
+        this.setRoutingEgressTrafficStrategy(new NoopRoutingEgressTrafficStrategy(p, x));
     }
 
     async handleTgwAttachmentRouteTable(payload: JSONable): Promise<void> {

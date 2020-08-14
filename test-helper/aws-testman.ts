@@ -22,6 +22,7 @@ import Sinon, { SinonStub } from 'sinon';
 
 import { SettingItem, Settings } from '../autoscale-setting';
 import { JSONable } from '../jsonable';
+import chalk from 'chalk';
 
 export type ApiGatewayRequestHandler = (
     event: APIGatewayProxyEvent,
@@ -48,6 +49,9 @@ export function CreateApiResult(f: () => any): ApiResult {
 export class AwsTestMan {
     constructor(readonly rootDir: string) {}
     readFileAsJson(filePath: string): Promise<JSONable> {
+        if (process.env.DEBUG_AWS_TESTMAN_SHOW_LOADED_SOURCE_PATH === 'true') {
+            console.log(`${chalk.cyan('[AwsTestMan]')} load file from: ${chalk.cyan(filePath)}`);
+        }
         return readFileAsJson(filePath);
     }
 
@@ -177,6 +181,13 @@ export abstract class TestFixture {
     subCallNth: number;
     readonly stubs: Map<string, StubStack> = new Map();
     abstract init(): void;
+    loadMockupData(filePath: string): Promise<JSONable> {
+        if (process.env.DEBUG_AWS_TESTMAN_SHOW_LOADED_SOURCE_PATH === 'true') {
+            console.log(`${chalk.cyan('[TestFixture]')} load file from:${chalk.cyan(filePath)}`);
+        }
+        return readFileAsJson(filePath);
+    }
+
     restoreAll(): void {
         this.stubs.forEach(stack => {
             stack.stub.restore();
@@ -323,6 +334,9 @@ export class MockS3 extends TestFixture {
                     .filter(v => v)
                     .join('/')
             );
+            if (process.env.DEBUG_AWS_TESTMAN_SHOW_LOADED_SOURCE_PATH === 'true') {
+                console.log(`${chalk.cyan('[TestFixture]')} list file in: ${chalk.cyan(filePath)}`);
+            }
             const files = await fs.readdirSync(filePath);
             this.clearSubPath();
             return {
@@ -347,6 +361,11 @@ export class MockS3 extends TestFixture {
                     .filter(v => v)
                     .join('/')
             );
+            if (process.env.DEBUG_AWS_TESTMAN_SHOW_LOADED_SOURCE_PATH === 'true') {
+                console.log(
+                    `${chalk.cyan('[TestFixture]')} load file from: ${chalk.cyan(filePath)}`
+                );
+            }
             const data = fs.readFileSync(filePath);
             this.clearSubPath();
             return {
@@ -490,7 +509,7 @@ export class MockEC2 extends TestFixture {
                 this.rootDir,
                 ['describe-instances', sampleName || this.subCall.subPath].filter(v => v).join('-')
             );
-            const data = await readFileAsJson(filePath);
+            const data = await this.loadMockupData(filePath);
             this.clearSubPath();
             return data;
         });
@@ -502,7 +521,7 @@ export class MockEC2 extends TestFixture {
                 this.rootDir,
                 ['create-network-interface', this.subCall.subPath].filter(v => v).join('-')
             );
-            const data = await readFileAsJson(filePath);
+            const data = await this.loadMockupData(filePath);
             const nic: JSONable = data.NetworkInterface as JSONable;
             nic.SubnetId = request.SubnetId;
             nic.Description = request.Description;
@@ -525,7 +544,7 @@ export class MockEC2 extends TestFixture {
                 this.rootDir,
                 ['describe-network-interfaces', this.subCall.subPath].filter(v => v).join('-')
             );
-            const data = await readFileAsJson(filePath);
+            const data = await this.loadMockupData(filePath);
             this.clearSubPath();
             return data;
         });
@@ -544,7 +563,7 @@ export class MockEC2 extends TestFixture {
                     .filter(v => v)
                     .join('-')
             );
-            const data = await readFileAsJson(filePath);
+            const data = await this.loadMockupData(filePath);
             this.clearSubPath();
             return data;
         });
@@ -556,7 +575,7 @@ export class MockEC2 extends TestFixture {
                 this.rootDir,
                 ['detach-network-interface', request.AttachmentId].filter(v => v).join('-')
             );
-            const data = await readFileAsJson(filePath);
+            const data = await this.loadMockupData(filePath);
             this.clearSubPath();
             return data;
         });
@@ -584,7 +603,7 @@ export class MockEC2 extends TestFixture {
                     .filter(v => v)
                     .join('-')
             );
-            const data = await readFileAsJson(filePath);
+            const data = await this.loadMockupData(filePath);
             this.clearSubPath();
             return data;
         });
@@ -607,7 +626,7 @@ export class MockEC2 extends TestFixture {
                     .filter(v => v)
                     .join('-')
             );
-            const data = await readFileAsJson(filePath);
+            const data = await this.loadMockupData(filePath);
             this.clearSubPath();
             return data;
         });
@@ -626,7 +645,7 @@ export class MockEC2 extends TestFixture {
                     .filter(v => v)
                     .join('-')
             );
-            const data = await readFileAsJson(filePath);
+            const data = await this.loadMockupData(filePath);
             this.clearSubPath();
             return data;
         });
@@ -655,7 +674,7 @@ export class MockEC2 extends TestFixture {
                     .filter(v => v)
                     .join('-')
             );
-            const data = await readFileAsJson(filePath);
+            const data = await this.loadMockupData(filePath);
             this.clearSubPath();
             return data;
         });
@@ -675,7 +694,7 @@ export class MockEC2 extends TestFixture {
                     .filter(v => v)
                     .join('-')
             );
-            const data = await readFileAsJson(filePath);
+            const data = await this.loadMockupData(filePath);
             this.clearSubPath();
             return data;
         });
@@ -695,7 +714,7 @@ export class MockEC2 extends TestFixture {
                     .filter(v => v)
                     .join('-')
             );
-            const data = await readFileAsJson(filePath);
+            const data = await this.loadMockupData(filePath);
             this.clearSubPath();
             return data;
         });
@@ -769,7 +788,7 @@ export class MockAutoScaling extends TestFixture {
                     .filter(v => v)
                     .join('-')
             );
-            const data = await readFileAsJson(filePath);
+            const data = await this.loadMockupData(filePath);
             this.clearSubPath();
             return data;
         });
@@ -856,7 +875,7 @@ export class MockLambda extends TestFixture {
                 this.rootDir,
                 ['invoke', request.FunctionName, this.subCall.subPath].filter(v => v).join('-')
             );
-            const data = await readFileAsJson(filePath);
+            const data = await this.loadMockupData(filePath);
             this.clearSubPath();
             return data;
         });
@@ -909,7 +928,7 @@ export class MockDocClient extends TestFixture {
                     .filter(v => v)
                     .join('-')
             );
-            const data = await readFileAsJson(filePath);
+            const data = await this.loadMockupData(filePath);
             const items = (data.Items as Array<any>).map(entry => {
                 const o = { ...entry };
                 return o;
@@ -933,7 +952,7 @@ export class MockDocClient extends TestFixture {
                     .filter(v => v)
                     .join('-')
             );
-            const data = await readFileAsJson(filePath);
+            const data = await this.loadMockupData(filePath);
             this.clearSubPath();
             return data;
         });
