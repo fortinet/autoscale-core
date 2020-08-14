@@ -7,9 +7,10 @@ import { HealthCheckRecord, MasterRecord } from './master-election';
 import { NetworkInterface, VirtualMachine } from './virtual-machine';
 import { Blob } from './blob';
 
-export interface ResourceTag {
+export interface ResourceFilter {
     key: string;
     value: string;
+    isTag?: boolean;
 }
 
 export interface LicenseFile {
@@ -134,6 +135,6 @@ export interface PlatformAdapter {
     deleteNetworkInterface(nicId: string): Promise<void>;
     attachNetworkInterface(vmId: string, nicId: string, index?: number): Promise<void>;
     detachNetworkInterface(vmId: string, nicId: string): Promise<void>;
-    listNetworkInterface(tags: ResourceTag[], status?: string): Promise<NetworkInterface[]>;
-    tagNetworkInterface(nicId: string, tags: ResourceTag[]): Promise<void>;
+    listNetworkInterfaces(tags: ResourceFilter[], status?: string): Promise<NetworkInterface[]>;
+    tagNetworkInterface(nicId: string, tags: ResourceFilter[]): Promise<void>;
 }

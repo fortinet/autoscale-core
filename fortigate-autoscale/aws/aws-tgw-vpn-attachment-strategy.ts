@@ -9,7 +9,7 @@ import {
     WaitForPromiseEmitter,
     WaitForMaxCount
 } from '../../helper-function';
-import { ResourceTag, TgwVpnAttachmentRecord } from '../../platform-adapter';
+import { ResourceFilter, TgwVpnAttachmentRecord } from '../../platform-adapter';
 import { VirtualMachine } from '../../virtual-machine';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsPlatformAdapter } from './aws-platform-adapter';
@@ -20,8 +20,8 @@ import {
 } from './transit-gateway-context';
 import { AwsTgwLambdaInvocable } from './aws-lambda-invocable';
 
-const TAG_KEY_AUTOSCALE_TGW_VPN_RESOURCE = 'tag:AutoscaleTgwVpnResource';
-const TAG_KEY_RESOURCE_GROUP = 'tag:ResourceGroup';
+const TAG_KEY_AUTOSCALE_TGW_VPN_RESOURCE = 'AutoscaleTgwVpnResource';
+const TAG_KEY_RESOURCE_GROUP = 'ResourceGroup';
 
 export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
     protected vm: VirtualMachine;
@@ -41,7 +41,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
         return Promise.resolve();
     }
 
-    async tags(): Promise<ResourceTag[]> {
+    async tags(): Promise<ResourceFilter[]> {
         const settings = await this.platform.getSettings();
         const resourceTagPrefix = settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix)
             .value;
@@ -50,11 +50,13 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
         return [
             {
                 key: TAG_KEY_AUTOSCALE_TGW_VPN_RESOURCE,
-                value: transitGatewayId
+                value: transitGatewayId,
+                isTag: true
             },
             {
                 key: TAG_KEY_RESOURCE_GROUP,
-                value: resourceTagPrefix
+                value: resourceTagPrefix,
+                isTag: true
             }
         ];
     }
@@ -103,7 +105,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
             this.vm.primaryPublicIpAddress
         ].join('-');
 
-        const tags: ResourceTag[] = await this.tags();
+        const tags: ResourceFilter[] = await this.tags();
         let customerGatewayId: string;
         let vpnConnection: AwsVpnConnection;
         try {
@@ -336,10 +338,10 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
     async cleanup(): Promise<number> {
         this.proxy.logAsInfo('calling AwsTgwVpnAttachmentStrategy.cleanup.');
         let errorCount = 0;
-        const tags: ResourceTag[] = await this.tags();
+        const tags: ResourceFilter[] = await this.tags();
         const [vpnIdList, cgwIdList] = await Promise.all([
-            this.platform.listAwsVpnConnectionIdByTags(tags),
-            this.platform.listAwsCustomerGatewayIdByTags(tags)
+            this.platform.listAwsVpnConnectionIds(tags),
+            this.platform.listAwsCustomerGatewayIds(tags)
         ]);
         await Promise.all(
             vpnIdList.map(vpnId => {
