@@ -313,14 +313,14 @@ describe('sanity test', () => {
             candidate: TEST_VM,
             signature: 'test-signature'
         };
-        ms = new PreferredGroupMasterElection();
-        hs = new ConstantIntervalHeartbeatSyncStrategy();
-        ss = new NoopScalingGroupStrategy();
+        ms = new PreferredGroupMasterElection(p, x);
+        hs = new ConstantIntervalHeartbeatSyncStrategy(p, x);
+        ss = new NoopScalingGroupStrategy(p, x);
         autoscale = new Autoscale(p, e, x);
         autoscale.setMasterElectionStrategy(ms);
         autoscale.setHeartbeatSyncStrategy(hs);
         autoscale.setScalingGroupStrategy(ss);
-        autoscale.setTaggingAutoscaleVmStrategy(new NoopTaggingVmStrategy());
+        autoscale.setTaggingAutoscaleVmStrategy(new NoopTaggingVmStrategy(p, x));
     });
     it('No conflicted settings in AutoscaleSettings', () => {
         const conflictCheck = (
@@ -343,12 +343,6 @@ describe('sanity test', () => {
         const stub2 = Sinon.stub(p, 'getSettings').callsFake(() => {
             return Promise.resolve(s);
         });
-        const stub3 = Sinon.stub(ms, 'prepare').callsFake((ms1, p1, x1) => {
-            Sinon.assert.match(ms1.candidate, TEST_VM);
-            Sinon.assert.match(Object.is(p1, p), true);
-            Sinon.assert.match(Object.is(x1, x), true);
-            return Promise.resolve();
-        });
         const stub4 = Sinon.stub(ms, 'apply');
         const stub5 = Sinon.stub(ms, 'result').callsFake(() => {
             return Promise.resolve(TEST_MASTER_ELECTION);
@@ -362,7 +356,6 @@ describe('sanity test', () => {
             const result = await autoscale.handleMasterElection();
             Sinon.assert.match(stub1.called, true);
             Sinon.assert.match(await stub2.returnValues[0], s);
-            Sinon.assert.match(stub3.called, true);
             Sinon.assert.match(stub4.notCalled, true);
             Sinon.assert.match(stub5.called, false);
             Sinon.assert.match(stub6.called, false);
@@ -373,7 +366,6 @@ describe('sanity test', () => {
         } finally {
             stub1.restore();
             stub2.restore();
-            stub3.restore();
             stub4.restore();
             stub5.restore();
             stub6.restore();

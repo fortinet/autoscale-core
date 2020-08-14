@@ -22,6 +22,7 @@ export interface VirtualMachine {
 export interface NetworkInterface {
     id: string;
     privateIpAddress: string;
+    index: number;
     subnetId?: string;
     virtualNetworkId?: string;
     attachmentId?: string;

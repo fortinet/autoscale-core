@@ -320,6 +320,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const nic: NetworkInterface = {
             id: eni.NetworkInterfaceId,
             privateIpAddress: eni.PrivateIpAddress,
+            index:
+                eni.Attachment && !isNaN(eni.Attachment.DeviceIndex)
+                    ? eni.Attachment.DeviceIndex
+                    : undefined,
             subnetId: eni.SubnetId,
             virtualNetworkId: eni.VpcId,
             attachmentId: (eni.Attachment && eni.Attachment.AttachmentId) || undefined,
@@ -1056,6 +1060,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         return {
             id: nic.NetworkInterfaceId,
             privateIpAddress: nic.PrivateIpAddress,
+            index: (nic.Attachment && nic.Attachment.DeviceIndex) || undefined,
             subnetId: nic.SubnetId,
             virtualNetworkId: nic.VpcId,
             attachmentId: (nic.Attachment && nic.Attachment.AttachmentId) || undefined,
@@ -1170,6 +1175,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 const nic: NetworkInterface = {
                     id: eni.NetworkInterfaceId,
                     privateIpAddress: eni.PrivateIpAddress,
+                    index: (eni.Attachment && eni.Attachment.DeviceIndex) || undefined,
                     subnetId: eni.SubnetId,
                     virtualNetworkId: eni.VpcId,
                     attachmentId: (eni.Attachment && eni.Attachment.AttachmentId) || undefined,

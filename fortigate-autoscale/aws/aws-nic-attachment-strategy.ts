@@ -16,14 +16,12 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
     vm: VirtualMachine;
     platform: AwsPlatformAdapter;
     proxy: CloudFunctionProxyAdapter;
-    prepare(
-        platform: AwsPlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        vm: VirtualMachine
-    ): Promise<void> {
-        this.vm = vm;
+    constructor(platform: AwsPlatformAdapter, proxy: CloudFunctionProxyAdapter) {
         this.platform = platform;
         this.proxy = proxy;
+    }
+    prepare(vm: VirtualMachine): Promise<void> {
+        this.vm = vm;
         return Promise.resolve();
     }
 

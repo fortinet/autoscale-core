@@ -7,20 +7,19 @@ import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings
 import { parseStringPromise as xml2jsParserPromise } from 'xml2js';
 import { JSONable } from '../../jsonable';
 export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigStrategy {
-    prepare(
+    constructor(
         platform: AwsPlatformAdapter,
         proxy: CloudFunctionProxyAdapter,
         env: AutoscaleEnvironment
-    ): Promise<void> {
-        return super.prepare(platform, proxy, env);
+    ) {
+        super(platform, proxy, env);
     }
-
-    set platform(platform: AwsPlatformAdapter) {
-        super.platform = platform;
-    }
-
     get platform(): AwsPlatformAdapter {
         return super.platform as AwsPlatformAdapter;
+    }
+
+    set platform(p: AwsPlatformAdapter) {
+        super.platform = p;
     }
 
     /**

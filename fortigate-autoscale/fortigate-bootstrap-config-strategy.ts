@@ -20,16 +20,14 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
     platform: PlatformAdapter;
     proxy: CloudFunctionProxyAdapter;
     env: AutoscaleEnvironment;
-    async prepare(
+    constructor(
         platform: PlatformAdapter,
         proxy: CloudFunctionProxyAdapter,
         env: AutoscaleEnvironment
-    ): Promise<void> {
+    ) {
         this.platform = platform;
         this.proxy = proxy;
         this.env = env;
-        this.settings = await this.platform.getSettings();
-        return Promise.resolve();
     }
     /**
      * get the bootstrap configuration for a certain role determined by the apply()
@@ -43,6 +41,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
      * @returns {Promise} BootstrapConfigStrategyResult
      */
     async apply(): Promise<BootstrapConfigStrategyResult> {
+        this.settings = await this.platform.getSettings();
         const config = await this.loadConfig();
         // target is the master? return config sets for active role
         if (this.platform.vmEquals(this.env.targetVm, this.env.masterVm)) {

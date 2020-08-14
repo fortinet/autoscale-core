@@ -3,31 +3,26 @@ import { RoutingEgressTrafficStrategy } from '../../context-strategy/autoscale-c
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AutoscaleEnvironment } from '../../autoscale-environment';
 import { Settings, SettingItem } from '../../autoscale-setting';
-import { PlatformAdapter } from '../../platform-adapter';
 import { isIpV4 } from '../../helper-function';
 import { AwsPlatformAdapter } from './aws-platform-adapter';
 
 /**
  * This strategy updates the route table associated with the private subnets which need outgoing
- * trffic capability. It adds/replace the route to the master FortiGate vm in the Autoscale cluster
+ * traffic capability. It adds/replace the route to the master FortiGate vm in the Autoscale cluster
  * so the FortiGate can handle such egress traffic.
  */
 export class AwsRoutingEgressTrafficViaMasterVmStrategy implements RoutingEgressTrafficStrategy {
     protected platform: AwsPlatformAdapter;
     protected proxy: CloudFunctionProxyAdapter;
     protected env: AutoscaleEnvironment;
-    prepare(
-        platform: PlatformAdapter,
+    constructor(
+        platform: AwsPlatformAdapter,
         proxy: CloudFunctionProxyAdapter,
         env: AutoscaleEnvironment
-    ): Promise<void> {
-        if (!(platform instanceof AwsPlatformAdapter)) {
-            throw new Error('Wrong PlatformAdapter instance. Expected AwsPlatformAdapter.');
-        }
-        this.platform = platform as AwsPlatformAdapter;
+    ) {
+        this.platform = platform;
         this.proxy = proxy;
         this.env = env;
-        return Promise.resolve();
     }
     async apply(): Promise<void> {
         this.proxy.logAsInfo('calling RoutingEgressTrafficViaMasterVmStrategy.apply');
@@ -58,23 +53,34 @@ export class AwsRoutingEgressTrafficViaMasterVmStrategy implements RoutingEgress
         // check if second nic is enabled. yes, then use the nic2 as the target, no, then
         // use the 1st nic as the target
         let networkInterfaceId: string;
+        // route traffic via nic2
         if (enableNic2 && enableNic2.truthValue) {
-            // find the nic on index 1
-            if (this.env.masterVm.networkInterfaces.length > 1) {
-                networkInterfaceId = this.env.masterVm.networkInterfaces[1].id;
-            } else {
-                this.proxy.logAsWarning(
-                    'Nic2 is enabled but the actual eni1 not found. Use eni0 instead.'
-                );
-                networkInterfaceId = this.env.masterVm.networkInterfaces[0].id;
+            // find the nic that has  DeviceIndex === 1 (property and value set by AWS EC2)
+            if (this.env.masterVm.networkInterfaces.length >= 1) {
+                [networkInterfaceId] = this.env.masterVm.networkInterfaces
+                    .filter(eni => eni.index === 1)
+                    .map(eni => eni.id);
             }
-        } else if (this.env.masterVm.networkInterfaces.length === 1) {
-            // ASSERT: every vm has at list 1 eni
-            networkInterfaceId = this.env.masterVm.networkInterfaces[0].id;
-        } else {
-            this.proxy.logAsError(
-                `No network interface found on the master vm (id: ${this.env.masterVm.id})`
-            );
+            if (!networkInterfaceId) {
+                throw new Error(
+                    'The Autoscale settings indicate Nic2 is enabled and the eni on DeviceIndex 1' +
+                        ' is expected available. However, no matching eni found. This is a fatal error.'
+                );
+            }
+        }
+        // route traffic via nic1
+        else {
+            if (this.env.masterVm.networkInterfaces.length >= 1) {
+                [networkInterfaceId] = this.env.masterVm.networkInterfaces
+                    .filter(eni => eni.index === 0)
+                    .map(eni => eni.id);
+            }
+            if (!networkInterfaceId) {
+                throw new Error(
+                    `No network interface found on the master vm (id: ${this.env.masterVm.id}).` +
+                        ' This is a fatal error and an impposible situation!'
+                );
+            }
         }
 
         // add / replace the route in each provided route table

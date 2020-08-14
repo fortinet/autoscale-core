@@ -1,5 +1,4 @@
 import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
-import { AwsPlatformAdapter } from '../fortigate-autoscale/aws/aws-platform-adapter';
 import { PlatformAdapter } from '../platform-adapter';
 
 /**
@@ -14,7 +13,6 @@ export interface ScalingGroupContext {
 }
 
 export interface ScalingGroupStrategy {
-    prepare(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter): Promise<void>;
     onLaunchingVm(): Promise<string>;
     onLaunchedVm(): Promise<string>;
     onTerminatingVm(): Promise<string>;
@@ -24,12 +22,11 @@ export interface ScalingGroupStrategy {
 }
 
 export class NoopScalingGroupStrategy implements ScalingGroupStrategy {
-    platform: AwsPlatformAdapter;
+    platform: PlatformAdapter;
     proxy: CloudFunctionProxyAdapter;
-    prepare(platform: AwsPlatformAdapter, proxy: CloudFunctionProxyAdapter): Promise<void> {
+    constructor(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter) {
         this.platform = platform;
         this.proxy = proxy;
-        return Promise.resolve();
     }
     onLaunchingVm(): Promise<string> {
         this.proxy.logAsInfo('Noop on launching.');
