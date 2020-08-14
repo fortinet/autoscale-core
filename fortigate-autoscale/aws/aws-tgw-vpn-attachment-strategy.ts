@@ -28,15 +28,12 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
     protected platform: AwsPlatformAdapter;
     protected proxy: CloudFunctionProxyAdapter;
     protected bgpAsn: number;
-    prepare(
-        platform: AwsPlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        vm: VirtualMachine,
-        bgpAsn = 65000
-    ): Promise<void> {
-        this.vm = vm;
+    constructor(platform: AwsPlatformAdapter, proxy: CloudFunctionProxyAdapter) {
         this.platform = platform;
         this.proxy = proxy;
+    }
+    prepare(vm: VirtualMachine, bgpAsn = 65000): Promise<void> {
+        this.vm = vm;
         this.bgpAsn = bgpAsn;
         return Promise.resolve();
     }

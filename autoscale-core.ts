@@ -97,11 +97,7 @@ export interface AutoscaleCore
 }
 
 export interface HAActivePassiveBoostrapStrategy {
-    prepare(
-        election: MasterElection,
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter
-    ): Promise<void>;
+    prepare(election: MasterElection): Promise<void>;
     result(): Promise<MasterElection>;
 }
 
@@ -145,14 +141,12 @@ export class Autoscale implements AutoscaleCore {
 
     async handleLaunchingVm(): Promise<string> {
         this.proxy.logAsInfo('calling handleLaunchingVm.');
-        this.scalingGroupStrategy.prepare(this.platform, this.proxy);
         const result = await this.scalingGroupStrategy.onLaunchingVm();
         this.proxy.logAsInfo('called handleLaunchingVm.');
         return result;
     }
     async handleLaunchedVm(): Promise<string> {
         this.proxy.logAsInfo('calling handleLaunchedVm.');
-        this.scalingGroupStrategy.prepare(this.platform, this.proxy);
         const result = await this.scalingGroupStrategy.onLaunchedVm();
         this.proxy.logAsInfo('called handleLaunchedVm.');
         return result;
@@ -163,7 +157,7 @@ export class Autoscale implements AutoscaleCore {
         // 1. mark it as heartbeat out-of-sync to prevent it from syncing again.
         // load target vm
         const targetVm = this.env.targetVm || (await this.platform.getTargetVm());
-        this.heartbeatSyncStrategy.prepare(this.platform, this.proxy, targetVm);
+        this.heartbeatSyncStrategy.prepare(targetVm);
         const success = await this.heartbeatSyncStrategy.forceOutOfSync();
         if (success) {
             this.env.targetHealthCheckRecord = await this.platform.getHealthCheckRecord(
@@ -181,7 +175,6 @@ export class Autoscale implements AutoscaleCore {
             await this.handleTaggingAutoscaleVm(vmTaggings);
         }
         // ASSERT: this.scalingGroupStrategy.onTerminatingVm() creates a terminating lifecycle item
-        this.scalingGroupStrategy.prepare(this.platform, this.proxy);
         await this.scalingGroupStrategy.onTerminatingVm();
         await this.scalingGroupStrategy.completeTerminating(true);
         this.proxy.logAsInfo('called handleTerminatingVm.');
@@ -189,7 +182,6 @@ export class Autoscale implements AutoscaleCore {
     }
     async handleTerminatedVm(): Promise<string> {
         this.proxy.logAsInfo('calling handleTerminatedVm.');
-        this.scalingGroupStrategy.prepare(this.platform, this.proxy);
         const result = await this.scalingGroupStrategy.onTerminatedVm();
         this.proxy.logAsInfo('called handleTerminatedVm.');
         return result;
@@ -212,7 +204,7 @@ export class Autoscale implements AutoscaleCore {
         }
         // prepare to apply the heartbeatSyncStrategy to get vm health check records
         // ASSERT: this.env.targetVm is available
-        this.heartbeatSyncStrategy.prepare(this.platform, this.proxy, this.env.targetVm);
+        this.heartbeatSyncStrategy.prepare(this.env.targetVm);
         // apply the heartbeat sync strategy to be able to get vm health check records
         await this.heartbeatSyncStrategy.apply();
         // ASSERT: the heartbeatSyncStrategy is done
@@ -377,7 +369,7 @@ export class Autoscale implements AutoscaleCore {
     }
     async handleTaggingAutoscaleVm(taggings: VmTagging[]): Promise<void> {
         this.proxy.logAsInfo('calling handleTaggingAutoscaleVm.');
-        this.taggingAutoscaleVmStrategy.prepare(this.platform, this.proxy, taggings);
+        this.taggingAutoscaleVmStrategy.prepare(taggings);
         await this.taggingAutoscaleVmStrategy.apply();
         this.proxy.logAsInfo('called handleTaggingAutoscaleVm.');
     }
@@ -396,7 +388,7 @@ export class Autoscale implements AutoscaleCore {
             electionDuration: electionTimeout,
             signature: null
         };
-        await this.masterElectionStrategy.prepare(election, this.platform, this.proxy);
+        await this.masterElectionStrategy.prepare(election);
 
         // master election required? condition 1: no master vm or record
         if (!this.env.masterRecord || !this.env.masterVm) {
@@ -516,8 +508,6 @@ export class Autoscale implements AutoscaleCore {
             productName
         );
         this.licensingStrategy.prepare(
-            this.platform,
-            this.proxy,
             this.env.targetVm,
             productName,
             assetContainer,
@@ -599,7 +589,6 @@ export class Autoscale implements AutoscaleCore {
 
     async handleEgressTrafficRoute(): Promise<void> {
         this.proxy.logAsInfo('calling handleEgressTrafficRoute.');
-        this.routingEgressTrafficStrategy.prepare(this.platform, this.proxy, this.env);
         await this.routingEgressTrafficStrategy.apply();
         this.proxy.logAsInfo('called handleEgressTrafficRoute.');
     }

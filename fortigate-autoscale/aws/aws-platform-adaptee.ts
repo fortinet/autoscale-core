@@ -283,9 +283,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 };
             })
         };
-        console.log(`listInstances request: ${JSON.stringify(request)}`);
         const result = await this.ec2.describeInstances(request).promise();
-        console.log(`listInstances result: ${JSON.stringify(result)}`);
         const instances: Map<string, EC2.Instance> = new Map();
         result.Reservations.forEach(reservation => {
             reservation.Instances.forEach(instance => {
@@ -294,7 +292,6 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 }
             });
         });
-        console.log(`listInstances instances: ${JSON.stringify(instances.values())}`);
         return Array.from(instances.values());
     }
 

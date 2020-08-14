@@ -1,6 +1,3 @@
-import { PlatformAdapter } from '../platform-adapter';
-import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
-import { AutoscaleEnvironment } from '../autoscale-environment';
 export interface BootstrapContext {
     setBootstrapConfigurationStrategy(strategy: BootstrapConfigurationStrategy): void;
     handleBootstrap(): Promise<string>;
@@ -12,11 +9,6 @@ export enum BootstrapConfigStrategyResult {
 }
 
 export interface BootstrapConfigurationStrategy {
-    prepare(
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        env: AutoscaleEnvironment
-    ): Promise<void>;
     getConfiguration(): string;
     apply(): Promise<BootstrapConfigStrategyResult>;
 }

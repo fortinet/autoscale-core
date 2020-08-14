@@ -12,13 +12,11 @@ export class AwsTaggingAutoscaleVmStrategy implements TaggingVmStrategy {
     protected platform: AwsPlatformAdapter;
     protected proxy: CloudFunctionProxyAdapter;
     protected taggings: VmTagging[];
-    prepare(
-        platform: AwsPlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        taggings: VmTagging[]
-    ): Promise<void> {
+    constructor(platform: AwsPlatformAdapter, proxy: CloudFunctionProxyAdapter) {
         this.platform = platform;
         this.proxy = proxy;
+    }
+    prepare(taggings: VmTagging[]): Promise<void> {
         this.taggings = taggings;
         return Promise.resolve();
     }

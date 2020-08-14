@@ -7,10 +7,9 @@ import { JSONable } from 'jsonable';
 export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
     platform: AwsPlatformAdapter;
     proxy: CloudFunctionProxyAdapter;
-    prepare(platform: AwsPlatformAdapter, proxy: CloudFunctionProxyAdapter): Promise<void> {
+    constructor(platform: AwsPlatformAdapter, proxy: CloudFunctionProxyAdapter) {
         this.platform = platform;
         this.proxy = proxy;
-        return Promise.resolve();
     }
     async onLaunchingVm(): Promise<string> {
         this.proxy.logAsInfo('calling AwsHybridScalingGroupStrategy.onLaunchingVm');

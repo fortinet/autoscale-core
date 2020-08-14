@@ -33,22 +33,15 @@ export interface NicAttachmentRecord {
 }
 
 export interface NicAttachmentStrategy {
-    prepare(
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        vm: VirtualMachine
-    ): Promise<void>;
+    prepare(vm: VirtualMachine): Promise<void>;
     attach(): Promise<NicAttachmentStrategyResult>;
     detach(): Promise<NicAttachmentStrategyResult>;
     cleanUp(): Promise<number>;
 }
 
 export class NoopNicAttachmentStrategy implements NicAttachmentStrategy {
+    constructor(readonly platform: PlatformAdapter, readonly proxy: CloudFunctionProxyAdapter) {}
     prepare(
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        platform: PlatformAdapter,
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        proxy: CloudFunctionProxyAdapter,
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         vm: VirtualMachine
     ): Promise<void> {
