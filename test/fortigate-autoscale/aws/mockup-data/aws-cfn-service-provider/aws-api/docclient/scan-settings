@@ -273,7 +273,7 @@
         },
         {
             "settingValue": "vpc-066ec3dc1f4a32167",
-            "settingKey": "fortigate-autoscale-vpc-id",
+            "settingKey": "fortigate-autoscale-virtual-network-id",
             "editable": false,
             "description": "VPC ID of the FortiGate Autoscale.",
             "jsonEncoded": false

@@ -10,12 +10,13 @@ export const FortiGateAutoscaleSetting = {
     EnableFazIntegration: 'enable-fortianalyzer-integration',
     FortiAnalyzerHandlerName: 'faz-handler-name',
     FortiGateAdminPort: 'fortigate-admin-port',
+    FortiGateAutoscaleSubnetIdList: 'fortigate-autoscale-subnet-id-list',
+    FortiGateAutoscaleSubnetPairs: 'fortigate-autoscale-subnet-pairs',
     FortiGateAutoscaleVirtualNetworkId: 'fortigate-autoscale-virtual-network-id',
+    FortiGateAutoscaleVirtualNetworkCidr: 'fortigate-autoscale-virtual-network-cidr',
     FortiGateExternalElbDns: 'fortigate-external-elb-dns',
     FortiGateInternalElbDns: 'fortigate-internal-elb-dns',
     FortiGatePskSecret: 'fortigate-psk-secret',
-    FortiGateAutoscaleSubnetIdList: 'fortigate-autoscale-subnet-id-list',
-    FortiGateAutoscaleSubnetPairs: 'fortigate-autoscale-subnet-pairs',
     FortiGateSyncInterface: 'fortigate-sync-interface',
     FortiGateTrafficPort: 'fortigate-traffic-port',
     FortiGateTrafficProtocol: 'fortigate-traffic-protocol'
@@ -58,6 +59,13 @@ export const FortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
     [FortiGateAutoscaleSetting.FortiGateAutoscaleVirtualNetworkId]: {
         keyName: FortiGateAutoscaleSetting.FortiGateAutoscaleVirtualNetworkId,
         description: 'Virtual Network ID of the FortiGate Autoscale.',
+        editable: false,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [FortiGateAutoscaleSetting.FortiGateAutoscaleVirtualNetworkCidr]: {
+        keyName: FortiGateAutoscaleSetting.FortiGateAutoscaleVirtualNetworkCidr,
+        description: 'Virtual Network CIDR of the FortiGate Autoscale.',
         editable: false,
         jsonEncoded: false,
         booleanType: false
