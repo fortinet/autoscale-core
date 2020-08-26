@@ -913,6 +913,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 };
                 let typeText: string;
                 // update if record exists
+                // NOTE: for updating an existing record, it requires a reference of the existing
+                // record as a snapshot of db data. Only when the record data at the time of updating
+                // matches exactly the same as the snapshot, the update succeeds. Otherwise, the
+                // record is considerred changed, and inconsistent anymore, thus not allowing updating.
                 if (items.has(rec.item.checksum)) {
                     // ASSERT: it must have a referenced record to replace. otherwise, if should fail
                     if (!rec.reference) {
@@ -928,12 +932,15 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     conditionExp.Expression =
                         'attribute_exists(checksum) AND vmId = :vmId' +
                         ' scalingGroupName = :scalingGroupName' +
-                        ' AND productName = :productName AND algorithm = :algorithm';
+                        ' AND productName = :productName' +
+                        ' AND algorithm = :algorithm' +
+                        ' AND assignedTime = :assignedTime';
                     conditionExp.ExpressionAttributeValues = {
                         ':vmId': rec.reference.vmId,
                         ':scalingGroupName': rec.reference.scalingGroupName,
                         ':productName': rec.reference.productName,
-                        ':algorithm': rec.reference.algorithm
+                        ':algorithm': rec.reference.algorithm,
+                        ':assignedTime': rec.reference.assignedTime ? rec.reference.assignedTime : 0
                     };
                     typeText =
                         `update existing item (checksum: ${rec.reference.checksum}). ` +
@@ -941,7 +948,8 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                         `vmId: ${rec.reference.vmId}, ` +
                         `scalingGroupName: ${rec.reference.scalingGroupName}, ` +
                         `productName: ${rec.reference.productName}, ` +
-                        `algorithm: ${rec.reference.algorithm}).` +
+                        `algorithm: ${rec.reference.algorithm}, ` +
+                        `assignedTime: ${rec.reference.assignedTime}).` +
                         `New values (filename: ${item.fileName}, vmId: ${item.vmId}, ` +
                         `scalingGroupName: ${item.scalingGroupName}, ` +
                         `productName: ${item.productName}, algorithm: ${item.algorithm})`;
