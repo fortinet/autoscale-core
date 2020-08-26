@@ -125,7 +125,9 @@ class TestPlatformAdapter implements PlatformAdapter {
     updateLicenseStock(records: LicenseStockRecord[]): Promise<void> {
         throw new Error('Method not implemented.');
     }
-    updateLicenseUsage(records: LicenseUsageRecord[]): Promise<void> {
+    updateLicenseUsage(
+        records: { item: LicenseUsageRecord; reference: LicenseUsageRecord }[]
+    ): Promise<void> {
         throw new Error('Method not implemented.');
     }
     loadLicenseFileContent(storageContainerName: string, filePath: string): Promise<string> {

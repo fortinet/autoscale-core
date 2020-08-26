@@ -187,10 +187,11 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
         const updatedRecordArray = await Promise.all(
             usageRecords.map(async u => {
                 const healthCheckRecord = await this.platform.getHealthCheckRecord(u.vmId);
-                u.vmInSync = !!(
+                const item: LicenseUsageRecord = { ...u };
+                item.vmInSync = !!(
                     healthCheckRecord && healthCheckRecord.syncState === HealthCheckSyncState.InSync
                 );
-                return u;
+                return { item: item, reference: u };
             })
         );
         await this.platform.updateLicenseUsage(updatedRecordArray);
@@ -204,7 +205,9 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
             newRecord.assignedTime = Date.now();
             // ASSERT: vm is in sync.
             newRecord.vmInSync = true;
-            await this.platform.updateLicenseUsage([newRecord]);
+            await this.platform.updateLicenseUsage([
+                { item: newRecord, reference: record.vmId ? record : null }
+            ]);
             // refresh the usage record because it is updated.
             this.usageRecords = await this.platform.listLicenseUsage(this.productName);
             return true;
