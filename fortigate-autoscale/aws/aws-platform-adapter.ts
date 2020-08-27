@@ -702,7 +702,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             'configset'
         ];
         keyPrefix.push(name);
-        const content = await this.adaptee.getS3ObjectContent(bucket, path.join(...keyPrefix));
+        const content = await this.adaptee.getS3ObjectContent(
+            bucket,
+            path.normalize(path.resolve('/', ...keyPrefix).substr(1))
+        );
         this.proxy.logAsInfo('configset loaded.');
         return content;
     }
