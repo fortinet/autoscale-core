@@ -494,18 +494,33 @@ export class Autoscale implements AutoscaleCore {
         }
         const settings = await this.platform.getSettings();
         // assume to use the custom asset container as the storage directory for license files.
-        let assetContainer = settings.get(AutoscaleSetting.CustomAssetContainer).value;
+        const customAssetContainer =
+            (settings.get(AutoscaleSetting.CustomAssetContainer) &&
+                settings.get(AutoscaleSetting.CustomAssetContainer).value) ||
+            null;
+        const customAssetDirectory =
+            (settings.get(AutoscaleSetting.CustomAssetDirectory) &&
+                settings.get(AutoscaleSetting.CustomAssetDirectory).value) ||
+            null;
+        const defaultAssetContainer =
+            (settings.get(AutoscaleSetting.AssetStorageContainer) &&
+                settings.get(AutoscaleSetting.AssetStorageContainer).value) ||
+            null;
+        const defaultAssetDirectory =
+            (settings.get(AutoscaleSetting.AssetStorageDirectory) &&
+                settings.get(AutoscaleSetting.AssetStorageDirectory).value) ||
+            null;
+        const licenseFileDirectory =
+            (settings.get(AutoscaleSetting.LicenseFileDirectory) &&
+                settings.get(AutoscaleSetting.LicenseFileDirectory).value) ||
+            null;
+        const assetContainer = customAssetContainer || defaultAssetContainer;
         const assetDirectory =
-            (assetContainer && settings.get(AutoscaleSetting.CustomAssetDirectory).value) ||
-            settings.get(AutoscaleSetting.AssetStorageDirectory).value;
-        // if such container isn't set, use the asset storage container and directory instead
-        if (!assetContainer) {
-            assetContainer = settings.get(AutoscaleSetting.AssetStorageContainer).value;
-        }
-        const licenseDirectory: string = path.join(
-            assetDirectory,
-            settings.get(AutoscaleSetting.LicenseFileDirectory).value,
-            productName
+            (customAssetContainer && customAssetDirectory) || defaultAssetDirectory;
+
+        // NOTE: the first '/' is used to form an absolute path, then will be removed by .substr(1)
+        const licenseDirectory: string = path.normalize(
+            path.resolve('/', assetDirectory, licenseFileDirectory, productName).substr(1)
         );
         this.licensingStrategy.prepare(
             this.env.targetVm,

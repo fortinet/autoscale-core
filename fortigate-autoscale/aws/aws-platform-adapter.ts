@@ -702,7 +702,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             'configset'
         ];
         keyPrefix.push(name);
-        const content = await this.adaptee.getS3ObjectContent(bucket, path.join(...keyPrefix));
+        const content = await this.adaptee.getS3ObjectContent(
+            bucket,
+            path.normalize(path.resolve('/', ...keyPrefix).substr(1))
+        );
         this.proxy.logAsInfo('configset loaded.');
         return content;
     }
@@ -881,7 +884,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         }
         this.proxy.logAsInfo('called updateLicenseStock');
     }
-    async updateLicenseUsage(records: LicenseUsageRecord[]): Promise<void> {
+    async updateLicenseUsage(
+        records: { item: LicenseUsageRecord; reference: LicenseUsageRecord }[]
+    ): Promise<void> {
         this.proxy.logAsInfo('calling updateLicenseUsage');
         const settings = await this.getSettings();
         const table = new AwsDBDef.AwsLicenseUsage(
@@ -895,41 +900,59 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         );
         let errorCount = 0;
         await Promise.all(
-            records.map(record => {
+            records.map(rec => {
                 const item: LicenseUsageDbItem = {
-                    checksum: record.checksum,
-                    algorithm: record.algorithm,
-                    fileName: record.fileName,
-                    productName: record.productName,
-                    vmId: record.vmId,
-                    scalingGroupName: record.scalingGroupName,
-                    assignedTime: record.assignedTime,
-                    vmInSync: record.vmInSync
+                    checksum: rec.item.checksum,
+                    algorithm: rec.item.algorithm,
+                    fileName: rec.item.fileName,
+                    productName: rec.item.productName,
+                    vmId: rec.item.vmId,
+                    scalingGroupName: rec.item.scalingGroupName,
+                    assignedTime: rec.item.assignedTime,
+                    vmInSync: rec.item.vmInSync
                 };
                 const conditionExp: AwsDdbOperations = {
                     Expression: ''
                 };
                 let typeText: string;
                 // update if record exists
-                if (items.has(record.checksum)) {
-                    const oldItem = items.get(record.checksum);
+                // NOTE: for updating an existing record, it requires a reference of the existing
+                // record as a snapshot of db data. Only when the record data at the time of updating
+                // matches exactly the same as the snapshot, the update succeeds. Otherwise, the
+                // record is considerred changed, and inconsistent anymore, thus not allowing updating.
+                if (items.has(rec.item.checksum)) {
+                    // ASSERT: it must have a referenced record to replace. otherwise, if should fail
+                    if (!rec.reference) {
+                        typeText = `update existing item (checksum: ${rec.item.checksum}). `;
+                        this.proxy.logAsError(
+                            `Failed to ${typeText}. No referenced record specified.`
+                        );
+                        errorCount++;
+                        return Promise.resolve();
+                    }
                     conditionExp.type = CreateOrUpdate.UpdateExisting;
                     // the conditional expression ensures the consistency of the DB system (ACID)
                     conditionExp.Expression =
                         'attribute_exists(checksum) AND vmId = :vmId' +
                         ' scalingGroupName = :scalingGroupName' +
-                        ' AND productName = :productName AND algorithm = :algorithm';
+                        ' AND productName = :productName' +
+                        ' AND algorithm = :algorithm' +
+                        ' AND assignedTime = :assignedTime';
                     conditionExp.ExpressionAttributeValues = {
-                        ':vmId': oldItem.vmId,
-                        ':scalingGroupName': oldItem.scalingGroupName,
-                        ':productName': oldItem.productName,
-                        ':algorithm': oldItem.algorithm
+                        ':vmId': rec.reference.vmId,
+                        ':scalingGroupName': rec.reference.scalingGroupName,
+                        ':productName': rec.reference.productName,
+                        ':algorithm': rec.reference.algorithm,
+                        ':assignedTime': rec.reference.assignedTime ? rec.reference.assignedTime : 0
                     };
                     typeText =
-                        `update existing item (checksum: ${oldItem.checksum}). ` +
-                        `Old values (filename: ${oldItem.fileName}, vmId: ${oldItem.vmId}, ` +
-                        `scalingGroupName: ${oldItem.scalingGroupName}, ` +
-                        `productName: ${oldItem.productName}, algorithm: ${oldItem.algorithm}).` +
+                        `update existing item (checksum: ${rec.reference.checksum}). ` +
+                        `Old values (filename: ${rec.reference.fileName}, ` +
+                        `vmId: ${rec.reference.vmId}, ` +
+                        `scalingGroupName: ${rec.reference.scalingGroupName}, ` +
+                        `productName: ${rec.reference.productName}, ` +
+                        `algorithm: ${rec.reference.algorithm}, ` +
+                        `assignedTime: ${rec.reference.assignedTime}).` +
                         `New values (filename: ${item.fileName}, vmId: ${item.vmId}, ` +
                         `scalingGroupName: ${item.scalingGroupName}, ` +
                         `productName: ${item.productName}, algorithm: ${item.algorithm})`;
@@ -949,7 +972,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     // the conditional expression ensures the consistency of the DB system (ACID)
                     conditionExp.Expression = 'attribute_not_exists(checksum)';
                     typeText =
-                        `create new item (checksum: ${record.checksum})` +
+                        `create new item (checksum: ${item.checksum})` +
                         `New values (filename: ${item.fileName}, vmId: ${item.vmId}, ` +
                         `scalingGroupName: ${item.scalingGroupName}, ` +
                         `productName: ${item.productName}, algorithm: ${item.algorithm})`;

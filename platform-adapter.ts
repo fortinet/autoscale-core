@@ -109,7 +109,9 @@ export interface PlatformAdapter {
     listLicenseStock(productName: string): Promise<LicenseStockRecord[]>;
     listLicenseUsage(productName: string): Promise<LicenseUsageRecord[]>;
     updateLicenseStock(records: LicenseStockRecord[]): Promise<void>;
-    updateLicenseUsage(records: LicenseUsageRecord[]): Promise<void>;
+    updateLicenseUsage(
+        records: { item: LicenseUsageRecord; reference: LicenseUsageRecord }[]
+    ): Promise<void>;
     loadLicenseFileContent(storageContainerName: string, filePath: string): Promise<string>;
 
     // NOTE: are the following methods relevant to this interface or should move to
