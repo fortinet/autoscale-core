@@ -272,7 +272,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
      * @returns {Promise<void>} void
      */
     async updateTgwAttachmentRouteTable(attachmentId: string): Promise<void> {
-        this.proxy.logAsDebug('calling AwsTgwVpnAttachmentStrategy.updateTgwAttachmentRouteTable');
+        this.proxy.logAsInfo('calling AwsTgwVpnAttachmentStrategy.updateTgwAttachmentRouteTable');
         const waitForInterval = 5000;
         const emitter: WaitForPromiseEmitter<AwsVpnAttachmentState> = () => {
             return this.platform.getAwsTgwVpnAttachmentState(attachmentId);
@@ -296,6 +296,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
             ) {
                 throw new Error(`Unexpected state: ${state}.`);
             } else {
+                this.proxy.logAsInfo(`vpn attachment state: ${state}.`);
                 return Promise.resolve(state === AwsVpnAttachmentState.Available);
             }
         };
@@ -320,12 +321,12 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
                 outboutRouteTable,
                 inboutRouteTable
             );
-            this.proxy.logAsDebug(
+            this.proxy.logAsInfo(
                 'called AwsTgwVpnAttachmentStrategy.updateTgwAttachmentRouteTable'
             );
         } catch (error) {
             this.proxy.logForError('Failed to complete updateTgwAttachmentRouteTable', error);
-            this.proxy.logAsDebug(
+            this.proxy.logAsInfo(
                 'called AwsTgwVpnAttachmentStrategy.updateTgwAttachmentRouteTable'
             );
             throw error;
