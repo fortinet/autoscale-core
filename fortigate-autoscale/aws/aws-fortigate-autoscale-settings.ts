@@ -23,8 +23,8 @@ export const AwsFortiGateAutoscaleSettingItemDictionary: SettingItemDictionary =
     [AwsFortiGateAutoscaleSetting.AwsAutoscaleFunctionMaxExecutionTime]: {
         keyName: AwsFortiGateAutoscaleSetting.AwsAutoscaleFunctionMaxExecutionTime,
         description:
-            'Maximum execution time allowed for an Autoscale Cloud Function that can run' +
-            ' in one cloud function invocation or multiple extended invocations.',
+            'Maximum execution time (in second) allowed for an Autoscale Cloud Function that can' +
+            ' run in one cloud function invocation or multiple extended invocations.',
         editable: true,
         jsonEncoded: false,
         booleanType: false

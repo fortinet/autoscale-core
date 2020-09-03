@@ -441,13 +441,15 @@ export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler {
                         AwsFortiGateAutoscaleSetting.AwsAutoscaleFunctionMaxExecutionTime
                     );
                     // the maximum execution time allowed for a cloud function
+                    // NOTE: the time is set in second.
                     const maxExecutionTime =
                         maxExecutionTimeItem && Number(maxExecutionTimeItem.value);
 
                     // time taken in preceeding relevent invocations and time taken in
                     // current invocation.
+                    // NOTE: this time is also in second.
                     const totalExecutionTime =
-                        Date.now() - currentExecutionStartTime + executionTime;
+                        Math.floor((Date.now() - currentExecutionStartTime) / 1000) + executionTime;
 
                     // if max execution time not reached, create a new invocation to continue
                     if (totalExecutionTime < maxExecutionTime) {
