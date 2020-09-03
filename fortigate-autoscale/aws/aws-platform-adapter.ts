@@ -1671,18 +1671,22 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         return genChecksum(`${functionName}:${psk}:${JSON.stringify(payload)}`, 'sha256');
     }
 
-    invokeAutoscaleFunction(invocable: string, parameters: JSONable): void {
+    invokeAutoscaleFunction(
+        payload: JSONable,
+        functionEndpoint: string,
+        invocable: string,
+        executionTime?: number
+    ): void {
         this.proxy.logAsInfo('calling invokeAwsLambda');
-        const handlerName = this.settings.get(
-            AwsFortiGateAutoscaleSetting.AwsTransitGatewayVpnHandlerName
-        ).value;
-        const secretKey = this.createAutoscaleFunctionInvocationKey(handlerName, parameters);
-        const payload: AwsLambdaInvocationPayload = {
+
+        const secretKey = this.createAutoscaleFunctionInvocationKey(functionEndpoint, payload);
+        const p: AwsLambdaInvocationPayload = {
             invocable: invocable,
-            invocationSecretKey: secretKey
+            invocationSecretKey: secretKey,
+            executionTime: executionTime
         };
-        Object.assign(payload, parameters);
-        this.adaptee.invokeLambda(handlerName, JSON.stringify(payload));
+        Object.assign(p, payload);
+        this.adaptee.invokeLambda(functionEndpoint, JSON.stringify(p));
         this.proxy.logAsInfo('called invokeAwsLambda');
     }
 

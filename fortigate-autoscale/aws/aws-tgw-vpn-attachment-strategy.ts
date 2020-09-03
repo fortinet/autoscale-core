@@ -18,7 +18,10 @@ import {
     AwsVpnConnection,
     AwsTgwVpnUpdateAttachmentRouteTableRequest
 } from './transit-gateway-context';
-import { AwsTgwLambdaInvocable } from './aws-lambda-invocable';
+import {
+    AwsTgwLambdaInvocable,
+    AwsLambdaInvocableExecutionTimeOutError
+} from './aws-lambda-invocable';
 
 const TAG_KEY_AUTOSCALE_TGW_VPN_RESOURCE = 'AutoscaleTgwVpnResource';
 const TAG_KEY_RESOURCE_GROUP = 'ResourceGroup';
@@ -206,9 +209,16 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
         const request: AwsTgwVpnUpdateAttachmentRouteTableRequest = {
             attachmentId: vpnConnection.transitGatewayAttachmentId
         };
-        this.platform.invokeAutoscaleFunction(AwsTgwLambdaInvocable.UpdateTgwAttachmentRoutTable, {
-            ...request
-        });
+        const handlerName = settings.get(
+            AwsFortiGateAutoscaleSetting.AwsTransitGatewayVpnHandlerName
+        ).value;
+        this.platform.invokeAutoscaleFunction(
+            {
+                ...request
+            },
+            handlerName,
+            AwsTgwLambdaInvocable.UpdateTgwAttachmentRoutTable
+        );
 
         // save the tgw vpn attachment record
         try {
@@ -273,7 +283,8 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
      */
     async updateTgwAttachmentRouteTable(attachmentId: string): Promise<void> {
         this.proxy.logAsInfo('calling AwsTgwVpnAttachmentStrategy.updateTgwAttachmentRouteTable');
-        const waitForInterval = 5000;
+        const waitForInterval = 5000; // ms
+        const timeBeforeRemainingExecution = 10000; // ms
         const emitter: WaitForPromiseEmitter<AwsVpnAttachmentState> = () => {
             return this.platform.getAwsTgwVpnAttachmentState(attachmentId);
         };
@@ -282,10 +293,13 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
             state: AwsVpnAttachmentState,
             callCount: number
         ) => {
-            // wait for up to 5 minutes
-            if (callCount * waitForInterval > 300000) {
-                throw new Error(
-                    'maximum amount of waiting time:' +
+            // wait for nearly the end of Lambda Function execution timeout
+            if (
+                callCount * waitForInterval >
+                this.proxy.getRemainingExecutionTime() - timeBeforeRemainingExecution
+            ) {
+                throw new AwsLambdaInvocableExecutionTimeOutError(
+                    'Execution timeout. Maximum amount of waiting time:' +
                         ` ${(callCount * waitForInterval) / 1000} seconds, have been reached.`
                 );
             }

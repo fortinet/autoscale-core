@@ -432,7 +432,11 @@ describe('AWS api test', () => {
         };
         // NOTE: test
         callCount = mockLambda.getStub('invoke').callCount;
-        await awsPlatformAdapter.invokeAutoscaleFunction(lambdaInvocable, payload);
+        await awsPlatformAdapter.invokeAutoscaleFunction(
+            payload,
+            'fakeLambdaEndpoint',
+            lambdaInvocable
+        );
         Sinon.assert.match(mockLambda.getStub('invoke').callCount - callCount > 0, true);
     });
 });
