@@ -32,7 +32,11 @@ import {
     TransitGatewayContext,
     AwsTgwVpnUpdateAttachmentRouteTableRequest
 } from './transit-gateway-context';
-import { AwsLambdaInvocationPayload, AwsTgwLambdaInvocable } from './aws-lambda-invocable';
+import {
+    AwsLambdaInvocationPayload,
+    AwsTgwLambdaInvocable,
+    AwsLambdaInvocableExecutionTimeOutError
+} from './aws-lambda-invocable';
 import { JSONable } from '../../jsonable';
 import { AwsLambdaInvocationProxy } from './aws-cloud-function-proxy';
 import { Context } from 'aws-lambda';
@@ -347,31 +351,134 @@ export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler {
             // init the platform. this step is important
             await this.platform.init();
             const requestType = await this.platform.getRequestType();
-            if (requestType === ReqType.CloudFunctionPeerInvocation) {
-                const body = this.proxy.getReqBody();
-                const payload: AwsLambdaInvocationPayload = {
+            const settings = await this.platform.getSettings();
+            if (requestType !== ReqType.CloudFunctionPeerInvocation) {
+                this.proxy.logAsWarning('Not a CloudFunctionPeerInvocation type request. Skip it.');
+                this.proxy.logAsInfo('called handleLambdaPeerInvocation.');
+                return;
+            }
+            const body = this.proxy.getReqBody();
+            const functionEndpoint = this.proxy.context.functionName;
+            if (!body) {
+                throw new Error('Invalid request body.');
+            }
+            const extractPayload = (
+                payload: JSONable
+            ): {
+                invocable: string;
+                secretKey: string;
+                executionTime: number;
+                payload: JSONable;
+            } => {
+                const p: AwsLambdaInvocationPayload = {
                     invocable: undefined,
-                    invocationSecretKey: undefined
+                    invocationSecretKey: undefined,
+                    executionTime: undefined
                 };
-                if (!body) {
-                    throw new Error('Invalid request body.');
-                }
-                Object.assign(payload, body);
-                const invocable = payload.invocable;
-                const invocationSecretKey = payload.invocationSecretKey;
-                delete payload.invocable;
-                delete payload.invocationSecretKey;
-                const secretKey = this.platform.createAutoscaleFunctionInvocationKey(
-                    this.proxy.context.functionName,
-                    payload
-                );
+                Object.assign(p, payload);
+                const invocable = p.invocable;
+                const secretKey = p.invocationSecretKey;
+                // if the payload carries an execution time, the execution time refers to its
+                // time been already taken in preceeding relevant invocations.
+                const executionTime = isNaN(p.executionTime) ? 0 : p.executionTime;
+                delete p.invocable;
+                delete p.invocationSecretKey;
+                delete p.executionTime;
+                return {
+                    invocable: invocable,
+                    secretKey: secretKey,
+                    executionTime: executionTime,
+                    payload: p
+                };
+            };
 
-                // verify the invocation key
-                if (!invocationSecretKey || invocationSecretKey !== secretKey) {
-                    throw new Error('Invalid invocation payload: invocationSecretKey not matched');
+            const { invocable, secretKey, executionTime, payload } = extractPayload(body);
+
+            const invocationSecretKey = this.platform.createAutoscaleFunctionInvocationKey(
+                functionEndpoint,
+                payload
+            );
+
+            // verify the invocation key
+            if (!invocationSecretKey || invocationSecretKey !== secretKey) {
+                throw new Error('Invalid invocation payload: invocationSecretKey not matched');
+            }
+            const currentExecutionStartTime = Date.now(); // ms
+            const extendExecution = settings.get(
+                AwsFortiGateAutoscaleSetting.AwsAutoscaleFunctionExtendExecution
+            );
+            let shouldExtendExecution: boolean;
+            try {
+                if (invocable === AwsTgwLambdaInvocable.UpdateTgwAttachmentRouteTable) {
+                    // KNOWN ISSUE: Sep. 01, 2020. AWS takes over 10 minutes to stablize a VPN
+                    // creation where the time was usually approx. 3 mins. The Lambda function that
+                    // handles the updateTgwAttachmentRouteTable process used to have a 5 minutes
+                    // execution time out which isn't enough in this situation.
+                    // updateTgwAttachmentRouteTable will time out and fail.
+                    // The solution:
+                    // The caller detects the 'Execution timeout' type error and create a new
+                    // request to continue to wait until the accumulated processing time
+                    // hit the maximum execution time: AwsAutoscaleFunctionMaxExecutionTime in the
+                    // settings. The ultimate time out ends the waiting with a proper error message,
+                    // and will not proceed. The waitFor time out will rely on the Lambda
+                    // function execution timeout time. It ends 10 seconds before the Lambda timeout
+                    // (can be retrieved with proxy.getRemainingExecutionTime()), invokes a new
+                    // Lambda function request to continue, passing the accumulated processing time
+                    // in the new request. Unless the VPN stablized, the process keeps creating new
+                    // invocation to wait.
+                    // There's a switch to toggle such feature on and off: AwsAutoscaleFunctionExtendExecution
+
+                    // NOTE: The invocable must be designed to support for running in extended invocations.
+                    await this.autoscale.handleTgwAttachmentRouteTable(payload).catch(e => {
+                        shouldExtendExecution =
+                            true && extendExecution && extendExecution.truthValue;
+                        throw e;
+                    });
                 }
-                if (invocable === AwsTgwLambdaInvocable.UpdateTgwAttachmentRoutTable) {
-                    await this.autoscale.handleTgwAttachmentRouteTable(payload);
+            } catch (e) {
+                if (e instanceof AwsLambdaInvocableExecutionTimeOutError && shouldExtendExecution) {
+                    const maxExecutionTimeItem = settings.get(
+                        AwsFortiGateAutoscaleSetting.AwsAutoscaleFunctionMaxExecutionTime
+                    );
+                    // the maximum execution time allowed for a cloud function
+                    // NOTE: the time is set in second.
+                    const maxExecutionTime =
+                        maxExecutionTimeItem && Number(maxExecutionTimeItem.value);
+
+                    // time taken in preceeding relevent invocations and time taken in
+                    // current invocation.
+                    // NOTE: this time is also in second.
+                    const totalExecutionTime =
+                        Math.floor((Date.now() - currentExecutionStartTime) / 1000) + executionTime;
+
+                    // if max execution time not reached, create a new invocation to continue
+                    if (totalExecutionTime < maxExecutionTime) {
+                        await this.platform.invokeAutoscaleFunction(
+                            payload,
+                            functionEndpoint,
+                            invocable,
+                            // carry the total execution time to the next call.
+                            totalExecutionTime
+                        );
+                        this.proxy.logAsInfo(
+                            'AutoscaleFunctionExtendExecution is enabled.' +
+                                ` Current total execution time is: ${totalExecutionTime} seconds.` +
+                                ` Max execution time allowed is: ${maxExecutionTime} seconds.` +
+                                ' Now invoke a new Lambda function to continue.'
+                        );
+                    } else {
+                        this.proxy.logAsError(
+                            'AutoscaleFunctionExtendExecution is enabled.' +
+                                ` Current total execution time is: ${totalExecutionTime} seconds.` +
+                                ` Max execution time allowed is: ${maxExecutionTime} seconds.` +
+                                ' No more time allowed to wait so it timed out and failed.'
+                        );
+                        // extended execution reached max execution time allowed.
+                        throw e;
+                    }
+                } else {
+                    // not a AwsLambdaInvocableExecutionTimeOutError or not allow to extend execution.
+                    throw e;
                 }
             }
             this.proxy.logAsInfo('called handleLambdaPeerInvocation.');

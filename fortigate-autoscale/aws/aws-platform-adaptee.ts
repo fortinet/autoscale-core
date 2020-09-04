@@ -731,21 +731,18 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         });
     }
 
-    invokeLambda(functionName: string, payload: string): Promise<Lambda._Blob> {
-        return new Promise((resolve, reject) => {
-            this.lambda.invoke(
-                {
-                    FunctionName: functionName,
-                    Payload: JSON.stringify(payload)
-                },
-                (err, data) => {
-                    if (err) {
-                        reject(err);
-                    }
-                    resolve(data.Payload);
-                }
-            );
-        });
+    invokeLambda(
+        functionName: string,
+        type: Lambda.Types.InvocationType,
+        payload: string
+    ): Promise<Lambda.InvocationResponse> {
+        return this.lambda
+            .invoke({
+                FunctionName: functionName,
+                InvocationType: type,
+                Payload: JSON.stringify(payload)
+            })
+            .promise();
     }
 
     async updateScalingGroupSize(

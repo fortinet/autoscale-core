@@ -1665,25 +1665,32 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     }
 
     createAutoscaleFunctionInvocationKey(functionName: string, payload: JSONable): string {
-        this.proxy.logAsInfo(functionName);
-        this.proxy.logAsInfo(JSON.stringify(payload));
         const psk = this.settings.get(AwsFortiGateAutoscaleSetting.FortiGatePskSecret).value;
         return genChecksum(`${functionName}:${psk}:${JSON.stringify(payload)}`, 'sha256');
     }
 
-    invokeAutoscaleFunction(invocable: string, parameters: JSONable): void {
-        this.proxy.logAsInfo('calling invokeAwsLambda');
-        const handlerName = this.settings.get(
-            AwsFortiGateAutoscaleSetting.AwsTransitGatewayVpnHandlerName
-        ).value;
-        const secretKey = this.createAutoscaleFunctionInvocationKey(handlerName, parameters);
-        const payload: AwsLambdaInvocationPayload = {
+    async invokeAutoscaleFunction(
+        payload: JSONable,
+        functionEndpoint: string,
+        invocable: string,
+        executionTime?: number
+    ): Promise<number> {
+        this.proxy.logAsInfo('calling invokeAutoscaleFunction');
+        const secretKey = this.createAutoscaleFunctionInvocationKey(functionEndpoint, payload);
+        const p: AwsLambdaInvocationPayload = {
             invocable: invocable,
-            invocationSecretKey: secretKey
+            invocationSecretKey: secretKey,
+            executionTime: executionTime
         };
-        Object.assign(payload, parameters);
-        this.adaptee.invokeLambda(handlerName, JSON.stringify(payload));
-        this.proxy.logAsInfo('called invokeAwsLambda');
+        Object.assign(p, payload);
+        const response = await this.adaptee.invokeLambda(
+            functionEndpoint,
+            'Event',
+            JSON.stringify(p)
+        );
+        this.proxy.logAsInfo(`invocation response status code: ${response.StatusCode}`);
+        this.proxy.logAsInfo('called invokeAutoscaleFunction');
+        return response.StatusCode;
     }
 
     async updateScalingGroupSize(

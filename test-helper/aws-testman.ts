@@ -493,6 +493,14 @@ export class MockEC2 extends TestFixture {
         this.setFakeCall('replaceRoute', args => {
             return this.replaceRoute(args);
         });
+        // NOTE: stub
+        this.setStub(
+            'modifyNetworkInterfaceAttribute',
+            Sinon.stub(this.ec2, 'modifyNetworkInterfaceAttribute')
+        );
+        this.setFakeCall('modifyNetworkInterfaceAttribute', args => {
+            return this.modifyNetworkInterfaceAttribute(args);
+        });
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -725,6 +733,13 @@ export class MockEC2 extends TestFixture {
         });
     }
     replaceRoute(request: EC2.ReplaceRouteRequest): ApiResult {
+        return CreateApiResult(() => {
+            return true;
+        });
+    }
+    modifyNetworkInterfaceAttribute(
+        request: EC2.ModifyNetworkInterfaceAttributeRequest
+    ): ApiResult {
         return CreateApiResult(() => {
             return true;
         });
