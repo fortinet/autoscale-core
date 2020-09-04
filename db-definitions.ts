@@ -243,7 +243,7 @@ export interface AutoscaleDbItem {
     vmId: string;
     scalingGroupName: string;
     ip: string;
-    masterIp: string;
+    primaryIp: string;
     heartBeatInterval: number;
     heartBeatLossCount: number;
     nextHeartBeatTime: number;
@@ -270,7 +270,7 @@ export abstract class Autoscale extends Table<AutoscaleDbItem> {
             isKey: false
         },
         {
-            name: 'masterIp',
+            name: 'primaryIp',
             attrType: TypeRef.StringType,
             isKey: false
         },
@@ -313,7 +313,7 @@ export abstract class Autoscale extends Table<AutoscaleDbItem> {
             vmId: this.typeConvert.valueToString(record.vmId),
             scalingGroupName: this.typeConvert.valueToString(record.scalingGroupName),
             ip: this.typeConvert.valueToString(record.ip),
-            masterIp: this.typeConvert.valueToString(record.masterIp),
+            primaryIp: this.typeConvert.valueToString(record.primaryIp),
             heartBeatLossCount: this.typeConvert.valueToNumber(record.heartBeatLossCount),
             heartBeatInterval: this.typeConvert.valueToNumber(record.heartBeatInterval),
             nextHeartBeatTime: this.typeConvert.valueToNumber(record.nextHeartBeatTime),
@@ -323,7 +323,7 @@ export abstract class Autoscale extends Table<AutoscaleDbItem> {
         return item;
     }
 }
-export interface MasterElectionDbItem {
+export interface PrimaryElectionDbItem {
     scalingGroupName: string;
     vmId: string;
     id: string;
@@ -333,7 +333,7 @@ export interface MasterElectionDbItem {
     voteEndTime: number;
     voteState: string;
 }
-export abstract class MasterElection extends Table<MasterElectionDbItem> {
+export abstract class PrimaryElection extends Table<PrimaryElectionDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'scalingGroupName',
@@ -380,13 +380,13 @@ export abstract class MasterElection extends Table<MasterElectionDbItem> {
     constructor(typeConvert, namePrefix = '', nameSuffix = '') {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
-        this.setName('MasterElection');
-        MasterElection.__attributes.forEach(def => {
+        this.setName('PrimaryElection');
+        PrimaryElection.__attributes.forEach(def => {
             this.addAttribute(def);
         });
     }
-    convertRecord(record: Record): MasterElectionDbItem {
-        const item: MasterElectionDbItem = {
+    convertRecord(record: Record): PrimaryElectionDbItem {
+        const item: PrimaryElectionDbItem = {
             scalingGroupName: this.typeConvert.valueToString(record.scalingGroupName),
             vmId: this.typeConvert.valueToString(record.vmId),
             id: this.typeConvert.valueToString(record.id),
@@ -402,7 +402,7 @@ export abstract class MasterElection extends Table<MasterElectionDbItem> {
 export interface FortiAnalyzerDbItem {
     vmId: string;
     ip: string;
-    master: string;
+    primary: string;
     vip: string;
 }
 
@@ -420,7 +420,7 @@ export abstract class FortiAnalyzer extends Table<FortiAnalyzerDbItem> {
             isKey: false
         },
         {
-            name: 'master',
+            name: 'primary',
             attrType: TypeRef.BooleanType,
             isKey: false
         },
@@ -442,7 +442,7 @@ export abstract class FortiAnalyzer extends Table<FortiAnalyzerDbItem> {
         const item: FortiAnalyzerDbItem = {
             vmId: this.typeConvert.valueToString(record.vmId),
             ip: this.typeConvert.valueToString(record.ip),
-            master: this.typeConvert.valueToString(record.master),
+            primary: this.typeConvert.valueToString(record.primary),
             vip: this.typeConvert.valueToString(record.vip)
         };
         return item;

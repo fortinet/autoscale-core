@@ -3,7 +3,7 @@ import { ReqType } from './cloud-function-proxy';
 import { NicAttachmentRecord } from './context-strategy/nic-attachment-context';
 import { KeyValue } from './db-definitions';
 import { JSONable } from './jsonable';
-import { HealthCheckRecord, MasterRecord } from './master-election';
+import { HealthCheckRecord, PrimaryRecord } from './primary-election';
 import { NetworkInterface, VirtualMachine } from './virtual-machine';
 import { Blob } from './blob';
 
@@ -76,29 +76,29 @@ export interface PlatformAdapter {
      */
     validateSettings(): Promise<boolean>;
     getTargetVm(): Promise<VirtualMachine | null>;
-    getMasterVm(): Promise<VirtualMachine | null>;
+    getPrimaryVm(): Promise<VirtualMachine | null>;
     listAutoscaleVm(
         identifyScalingGroup?: boolean,
         listNic?: boolean
     ): Promise<VirtualMachine[] | null>;
     getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord | null>;
-    getMasterRecord(filters?: KeyValue[]): Promise<MasterRecord | null>;
+    getPrimaryRecord(filters?: KeyValue[]): Promise<PrimaryRecord | null>;
     vmEquals(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean;
     createHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
     updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
     /**
-     * create the master record in the db system.
-     * @param rec the new master record
-     * @param oldRec the old master record, if provided, will try to replace this record by
+     * create the primary record in the db system.
+     * @param rec the new primary record
+     * @param oldRec the old primary record, if provided, will try to replace this record by
      * matching the key properties.
      */
-    createMasterRecord(rec: MasterRecord, oldRec: MasterRecord | null): Promise<void>;
+    createPrimaryRecord(rec: PrimaryRecord, oldRec: PrimaryRecord | null): Promise<void>;
     /**
-     * update the master record using the given rec. update only when the record key match
+     * update the primary record using the given rec. update only when the record key match
      * the record in the db.
-     * @param rec master record to be updated.
+     * @param rec primary record to be updated.
      */
-    updateMasterRecord(rec: MasterRecord): Promise<void>;
+    updatePrimaryRecord(rec: PrimaryRecord): Promise<void>;
     loadConfigSet(name: string, custom?: boolean): Promise<string>;
     listConfigSet(subDirectory?: string, custom?: boolean): Promise<Blob[]>;
     deleteVmFromScalingGroup(vmId: string): Promise<void>;

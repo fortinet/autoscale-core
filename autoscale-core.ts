@@ -6,7 +6,7 @@ import { CloudFunctionProxy, CloudFunctionProxyAdapter, ReqMethod } from './clou
 import {
     AutoscaleContext,
     HeartbeatSyncStrategy,
-    MasterElectionStrategy,
+    PrimaryElectionStrategy,
     TaggingVmStrategy,
     VmTagging,
     RoutingEgressTrafficStrategy
@@ -23,9 +23,9 @@ import {
 import {
     HealthCheckResult,
     HealthCheckSyncState,
-    MasterElection,
-    MasterRecordVoteState
-} from './master-election';
+    PrimaryElection,
+    PrimaryRecordVoteState
+} from './primary-election';
 import { PlatformAdapter } from './platform-adapter';
 import { VirtualMachine } from './virtual-machine';
 
@@ -97,8 +97,8 @@ export interface AutoscaleCore
 }
 
 export interface HAActivePassiveBoostrapStrategy {
-    prepare(election: MasterElection): Promise<void>;
-    result(): Promise<MasterElection>;
+    prepare(election: PrimaryElection): Promise<void>;
+    result(): Promise<PrimaryElection>;
 }
 
 export class Autoscale implements AutoscaleCore {
@@ -110,7 +110,7 @@ export class Autoscale implements AutoscaleCore {
     routingEgressTrafficStrategy: RoutingEgressTrafficStrategy;
     scalingGroupStrategy: ScalingGroupStrategy;
     heartbeatSyncStrategy: HeartbeatSyncStrategy;
-    masterElectionStrategy: MasterElectionStrategy;
+    primaryElectionStrategy: PrimaryElectionStrategy;
     licensingStrategy: LicensingStrategy;
     constructor(p: PlatformAdapter, e: AutoscaleEnvironment, x: CloudFunctionProxyAdapter) {
         this.platform = p;
@@ -120,8 +120,8 @@ export class Autoscale implements AutoscaleCore {
     setScalingGroupStrategy(strategy: ScalingGroupStrategy): void {
         this.scalingGroupStrategy = strategy;
     }
-    setMasterElectionStrategy(strategy: MasterElectionStrategy): void {
-        this.masterElectionStrategy = strategy;
+    setPrimaryElectionStrategy(strategy: PrimaryElectionStrategy): void {
+        this.primaryElectionStrategy = strategy;
     }
     setHeartbeatSyncStrategy(strategy: HeartbeatSyncStrategy): void {
         this.heartbeatSyncStrategy = strategy;
@@ -164,8 +164,8 @@ export class Autoscale implements AutoscaleCore {
                 this.env.targetVm.id
             );
         }
-        // 2. if it is a master vm, remove its master tag
-        if (this.platform.vmEquals(targetVm, this.env.masterVm)) {
+        // 2. if it is a primary vm, remove its primary tag
+        if (this.platform.vmEquals(targetVm, this.env.primaryVm)) {
             const vmTaggings: VmTagging[] = [
                 {
                     vmId: targetVm.id,
@@ -236,58 +236,58 @@ export class Autoscale implements AutoscaleCore {
             return '';
         }
 
-        // if master exists?
-        // get master vm
-        this.env.masterVm = this.env.masterVm || (await this.platform.getMasterVm());
+        // if primary exists?
+        // get primary vm
+        this.env.primaryVm = this.env.primaryVm || (await this.platform.getPrimaryVm());
 
-        // get master healthcheck record
-        if (this.env.masterVm) {
-            this.env.masterHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                this.env.masterVm.id
+        // get primary healthcheck record
+        if (this.env.primaryVm) {
+            this.env.primaryHealthCheckRecord = await this.platform.getHealthCheckRecord(
+                this.env.primaryVm.id
             );
         } else {
-            this.env.masterHealthCheckRecord = undefined;
+            this.env.primaryHealthCheckRecord = undefined;
         }
-        // get master record
-        this.env.masterRecord = this.env.masterRecord || (await this.platform.getMasterRecord());
+        // get primary record
+        this.env.primaryRecord = this.env.primaryRecord || (await this.platform.getPrimaryRecord());
 
-        // about to handle to the master election
+        // about to handle to the primary election
 
-        // NOTE: master election relies on health check record of both target and master vm,
+        // NOTE: primary election relies on health check record of both target and primary vm,
         // ensure the two values are up to date.
 
-        // ASSERT: the following values are up-to-date before handling master election.
+        // ASSERT: the following values are up-to-date before handling primary election.
         // this.env.targetVm
-        // this.env.masterVm
-        // this.env.masterRecord
+        // this.env.primaryVm
+        // this.env.primaryRecord
 
-        const masterElection = await this.handleMasterElection();
+        const primaryElection = await this.handlePrimaryElection();
 
         // handle unhealthy vm
 
         // target not healthy?
 
-        // if new master is elected, reload the masterVm, master record to this.env.
-        if (masterElection.newMaster) {
-            this.env.masterVm = masterElection.newMaster;
-            this.env.masterRecord = masterElection.newMasterRecord;
-            this.env.masterHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                this.env.masterVm.id
+        // if new primary is elected, reload the primaryVm, primary record to this.env.
+        if (primaryElection.newPrimary) {
+            this.env.primaryVm = primaryElection.newPrimary;
+            this.env.primaryRecord = primaryElection.newPrimaryRecord;
+            this.env.primaryHealthCheckRecord = await this.platform.getHealthCheckRecord(
+                this.env.primaryVm.id
             );
 
-            // what to do with the old master?
+            // what to do with the old primary?
 
-            // old master unhealthy?
-            const oldMasterHealthCheck =
-                masterElection.oldMaster &&
-                (await this.platform.getHealthCheckRecord(masterElection.oldMaster.id));
-            if (oldMasterHealthCheck && !oldMasterHealthCheck.healthy) {
+            // old primary unhealthy?
+            const oldPrimaryHealthCheck =
+                primaryElection.oldPrimary &&
+                (await this.platform.getHealthCheckRecord(primaryElection.oldPrimary.id));
+            if (oldPrimaryHealthCheck && !oldPrimaryHealthCheck.healthy) {
                 if (
                     unhealthyVms.filter(vm => {
-                        return this.platform.vmEquals(vm, masterElection.oldMaster);
+                        return this.platform.vmEquals(vm, primaryElection.oldPrimary);
                     }).length === 0
                 ) {
-                    unhealthyVms.push(masterElection.oldMaster);
+                    unhealthyVms.push(primaryElection.oldPrimary);
                 }
             }
         }
@@ -313,55 +313,55 @@ export class Autoscale implements AutoscaleCore {
 
         // the health check record may need to update again.
         let needToUpdateHealthCheckRecord = false;
-        let updatedMasterIp: string;
+        let updatedPrimaryIp: string;
 
-        // if there's a new master elected, and the new master ip doesn't match the master ip of
-        // the target, assign the new master to the target
+        // if there's a new primary elected, and the new primary ip doesn't match the primary ip of
+        // the target, assign the new primary to the target
         if (
-            masterElection.newMaster &&
-            this.env.targetHealthCheckRecord.masterIp !==
-                masterElection.newMaster.primaryPrivateIpAddress
+            primaryElection.newPrimary &&
+            this.env.targetHealthCheckRecord.primaryIp !==
+                primaryElection.newPrimary.primaryPrivateIpAddress
         ) {
             needToUpdateHealthCheckRecord = true;
-            updatedMasterIp = masterElection.newMaster.primaryPrivateIpAddress;
+            updatedPrimaryIp = primaryElection.newPrimary.primaryPrivateIpAddress;
         }
-        // if there's an old master, and it's in healthy state, and the target vm doesn't have
-        // an assigned master ip, or the master ip is different, assign the old healthy master to it
+        // if there's an old primary, and it's in healthy state, and the target vm doesn't have
+        // an assigned primary ip, or the primary ip is different, assign the old healthy primary to it
         else if (
-            masterElection.oldMaster &&
-            this.env.masterVm &&
-            this.env.masterHealthCheckRecord &&
-            masterElection.oldMaster.id === this.env.masterVm.id &&
-            this.env.masterHealthCheckRecord.healthy &&
-            this.env.targetHealthCheckRecord.masterIp !==
-                masterElection.oldMaster.primaryPrivateIpAddress
+            primaryElection.oldPrimary &&
+            this.env.primaryVm &&
+            this.env.primaryHealthCheckRecord &&
+            primaryElection.oldPrimary.id === this.env.primaryVm.id &&
+            this.env.primaryHealthCheckRecord.healthy &&
+            this.env.targetHealthCheckRecord.primaryIp !==
+                primaryElection.oldPrimary.primaryPrivateIpAddress
         ) {
             needToUpdateHealthCheckRecord = true;
-            updatedMasterIp = masterElection.oldMaster.primaryPrivateIpAddress;
+            updatedPrimaryIp = primaryElection.oldPrimary.primaryPrivateIpAddress;
         }
 
-        if (masterElection.newMaster) {
-            // add master tag to the new master
+        if (primaryElection.newPrimary) {
+            // add primary tag to the new primary
             const vmTaggings: VmTagging[] = [
                 {
-                    vmId: masterElection.newMaster.id,
+                    vmId: primaryElection.newPrimary.id,
                     newVm: false, // ASSERT: vm making heartbeat sync request isn't a new vm
-                    newMasterRole: true
+                    newPrimaryRole: true
                 }
             ];
             await this.handleTaggingAutoscaleVm(vmTaggings);
 
-            // need to update egress traffic route when master role has changed.
+            // need to update egress traffic route when primary role has changed.
             // egress traffic route table is set in in EgressTrafficRouteTableList
             await this.handleEgressTrafficRoute();
         }
 
-        // need to update the health check record again due to master ip changes.
+        // need to update the health check record again due to primary ip changes.
         if (needToUpdateHealthCheckRecord) {
-            this.env.targetHealthCheckRecord.masterIp = updatedMasterIp;
+            this.env.targetHealthCheckRecord.primaryIp = updatedPrimaryIp;
             await this.platform.updateHealthCheckRecord(this.env.targetHealthCheckRecord);
             response = JSON.stringify({
-                'master-ip': updatedMasterIp
+                'master-ip': updatedPrimaryIp
             });
         }
         this.proxy.logAsInfo('called handleHeartbeatSync.');
@@ -374,92 +374,92 @@ export class Autoscale implements AutoscaleCore {
         this.proxy.logAsInfo('called handleTaggingAutoscaleVm.');
     }
 
-    async handleMasterElection(): Promise<MasterElection> {
-        this.proxy.logAsInfo('calling handleMasterElection.');
+    async handlePrimaryElection(): Promise<PrimaryElection> {
+        this.proxy.logAsInfo('calling handlePrimaryElection.');
         const settings = await this.platform.getSettings();
-        const electionTimeout = Number(settings.get(AutoscaleSetting.MasterElectionTimeout).value);
-        let election: MasterElection = {
-            oldMaster: this.env.masterVm,
-            oldMasterRecord: this.env.masterRecord,
-            newMaster: null,
-            newMasterRecord: null,
+        const electionTimeout = Number(settings.get(AutoscaleSetting.PrimaryElectionTimeout).value);
+        let election: PrimaryElection = {
+            oldPrimary: this.env.primaryVm,
+            oldPrimaryRecord: this.env.primaryRecord,
+            newPrimary: null,
+            newPrimaryRecord: null,
             candidate: this.env.targetVm,
             candidateHealthCheck: this.env.targetHealthCheckRecord || undefined,
             electionDuration: electionTimeout,
             signature: null
         };
-        await this.masterElectionStrategy.prepare(election);
+        await this.primaryElectionStrategy.prepare(election);
 
-        // master election required? condition 1: no master vm or record
-        if (!this.env.masterRecord || !this.env.masterVm) {
-            // handleMasterElection() will update the master vm info, if cannot determine the
-            // master vm, master vm info will be set to null
-            // expect that the pending master vm info can be available
-            await this.masterElectionStrategy.apply();
-            // after master election complete (election may not be necessary in some cases)
+        // primary election required? condition 1: no primary vm or record
+        if (!this.env.primaryRecord || !this.env.primaryVm) {
+            // handlePrimaryElection() will update the primary vm info, if cannot determine the
+            // primary vm, primary vm info will be set to null
+            // expect that the pending primary vm info can be available
+            await this.primaryElectionStrategy.apply();
+            // after primary election complete (election may not be necessary in some cases)
             // get the election result.
-            election = await this.masterElectionStrategy.result();
+            election = await this.primaryElectionStrategy.result();
         }
-        // master election required? condition 2: has master record, but it's pending
-        // ASSERT: the existing master record voteEndTime > now if voteState is pending (it's a calculated state)
-        else if (this.env.masterRecord.voteState === MasterRecordVoteState.Pending) {
-            // if master election is pending, only need to know the current result. do not need
+        // primary election required? condition 2: has primary record, but it's pending
+        // ASSERT: the existing primary record voteEndTime > now if voteState is pending (it's a calculated state)
+        else if (this.env.primaryRecord.voteState === PrimaryRecordVoteState.Pending) {
+            // if primary election is pending, only need to know the current result. do not need
             // to redo the election.
-            // but if the target is also the pending master, the master election need to complete
-            if (this.platform.vmEquals(this.env.targetVm, this.env.masterVm)) {
-                // only complete the election when the pending master is healthy and still in-sync
+            // but if the target is also the pending primary, the primary election need to complete
+            if (this.platform.vmEquals(this.env.targetVm, this.env.primaryVm)) {
+                // only complete the election when the pending primary is healthy and still in-sync
                 if (
                     this.env.targetHealthCheckRecord &&
                     this.env.targetHealthCheckRecord.healthy &&
                     this.env.targetHealthCheckRecord.syncState === HealthCheckSyncState.InSync
                 ) {
-                    this.env.masterRecord.voteState = MasterRecordVoteState.Done;
-                    election.newMaster = this.env.targetVm;
-                    election.newMasterRecord = this.env.masterRecord;
-                    await this.platform.updateMasterRecord(this.env.masterRecord);
+                    this.env.primaryRecord.voteState = PrimaryRecordVoteState.Done;
+                    election.newPrimary = this.env.targetVm;
+                    election.newPrimaryRecord = this.env.primaryRecord;
+                    await this.platform.updatePrimaryRecord(this.env.primaryRecord);
                 }
                 // otherwise, do nothing
             }
             // otherwise, do nothing
         }
-        // master election required? condition 3: has master record, but it's timeout
-        else if (this.env.masterRecord.voteState === MasterRecordVoteState.Timeout) {
-            // if master election already timeout, clear the current master vm and record
-            // handleMasterElection() will update the master vm info, if cannot determine the
-            // master vm, master vm info will be set to null
-            // expect that a different master will be elected and its vm info can be available
-            this.env.masterRecord = null;
-            this.env.masterVm = null;
-            await this.masterElectionStrategy.apply();
-            // after master election complete (election may not be necessary in some cases)
+        // primary election required? condition 3: has primary record, but it's timeout
+        else if (this.env.primaryRecord.voteState === PrimaryRecordVoteState.Timeout) {
+            // if primary election already timeout, clear the current primary vm and record
+            // handlePrimaryElection() will update the primary vm info, if cannot determine the
+            // primary vm, primary vm info will be set to null
+            // expect that a different primary will be elected and its vm info can be available
+            this.env.primaryRecord = null;
+            this.env.primaryVm = null;
+            await this.primaryElectionStrategy.apply();
+            // after primary election complete (election may not be necessary in some cases)
             // get the election result.
-            election = await this.masterElectionStrategy.result();
+            election = await this.primaryElectionStrategy.result();
         }
-        // master election required? condition 4: has master record, it's done
-        else if (this.env.masterRecord.voteState === MasterRecordVoteState.Done) {
-            // how is the master health check in this case?
-            // get master vm healthcheck record
-            if (!this.env.masterHealthCheckRecord) {
-                this.env.masterHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                    this.env.masterVm.id
+        // primary election required? condition 4: has primary record, it's done
+        else if (this.env.primaryRecord.voteState === PrimaryRecordVoteState.Done) {
+            // how is the primary health check in this case?
+            // get primary vm healthcheck record
+            if (!this.env.primaryHealthCheckRecord) {
+                this.env.primaryHealthCheckRecord = await this.platform.getHealthCheckRecord(
+                    this.env.primaryVm.id
                 );
             }
-            // master is unhealthy, master election required. if target is the master, don't do election.
+            // primary is unhealthy, primary election required. if target is the primary, don't do election.
             if (
-                !this.env.masterHealthCheckRecord.healthy &&
-                !this.platform.vmEquals(this.env.targetVm, this.env.masterVm)
+                !this.env.primaryHealthCheckRecord.healthy &&
+                !this.platform.vmEquals(this.env.targetVm, this.env.primaryVm)
             ) {
-                // handleMasterElection() will update the master vm info, if cannot determine the
-                // master vm, master vm info will be set to null
-                // expect that a different master will be elected and its vm info can be available
-                await this.masterElectionStrategy.apply();
-                // after master election complete (election may not be necessary in some cases)
+                // handlePrimaryElection() will update the primary vm info, if cannot determine the
+                // primary vm, primary vm info will be set to null
+                // expect that a different primary will be elected and its vm info can be available
+                await this.primaryElectionStrategy.apply();
+                // after primary election complete (election may not be necessary in some cases)
                 // get the election result.
-                election = await this.masterElectionStrategy.result();
+                election = await this.primaryElectionStrategy.result();
             }
         }
 
-        this.proxy.logAsInfo('called handleMasterElection.');
+        this.proxy.logAsInfo('called handlePrimaryElection.');
         return election;
     }
     async handleUnhealthyVm(vms: VirtualMachine[]): Promise<void> {

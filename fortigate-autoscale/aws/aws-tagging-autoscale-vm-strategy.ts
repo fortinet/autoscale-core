@@ -35,14 +35,14 @@ export class AwsTaggingAutoscaleVmStrategy implements TaggingVmStrategy {
     async add(taggings: VmTagging[]): Promise<void> {
         this.proxy.logAsInfo('calling AwsTaggingAutoscaleVmStrategy.add');
         try {
-            // if there's a vm with new master role flag, delete the master role tag from any other
-            // vm in autoscale, then add master role tag to the new master vm
-            const newMasterTagging = taggings.find(tagging => tagging.newMasterRole);
-            if (newMasterTagging) {
-                const vmIds: string[] = await this.platform.listMasterRoleVmId();
+            // if there's a vm with new primary role flag, delete the primary role tag from any other
+            // vm in autoscale, then add primary role tag to the new primary vm
+            const newPrimaryTagging = taggings.find(tagging => tagging.newPrimaryRole);
+            if (newPrimaryTagging) {
+                const vmIds: string[] = await this.platform.listPrimaryRoleVmId();
                 // delete Autoscale role tag from those vms
                 if (vmIds.length > 0) {
-                    await this.platform.removeMasterRoleTag(vmIds);
+                    await this.platform.removePrimaryRoleTag(vmIds);
                 }
             }
             // add necessary tags to each new vm.
@@ -64,10 +64,10 @@ export class AwsTaggingAutoscaleVmStrategy implements TaggingVmStrategy {
                             value: `${ResTagPrefix}-fortigate-autoscale-instance-${tagging.vmId}`
                         });
                     }
-                    if (tagging.newMasterRole) {
+                    if (tagging.newPrimaryRole) {
                         allTags.push({
                             key: TAG_KEY_AUTOSCALE_ROLE,
-                            value: 'master'
+                            value: 'primary'
                         });
                     }
                     return this.platform.tagResource([tagging.vmId], allTags).catch(error => {
@@ -88,13 +88,13 @@ export class AwsTaggingAutoscaleVmStrategy implements TaggingVmStrategy {
     async clear(taggings: VmTagging[]): Promise<void> {
         this.proxy.logAsInfo('calling AwsTaggingAutoscaleVmStrategy.clear');
         try {
-            const vmIds: string[] = await this.platform.listMasterRoleVmId();
-            // delete Autoscale role tag from those vms with master role tag as well as
+            const vmIds: string[] = await this.platform.listPrimaryRoleVmId();
+            // delete Autoscale role tag from those vms with primary role tag as well as
             // in the taggings list
             const deleteIds: string[] = taggings
                 .filter(tagging => vmIds.includes(tagging.vmId))
                 .map(tagging => tagging.vmId);
-            await this.platform.removeMasterRoleTag(deleteIds);
+            await this.platform.removePrimaryRoleTag(deleteIds);
         } catch (error) {
             this.proxy.logForError('clearing tag from Autoscale vm unsucessfully', error);
         }

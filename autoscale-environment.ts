@@ -1,13 +1,13 @@
 import { VirtualMachine } from './virtual-machine';
-import { HealthCheckRecord, MasterRecord } from './master-election';
+import { HealthCheckRecord, PrimaryRecord } from './primary-election';
 
 export interface AutoscaleEnvironment {
-    masterId?: string;
-    masterVm?: VirtualMachine;
-    masterScalingGroup?: string;
-    masterHealthCheckRecord?: HealthCheckRecord;
-    masterRecord: MasterRecord;
-    masterRoleChanged?: boolean;
+    primaryId?: string;
+    primaryVm?: VirtualMachine;
+    primaryScalingGroup?: string;
+    primaryHealthCheckRecord?: HealthCheckRecord;
+    primaryRecord: PrimaryRecord;
+    primaryRoleChanged?: boolean;
     targetId?: string;
     targetVm?: VirtualMachine;
     targetScalingGroup?: string;

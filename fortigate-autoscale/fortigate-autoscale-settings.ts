@@ -29,7 +29,7 @@ export const FortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
         description:
             'The comma-separeted list of route tables associated with any subnets,' +
             ' which should bet configured to contain a route 0.0.0.0/0 to the' +
-            ' master fortigate to handle egress traffic.',
+            ' primary fortigate to handle egress traffic.',
         editable: false,
         jsonEncoded: false,
         booleanType: false

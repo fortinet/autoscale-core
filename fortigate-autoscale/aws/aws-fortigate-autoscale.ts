@@ -2,7 +2,7 @@ import { AutoscaleEnvironment } from '../../autoscale-environment';
 import { CloudFunctionProxyAdapter, ReqType } from '../../cloud-function-proxy';
 import {
     ConstantIntervalHeartbeatSyncStrategy,
-    PreferredGroupMasterElection,
+    PreferredGroupPrimaryElection,
     NoopRoutingEgressTrafficStrategy
 } from '../../context-strategy/autoscale-context';
 import { ReusableLicensingStrategy } from '../../context-strategy/licensing-context';
@@ -40,7 +40,7 @@ import {
 import { JSONable } from '../../jsonable';
 import { AwsLambdaInvocationProxy } from './aws-cloud-function-proxy';
 import { Context } from 'aws-lambda';
-import { AwsRoutingEgressTrafficViaMasterVmStrategy } from './aws-routing-egress-traffic-via-master-vm-strategy';
+import { AwsRoutingEgressTrafficViaPrimaryVmStrategy } from './aws-routing-egress-traffic-via-primary-vm-strategy';
 
 /** ./aws-fortigate-autoscale-lambda-invocable
  * AWS FortiGate Autoscale - class, with capabilities:
@@ -64,8 +64,8 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         super(p, e, x);
         // use AWS Hybrid scaling group strategy
         this.setScalingGroupStrategy(new AwsHybridScalingGroupStrategy(p, x));
-        // use peferred group master election for Hybrid licensing model
-        this.setMasterElectionStrategy(new PreferredGroupMasterElection(p, x));
+        // use peferred group primary election for Hybrid licensing model
+        this.setPrimaryElectionStrategy(new PreferredGroupPrimaryElection(p, x));
         // use a constant interval heartbeat sync strategy
         this.setHeartbeatSyncStrategy(new ConstantIntervalHeartbeatSyncStrategy(p, x));
         // use AWS resource tagging strategy
@@ -79,9 +79,9 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         this.setNicAttachmentStrategy(new AwsNicAttachmentStrategy(p, x));
         // use Noop vpn attachment strategy
         this.setVpnAttachmentStrategy(new NoopVpnAttachmentStrategy(p, x));
-        // use the routing egress traffic via master vm strategy
+        // use the routing egress traffic via primary vm strategy
         this.setRoutingEgressTrafficStrategy(
-            new AwsRoutingEgressTrafficViaMasterVmStrategy(p, x, e)
+            new AwsRoutingEgressTrafficViaPrimaryVmStrategy(p, x, e)
         );
     }
     setNicAttachmentStrategy(strategy: NicAttachmentStrategy): void {

@@ -43,17 +43,17 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
     async apply(): Promise<BootstrapConfigStrategyResult> {
         this.settings = await this.platform.getSettings();
         const config = await this.loadConfig();
-        // target is the master? return config sets for active role
-        if (this.platform.vmEquals(this.env.targetVm, this.env.masterVm)) {
-            this.config = await this.getActiveRoleConfig(config, this.env.targetVm);
+        // target is the primary? return config sets for active role
+        if (this.platform.vmEquals(this.env.targetVm, this.env.primaryVm)) {
+            this.config = await this.getPrimaryRoleConfig(config, this.env.targetVm);
             this.proxy.logAsInfo('loaded configuration for active role.');
         }
         // else return config sets for passive device role
         else {
-            this.config = await this.getPassiveRoleConfig(
+            this.config = await this.getSecondaryRoleConfig(
                 config,
                 this.env.targetVm,
-                this.env.masterVm
+                this.env.primaryVm
             );
             this.proxy.logAsInfo('loaded configuration for passive role.');
         }
@@ -337,32 +337,36 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         }
     }
     /**
-     * get bootstrap configuration for a FGT vm which's role will be master (or HA active)
+     * get bootstrap configuration for a FGT vm which's role will be primary
      * @param  {string} config configset content
      * @param  {VirtualMachine} targetVm the target vm which will consume this configuration
      * @returns {Promise} configset content
      */
-    protected getActiveRoleConfig(config: string, targetVm: VirtualMachine): Promise<string> {
+    protected getPrimaryRoleConfig(config: string, targetVm: VirtualMachine): Promise<string> {
         return Promise.resolve(this.processConfigV2(config, { '@device': targetVm }));
     }
     /**
-     * get bootstrap configuration for a FGT vm which's role will be slave (or HA passive)
+     * get bootstrap configuration for a FGT vm which's role will be secondary
      * @param  {string} config configset content
      * @param  {VirtualMachine} targetVm the target vm which will consume this configuration
-     * @param  {VirtualMachine} masterVm (optional) the target vm which will be the master (active)
+     * @param  {VirtualMachine} primaryVm (optional) the target vm which will be the primary (active)
      * role in the HA cluster
      * @returns {Promise} configset content
      */
-    protected getPassiveRoleConfig(
+    protected getSecondaryRoleConfig(
         config: string,
         targetVm: VirtualMachine,
-        masterVm?: VirtualMachine
+        primaryVm?: VirtualMachine
     ): Promise<string> {
-        const setMasterIpSection =
-            (masterVm && `\n    set master-ip ${masterVm.primaryPrivateIpAddress}`) || '';
+        const setPrimaryIpSection =
+            (primaryVm && `\n    set master-ip ${primaryVm.primaryPrivateIpAddress}`) || '';
         const conf = this.processConfig(config, { '@device': targetVm });
+        // TODO: fix it when primary/secondary terminology has been used in FOS CLI command.
         return Promise.resolve(
-            conf.replace(new RegExp('set role master', 'gm'), `set role slave${setMasterIpSection}`)
+            conf.replace(
+                new RegExp('set role master', 'gm'),
+                `set role slave${setPrimaryIpSection}`
+            )
         );
     }
 }

@@ -1,6 +1,6 @@
 import {
     AwsFortiGateAutoscale,
-    MasterElectionStrategy,
+    PrimaryElectionStrategy,
     BootstrapConfigurationStrategy,
     HeartbeatSyncStrategy,
     AwsFortiGateAutoscaleTgw,
@@ -16,13 +16,13 @@ export class TestAwsFortiGateAutoscale<TReq, TContext, TRes> extends AwsFortiGat
     TRes
 > {
     expose(): {
-        masterElectionStrategy: MasterElectionStrategy;
+        primaryElectionStrategy: PrimaryElectionStrategy;
         heartbeatSyncStrategy: HeartbeatSyncStrategy;
         bootstrapConfigStrategy: BootstrapConfigurationStrategy;
         licensingStrategy: LicensingStrategy;
     } {
         return {
-            masterElectionStrategy: this.masterElectionStrategy,
+            primaryElectionStrategy: this.primaryElectionStrategy,
             heartbeatSyncStrategy: this.heartbeatSyncStrategy,
             bootstrapConfigStrategy: this.bootstrapConfigStrategy,
             licensingStrategy: this.licensingStrategy
@@ -36,12 +36,12 @@ export class TestAwsTgwFortiGateAutoscale<TReq, TContext, TRes> extends AwsForti
     TRes
 > {
     expose(): {
-        masterElectionStrategy: MasterElectionStrategy;
+        primaryElectionStrategy: PrimaryElectionStrategy;
         heartbeatSyncStrategy: HeartbeatSyncStrategy;
         bootstrapConfigStrategy: AwsFortiGateBootstrapTgwStrategy;
     } {
         return {
-            masterElectionStrategy: this.masterElectionStrategy,
+            primaryElectionStrategy: this.primaryElectionStrategy,
             heartbeatSyncStrategy: this.heartbeatSyncStrategy,
             bootstrapConfigStrategy: this
                 .bootstrapConfigStrategy as AwsFortiGateBootstrapTgwStrategy

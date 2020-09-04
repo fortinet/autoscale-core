@@ -1,12 +1,12 @@
 import { AutoscaleSetting } from '../autoscale-setting';
 import {
-    MasterElection,
-    MasterRecordVoteState,
-    MasterRecord,
+    PrimaryElection,
+    PrimaryRecordVoteState,
+    PrimaryRecord,
     HealthCheckResult,
     HealthCheckRecord,
     HealthCheckSyncState as HeartbeatSyncState
-} from '../master-election';
+} from '../primary-election';
 import { PlatformAdapter } from '../platform-adapter';
 import { CloudFunctionProxyAdapter, LogLevel } from '../cloud-function-proxy';
 import { VirtualMachine } from '../virtual-machine';
@@ -17,8 +17,8 @@ import { AutoscaleEnvironment } from '../autoscale-environment';
  * To provide Autoscale basic logics
  */
 export interface AutoscaleContext {
-    setMasterElectionStrategy(strategy: MasterElectionStrategy): void;
-    handleMasterElection(): Promise<MasterElection | null>;
+    setPrimaryElectionStrategy(strategy: PrimaryElectionStrategy): void;
+    handlePrimaryElection(): Promise<PrimaryElection | null>;
     setHeartbeatSyncStrategy(strategy: HeartbeatSyncStrategy): void;
     handleHeartbeatSync(): Promise<string>;
     setTaggingAutoscaleVmStrategy(strategy: TaggingVmStrategy): void;
@@ -28,35 +28,35 @@ export interface AutoscaleContext {
     onVmFullyConfigured(): Promise<void>;
 }
 
-export interface MasterElectionStrategy {
-    prepare(election: MasterElection): Promise<void>;
-    result(): Promise<MasterElection>;
-    apply(): Promise<MasterElectionStrategyResult>;
+export interface PrimaryElectionStrategy {
+    prepare(election: PrimaryElection): Promise<void>;
+    result(): Promise<PrimaryElection>;
+    apply(): Promise<PrimaryElectionStrategyResult>;
     readonly applied: boolean;
 }
 
-export enum MasterElectionStrategyResult {
+export enum PrimaryElectionStrategyResult {
     ShouldStop = 'ShouldStop',
     ShouldContinue = 'ShouldContinue'
 }
 
-export class PreferredGroupMasterElection implements MasterElectionStrategy {
-    env: MasterElection;
+export class PreferredGroupPrimaryElection implements PrimaryElectionStrategy {
+    env: PrimaryElection;
     platform: PlatformAdapter;
-    res: MasterElection;
+    res: PrimaryElection;
     proxy: CloudFunctionProxyAdapter;
     private _applied: boolean;
     constructor(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter) {
         this.platform = platform;
         this.proxy = proxy;
     }
-    prepare(env: MasterElection): Promise<void> {
+    prepare(env: PrimaryElection): Promise<void> {
         this.env = env;
         this.res = {
-            oldMaster: this.env.oldMaster,
-            oldMasterRecord: this.env.oldMasterRecord,
-            newMaster: null, // no initial new master
-            newMasterRecord: null, // no initial new master record
+            oldPrimary: this.env.oldPrimary,
+            oldPrimaryRecord: this.env.oldPrimaryRecord,
+            newPrimary: null, // no initial new primary
+            newPrimaryRecord: null, // no initial new primary record
             candidate: this.env.candidate,
             candidateHealthCheck: this.env.candidateHealthCheck,
             preferredScalingGroup: this.env.preferredScalingGroup,
@@ -71,28 +71,30 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
         return this._applied;
     }
 
-    result(): Promise<MasterElection> {
+    result(): Promise<PrimaryElection> {
         return Promise.resolve(this.res);
     }
-    async apply(): Promise<MasterElectionStrategyResult> {
-        this.proxy.log('applying PreferredGroupMasterElection strategy.', LogLevel.Log);
+    async apply(): Promise<PrimaryElectionStrategyResult> {
+        this.proxy.log('applying PreferredGroupPrimaryElection strategy.', LogLevel.Log);
         this._applied = true;
         const result = await this.run();
-        this.proxy.log('applied PreferredGroupMasterElection strategy.', LogLevel.Log);
+        this.proxy.log('applied PreferredGroupPrimaryElection strategy.', LogLevel.Log);
         return result;
     }
     /**
-     * Only vm in the specified byol scaling group can be elected as the new master
+     * Only vm in the specified byol scaling group can be elected as the new primary
      */
-    async run(): Promise<MasterElectionStrategyResult> {
+    async run(): Promise<PrimaryElectionStrategyResult> {
         const settings = await this.platform.getSettings();
-        // get the master scaling group
-        const settingGroupName = settings.get(AutoscaleSetting.MasterScalingGroupName).value;
-        const electionDuration = Number(settings.get(AutoscaleSetting.MasterElectionTimeout).value);
+        // get the primary scaling group
+        const settingGroupName = settings.get(AutoscaleSetting.PrimaryScalingGroupName).value;
+        const electionDuration = Number(
+            settings.get(AutoscaleSetting.PrimaryElectionTimeout).value
+        );
         const signature = this.env.candidate
             ? `${this.env.candidate.scalingGroupName}:${this.env.candidate.id}:${Date.now()}`
             : '';
-        const masterRecord: MasterRecord = {
+        const primaryRecord: PrimaryRecord = {
             id: `${signature}`,
             ip: this.env.candidate.primaryPrivateIpAddress,
             vmId: this.env.candidate.id,
@@ -100,73 +102,73 @@ export class PreferredGroupMasterElection implements MasterElectionStrategy {
             virtualNetworkId: this.env.candidate.virtualNetworkId,
             subnetId: this.env.candidate.subnetId,
             voteEndTime: null,
-            voteState: MasterRecordVoteState.Pending
+            voteState: PrimaryRecordVoteState.Pending
         };
 
         // candidate not in the preferred scaling group? no election will be run
         if (this.env.candidate.scalingGroupName !== settingGroupName) {
             this.proxy.log(
                 `The candidate (id: ${this.env.candidate.id}) ` +
-                    "isn't in the preferred scaling group. It cannot run a master election. " +
-                    'Master election not started.',
+                    "isn't in the preferred scaling group. It cannot run a primary election. " +
+                    'Primary election not started.',
                 LogLevel.Warn
             );
-            return MasterElectionStrategyResult.ShouldContinue;
+            return PrimaryElectionStrategyResult.ShouldContinue;
         } else {
             // if has candidate healthcheck record, that means this candidate is already in-service
-            // but is in a non-master role. If it qualifies for election and wins the election, the
-            // master election can be deemed done immediately as master record created.
+            // but is in a non-primary role. If it qualifies for election and wins the election, the
+            // primary election can be deemed done immediately as primary record created.
             if (this.env.candidateHealthCheck && this.env.candidateHealthCheck.healthy) {
-                // KNOWN ISSUE: if a brand new device is the master candidate and it wins
-                // the election to become the new master, ALL CONFIGURATION WILL BE LOST
+                // KNOWN ISSUE: if a brand new device is the primary candidate and it wins
+                // the election to become the new primary, ALL CONFIGURATION WILL BE LOST
                 // TODO: need to find a more qualified candidate, or develop a technique to sync
                 // the configuration.
-                masterRecord.voteEndTime = Date.now(); // election ends immediately
-                masterRecord.voteState = MasterRecordVoteState.Done;
+                primaryRecord.voteEndTime = Date.now(); // election ends immediately
+                primaryRecord.voteState = PrimaryRecordVoteState.Done;
             }
             // otherwise, the election should be pending
             else {
                 // election will end in now + electionduration
-                masterRecord.voteEndTime = Date.now() + electionDuration * 1000;
-                masterRecord.voteState = MasterRecordVoteState.Pending;
+                primaryRecord.voteEndTime = Date.now() + electionDuration * 1000;
+                primaryRecord.voteState = PrimaryRecordVoteState.Pending;
             }
             try {
-                // if old master record is provided, will purge it.
-                // this strategy doesn't check the legitimacy of the old master record.
+                // if old primary record is provided, will purge it.
+                // this strategy doesn't check the legitimacy of the old primary record.
                 // the strategy context checks the legitimacy instead.
-                await this.platform.createMasterRecord(
-                    masterRecord,
-                    this.env.oldMasterRecord || null
+                await this.platform.createPrimaryRecord(
+                    primaryRecord,
+                    this.env.oldPrimaryRecord || null
                 );
                 this.proxy.log(
-                    `Master election completed. New master is (id: ${this.env.candidate.id})`,
+                    `Primary election completed. New primary is (id: ${this.env.candidate.id})`,
                     LogLevel.Info
                 );
-                // the candidate becomes the new master because it wins the election
-                this.res.newMaster = this.env.candidate;
-                // update the new master record
-                this.res.newMasterRecord = masterRecord;
+                // the candidate becomes the new primary because it wins the election
+                this.res.newPrimary = this.env.candidate;
+                // update the new primary record
+                this.res.newPrimaryRecord = primaryRecord;
             } catch (error) {
-                // if error occurred within creating the master record, check if a new master was
+                // if error occurred within creating the primary record, check if a new primary was
                 // elected somewhere else at the same time.
-                const newMaster = await this.platform.getMasterVm();
-                // if another master was elected. use that elected master.
-                if (newMaster) {
-                    this.res.newMaster = newMaster;
-                    // update the new master record
-                    this.res.newMasterRecord = await this.platform.getMasterRecord();
+                const newPrimary = await this.platform.getPrimaryVm();
+                // if another primary was elected. use that elected primary.
+                if (newPrimary) {
+                    this.res.newPrimary = newPrimary;
+                    // update the new primary record
+                    this.res.newPrimaryRecord = await this.platform.getPrimaryRecord();
                 }
-                // if no master elected, there must be an unexpected error, log and stop.
+                // if no primary elected, there must be an unexpected error, log and stop.
                 else {
                     this.proxy.logForError(
-                        'Error in running PreferredGroupMasterElection strategy.',
+                        'Error in running PreferredGroupPrimaryElection strategy.',
                         error
                     );
-                    return MasterElectionStrategyResult.ShouldStop;
+                    return PrimaryElectionStrategyResult.ShouldStop;
                 }
             }
-            // ASSERT: new master and master record are ready.
-            return MasterElectionStrategyResult.ShouldContinue;
+            // ASSERT: new primary and primary record are ready.
+            return PrimaryElectionStrategyResult.ShouldContinue;
         }
     }
 }
@@ -234,7 +236,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 vmId: this.targetVm.id,
                 scalingGroupName: this.targetVm.scalingGroupName,
                 ip: this.targetVm.primaryPrivateIpAddress,
-                masterIp: '', // master ip is unknown to this strategy
+                primaryIp: '', // primary ip is unknown to this strategy
                 heartbeatInterval: newInterval,
                 heartbeatLossCount: 0, // set to 0 because it is the first heartbeat
                 nextHeartbeatTime: heartbeatArriveTime + newInterval,
@@ -318,7 +320,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
     get targetHealthCheckRecord(): HealthCheckRecord {
         return this._targetHealthCheckRecord;
     }
-    masterHealthCheckRecord: HealthCheckRecord;
+    primaryHealthCheckRecord: HealthCheckRecord;
     get healthCheckResult(): HealthCheckResult {
         return this.result;
     }
@@ -368,7 +370,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
 export interface VmTagging {
     vmId: string;
     newVm?: boolean;
-    newMasterRole?: boolean;
+    newPrimaryRole?: boolean;
     clear?: boolean;
 }
 
