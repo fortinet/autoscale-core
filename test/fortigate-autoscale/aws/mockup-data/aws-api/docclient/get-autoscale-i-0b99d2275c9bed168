@@ -15,7 +15,7 @@
             "ip": {
                 "S": "192.168.0.133"
             },
-            "masterIp": {
+            "primaryIp": {
                 "S": "192.168.1.220"
             },
             "nextHeartBeatTime": {

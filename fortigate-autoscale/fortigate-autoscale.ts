@@ -142,40 +142,40 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
                     'already exists. It seems this bootstrap configuration request is duplicate.'
             );
         } else {
-            // if master is elected?
-            // get master vm
-            if (!this.env.masterVm) {
-                this.env.masterVm = await this.platform.getMasterVm();
+            // if primary is elected?
+            // get primary vm
+            if (!this.env.primaryVm) {
+                this.env.primaryVm = await this.platform.getPrimaryVm();
             }
-            // get master record
-            this.env.masterRecord =
-                this.env.masterRecord || (await this.platform.getMasterRecord());
-            // handle master election. the expected result should be one of:
-            // master election is triggered
-            // master election is finalized
-            // master election isn't needed
-            const masterElection = await this.handleMasterElection();
+            // get primary record
+            this.env.primaryRecord =
+                this.env.primaryRecord || (await this.platform.getPrimaryRecord());
+            // handle primary election. the expected result should be one of:
+            // primary election is triggered
+            // primary election is finalized
+            // primary election isn't needed
+            const primaryElection = await this.handlePrimaryElection();
 
-            // assert master record should be available now
-            // get master record again
-            this.env.masterVm = masterElection.newMaster || masterElection.oldMaster;
-            this.env.masterRecord =
-                masterElection.newMasterRecord || masterElection.oldMasterRecord;
+            // assert primary record should be available now
+            // get primary record again
+            this.env.primaryVm = primaryElection.newPrimary || primaryElection.oldPrimary;
+            this.env.primaryRecord =
+                primaryElection.newPrimaryRecord || primaryElection.oldPrimaryRecord;
 
             // tag the new vm
             const vmTagging: VmTagging = {
                 vmId: this.env.targetVm.id,
                 newVm: true, // ASSERT: vm in boostraping is a new vm
-                newMasterRole:
-                    (masterElection.newMaster &&
-                        this.platform.vmEquals(this.env.targetVm, this.env.masterVm)) ||
+                newPrimaryRole:
+                    (primaryElection.newPrimary &&
+                        this.platform.vmEquals(this.env.targetVm, this.env.primaryVm)) ||
                     false
             };
             await this.handleTaggingAutoscaleVm([vmTagging]);
 
-            // need to update egress traffic route when master role has changed.
+            // need to update egress traffic route when primary role has changed.
             // egress traffic route table is set in in EgressTrafficRouteTableList
-            if (masterElection.newMaster) {
+            if (primaryElection.newPrimary) {
                 await this.handleEgressTrafficRoute();
             }
         }

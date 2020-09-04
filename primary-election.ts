@@ -8,7 +8,7 @@ export interface HealthCheckRecord {
     vmId: string;
     scalingGroupName: string;
     ip: string;
-    masterIp: string;
+    primaryIp: string;
     heartbeatInterval: number;
     heartbeatLossCount: number;
     nextHeartbeatTime: number;
@@ -25,13 +25,13 @@ export enum HealthCheckResult {
     Dropped = 'dropped'
 }
 
-export enum MasterRecordVoteState {
+export enum PrimaryRecordVoteState {
     Pending = 'pending',
     Done = 'done',
     Timeout = 'timeout'
 }
 
-export interface MasterRecord {
+export interface PrimaryRecord {
     id: string;
     vmId: string;
     ip: string;
@@ -39,17 +39,17 @@ export interface MasterRecord {
     virtualNetworkId: string;
     subnetId: string;
     voteEndTime: number;
-    voteState: MasterRecordVoteState;
+    voteState: PrimaryRecordVoteState;
 }
 
-export interface MasterElection {
-    oldMaster?: VirtualMachine;
-    oldMasterRecord?: MasterRecord;
-    newMaster: VirtualMachine;
-    newMasterRecord: MasterRecord;
+export interface PrimaryElection {
+    oldPrimary?: VirtualMachine;
+    oldPrimaryRecord?: PrimaryRecord;
+    newPrimary: VirtualMachine;
+    newPrimaryRecord: PrimaryRecord;
     candidate: VirtualMachine;
     candidateHealthCheck?: HealthCheckRecord;
     preferredScalingGroup?: string;
     electionDuration?: number;
-    signature: string; // to identify a master election
+    signature: string; // to identify a primary election
 }

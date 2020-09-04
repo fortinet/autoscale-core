@@ -7,7 +7,7 @@ import {
 import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
 import { VirtualMachine } from '../virtual-machine';
 import path from 'path';
-import { HealthCheckSyncState } from '../master-election';
+import { HealthCheckSyncState } from '../primary-election';
 import { waitFor, WaitForPromiseEmitter, WaitForConditionChecker } from '../helper-function';
 
 export enum LicensingStrategyResult {

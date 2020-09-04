@@ -26,8 +26,8 @@ export enum AutoscaleSetting {
     HeartbeatInterval = 'heartbeat-interval',
     HeartbeatLossCount = 'heartbeat-loss-count',
     LicenseFileDirectory = 'license-file-directory',
-    MasterElectionTimeout = 'master-election-timeout',
-    MasterScalingGroupName = 'master-scaling-group-name',
+    PrimaryElectionTimeout = 'primary-election-timeout',
+    PrimaryScalingGroupName = 'primary-scaling-group-name',
     PaygScalingGroupDesiredCapacity = 'scaling-group-desired-capacity',
     PaygScalingGroupMinSize = 'scaling-group-min-size',
     PaygScalingGroupMaxSize = 'scaling-group-max-size',
@@ -320,16 +320,16 @@ export const AutoscaleSettingItemDictionary: SettingItemDictionary = {
         jsonEncoded: false,
         booleanType: false
     },
-    [AutoscaleSetting.MasterElectionTimeout]: {
-        keyName: AutoscaleSetting.MasterElectionTimeout,
-        description: 'The maximum time (in seconds) to wait for a master election to complete.',
+    [AutoscaleSetting.PrimaryElectionTimeout]: {
+        keyName: AutoscaleSetting.PrimaryElectionTimeout,
+        description: 'The maximum time (in seconds) to wait for a primary election to complete.',
         editable: true,
         jsonEncoded: false,
         booleanType: false
     },
-    [AutoscaleSetting.MasterScalingGroupName]: {
-        keyName: AutoscaleSetting.MasterScalingGroupName,
-        description: 'The name of the master auto scaling group.',
+    [AutoscaleSetting.PrimaryScalingGroupName]: {
+        keyName: AutoscaleSetting.PrimaryScalingGroupName,
+        description: 'The name of the primary auto scaling group.',
         editable: false,
         jsonEncoded: false,
         booleanType: false

@@ -13,10 +13,10 @@ import {
 import {
     ConstantIntervalHeartbeatSyncStrategy,
     HeartbeatSyncStrategy,
-    MasterElectionStrategy,
-    MasterElectionStrategyResult,
+    PrimaryElectionStrategy,
+    PrimaryElectionStrategyResult,
     NoopTaggingVmStrategy,
-    PreferredGroupMasterElection
+    PreferredGroupPrimaryElection
 } from '../context-strategy/autoscale-context';
 import {
     NoopScalingGroupStrategy,
@@ -27,10 +27,10 @@ import {
     HealthCheckRecord,
     HealthCheckResult,
     HealthCheckSyncState,
-    MasterElection,
-    MasterRecord,
-    MasterRecordVoteState
-} from '../master-election';
+    PrimaryElection,
+    PrimaryRecord,
+    PrimaryRecordVoteState
+} from '../primary-election';
 import {
     LicenseFile,
     LicenseStockRecord,
@@ -50,7 +50,7 @@ const TEST_HCR: HealthCheckRecord = {
     vmId: 'fake-test-vm-id',
     scalingGroupName: 'fake-test-vm-scaling-group-name',
     ip: '2',
-    masterIp: '3',
+    primaryIp: '3',
     heartbeatInterval: 4,
     heartbeatLossCount: 5,
     nextHeartbeatTime: 6,
@@ -70,7 +70,7 @@ const TEST_VM: VirtualMachine = {
     state: VirtualMachineState.Running
 };
 
-const TEST_MASTER_RECORD: MasterRecord = {
+const TEST_PRIMARY_RECORD: PrimaryRecord = {
     id: '1',
     vmId: '2',
     ip: '3',
@@ -78,12 +78,12 @@ const TEST_MASTER_RECORD: MasterRecord = {
     virtualNetworkId: '5',
     subnetId: '6',
     voteEndTime: 7,
-    voteState: MasterRecordVoteState.Done
+    voteState: PrimaryRecordVoteState.Done
 };
 
-const TEST_MASTER_ELECTION: MasterElection = {
-    newMaster: TEST_VM,
-    newMasterRecord: TEST_MASTER_RECORD,
+const TEST_PRIMARY_ELECTION: PrimaryElection = {
+    newPrimary: TEST_VM,
+    newPrimaryRecord: TEST_PRIMARY_RECORD,
     candidate: TEST_VM,
     signature: '12345'
 };
@@ -197,13 +197,13 @@ class TestPlatformAdapter implements PlatformAdapter {
     getTargetVm(): Promise<VirtualMachine> {
         return Promise.resolve(TEST_VM);
     }
-    getMasterVm(): Promise<VirtualMachine> {
+    getPrimaryVm(): Promise<VirtualMachine> {
         throw new Error('Method not implemented.');
     }
     getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord> {
         return Promise.resolve(TEST_HCR);
     }
-    getMasterRecord(): Promise<MasterRecord> {
+    getPrimaryRecord(): Promise<PrimaryRecord> {
         throw new Error('Method not implemented.');
     }
     equalToVm(vmA: VirtualMachine, vmB: VirtualMachine): boolean {
@@ -218,10 +218,10 @@ class TestPlatformAdapter implements PlatformAdapter {
     updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
         throw new Error('Method not implemented.');
     }
-    createMasterRecord(rec: MasterRecord, oldRec: MasterRecord): Promise<void> {
+    createPrimaryRecord(rec: PrimaryRecord, oldRec: PrimaryRecord): Promise<void> {
         throw new Error('Method not implemented.');
     }
-    updateMasterRecord(rec: MasterRecord): Promise<void> {
+    updatePrimaryRecord(rec: PrimaryRecord): Promise<void> {
         throw new Error('Method not implemented.');
     }
 }
@@ -266,21 +266,21 @@ describe('sanity test', () => {
     let e: AutoscaleEnvironment;
     let x: TestCloudFunctionProxyAdapter;
     let s: Settings;
-    let ms: MasterElectionStrategy;
+    let ms: PrimaryElectionStrategy;
     let hs: HeartbeatSyncStrategy;
-    let me: MasterElection;
+    let me: PrimaryElection;
     let ss: ScalingGroupStrategy;
     let autoscale: Autoscale;
     before(function() {
         p = new TestPlatformAdapter();
         e = {
             targetVm: TEST_VM,
-            masterVm: TEST_VM,
-            masterRecord: TEST_MASTER_RECORD
+            primaryVm: TEST_VM,
+            primaryRecord: TEST_PRIMARY_RECORD
         };
         x = new TestCloudFunctionProxyAdapter();
         s = new Map<string, SettingItem>();
-        s.set(AutoscaleSetting.MasterElectionTimeout, new SettingItem('1', '2', '3', true, true));
+        s.set(AutoscaleSetting.PrimaryElectionTimeout, new SettingItem('1', '2', '3', true, true));
         s.set(AutoscaleSetting.HeartbeatDelayAllowance, new SettingItem('1', '2', '3', true, true));
         s.set(AutoscaleSetting.HeartbeatLossCount, new SettingItem('1', '0', '3', true, true));
         ms = {
@@ -288,10 +288,10 @@ describe('sanity test', () => {
                 return Promise.resolve();
             },
             apply() {
-                return Promise.resolve(MasterElectionStrategyResult.ShouldContinue);
+                return Promise.resolve(PrimaryElectionStrategyResult.ShouldContinue);
             },
             result() {
-                return Promise.resolve(TEST_MASTER_ELECTION);
+                return Promise.resolve(TEST_PRIMARY_ELECTION);
             },
             applied: false
         };
@@ -310,16 +310,16 @@ describe('sanity test', () => {
             }
         };
         me = {
-            newMaster: TEST_VM,
-            newMasterRecord: TEST_MASTER_RECORD,
+            newPrimary: TEST_VM,
+            newPrimaryRecord: TEST_PRIMARY_RECORD,
             candidate: TEST_VM,
             signature: 'test-signature'
         };
-        ms = new PreferredGroupMasterElection(p, x);
+        ms = new PreferredGroupPrimaryElection(p, x);
         hs = new ConstantIntervalHeartbeatSyncStrategy(p, x);
         ss = new NoopScalingGroupStrategy(p, x);
         autoscale = new Autoscale(p, e, x);
-        autoscale.setMasterElectionStrategy(ms);
+        autoscale.setPrimaryElectionStrategy(ms);
         autoscale.setHeartbeatSyncStrategy(hs);
         autoscale.setScalingGroupStrategy(ss);
         autoscale.setTaggingAutoscaleVmStrategy(new NoopTaggingVmStrategy(p, x));
@@ -340,14 +340,14 @@ describe('sanity test', () => {
         conflictCheck(FortiGateAutoscaleSetting, AutoscaleSetting);
         conflictCheck(AwsFortiGateAutoscaleSetting, FortiGateAutoscaleSetting);
     });
-    it('handleMasterElection', async () => {
+    it('handlePrimaryElection', async () => {
         const stub1 = Sinon.stub(x, 'logAsInfo');
         const stub2 = Sinon.stub(p, 'getSettings').callsFake(() => {
             return Promise.resolve(s);
         });
         const stub4 = Sinon.stub(ms, 'apply');
         const stub5 = Sinon.stub(ms, 'result').callsFake(() => {
-            return Promise.resolve(TEST_MASTER_ELECTION);
+            return Promise.resolve(TEST_PRIMARY_ELECTION);
         });
         const stub6 = Sinon.stub(p, 'equalToVm').callsFake((a, b) => {
             Sinon.assert.match(a, TEST_VM);
@@ -355,13 +355,13 @@ describe('sanity test', () => {
             return true;
         });
         try {
-            const result = await autoscale.handleMasterElection();
+            const result = await autoscale.handlePrimaryElection();
             Sinon.assert.match(stub1.called, true);
             Sinon.assert.match(await stub2.returnValues[0], s);
             Sinon.assert.match(stub4.notCalled, true);
             Sinon.assert.match(stub5.called, false);
             Sinon.assert.match(stub6.called, false);
-            Sinon.assert.match(!result.newMaster, true);
+            Sinon.assert.match(!result.newPrimary, true);
         } catch (error) {
             console.log(error);
             Sinon.assert.fail('should not throw errors.');
@@ -387,13 +387,13 @@ describe('sanity test', () => {
             return Promise.resolve('Sinon.stub.callsFake');
         });
 
-        const stub5 = Sinon.stub(p, 'getMasterVm').callsFake(() => {
+        const stub5 = Sinon.stub(p, 'getPrimaryVm').callsFake(() => {
             return Promise.resolve(TEST_VM);
         });
-        const stub6 = Sinon.stub(p, 'getMasterRecord').callsFake(() => {
-            return Promise.resolve(TEST_MASTER_RECORD);
+        const stub6 = Sinon.stub(p, 'getPrimaryRecord').callsFake(() => {
+            return Promise.resolve(TEST_PRIMARY_RECORD);
         });
-        const stub7 = Sinon.stub(autoscale, 'handleMasterElection').callsFake(() => {
+        const stub7 = Sinon.stub(autoscale, 'handlePrimaryElection').callsFake(() => {
             return Promise.resolve(me);
         });
         const stub8 = Sinon.stub(autoscale, 'handleTaggingAutoscaleVm');

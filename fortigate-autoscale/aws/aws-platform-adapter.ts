@@ -11,7 +11,7 @@ import {
     KeyValue,
     LicenseStockDbItem,
     LicenseUsageDbItem,
-    MasterElectionDbItem,
+    PrimaryElectionDbItem,
     NicAttachmentDbItem,
     SettingsDbItem,
     VpnAttachmentDbItem
@@ -26,9 +26,9 @@ import { JSONable } from '../../jsonable';
 import {
     HealthCheckRecord,
     HealthCheckSyncState,
-    MasterRecord,
-    MasterRecordVoteState
-} from '../../master-election';
+    PrimaryRecord,
+    PrimaryRecordVoteState
+} from '../../primary-election';
 import {
     LicenseFile,
     LicenseStockRecord,
@@ -364,18 +364,18 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called getTargetVm');
         return vm;
     }
-    async getMasterVm(): Promise<VirtualMachine> {
-        this.proxy.logAsInfo('calling getMasterVm');
-        const masterRecord = await this.getMasterRecord();
-        if (!masterRecord) {
+    async getPrimaryVm(): Promise<VirtualMachine> {
+        this.proxy.logAsInfo('calling getPrimaryVm');
+        const primaryRecord = await this.getPrimaryRecord();
+        if (!primaryRecord) {
             return null;
         }
-        const instance = await this.adaptee.describeInstance(masterRecord.vmId);
+        const instance = await this.adaptee.describeInstance(primaryRecord.vmId);
         let vm: VirtualMachine;
         if (instance) {
             vm = this.instanceToVm(
                 instance,
-                masterRecord.scalingGroupName,
+                primaryRecord.scalingGroupName,
                 instance.NetworkInterfaces
             );
             // NOTE: vm in terminated state can be still described. We should consider such vm as unavailable
@@ -383,7 +383,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 vm = null;
             }
         }
-        this.proxy.logAsInfo('called getMasterVm');
+        this.proxy.logAsInfo('called getPrimaryVm');
         return vm;
     }
 
@@ -426,7 +426,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         return vms;
     }
 
-    async listMasterRoleVmId(): Promise<string[]> {
+    async listPrimaryRoleVmId(): Promise<string[]> {
         const filters: ResourceFilter[] = [];
         // list vm with resource group tag
         filters.push({
@@ -437,7 +437,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         // list vm with autoscale role tag
         filters.push({
             key: TAG_KEY_AUTOSCALE_ROLE,
-            value: 'master',
+            value: 'primary',
             isTag: true
         });
         try {
@@ -496,7 +496,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 vmId: vmId,
                 scalingGroupName: dbItem.scalingGroupName,
                 ip: dbItem.ip,
-                masterIp: dbItem.masterIp,
+                primaryIp: dbItem.primaryIp,
                 heartbeatInterval: dbItem.heartBeatInterval,
                 heartbeatLossCount: dbItem.heartBeatLossCount,
                 nextHeartbeatTime: dbItem.nextHeartBeatTime,
@@ -509,10 +509,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called getHealthCheckRecord');
         return record;
     }
-    async getMasterRecord(filters?: KeyValue[]): Promise<MasterRecord> {
-        this.proxy.logAsInfo('calling getMasterRecord');
+    async getPrimaryRecord(filters?: KeyValue[]): Promise<PrimaryRecord> {
+        this.proxy.logAsInfo('calling getPrimaryRecord');
         const settings = await this.getSettings();
-        const table = new AwsDBDef.AwsMasterElection(
+        const table = new AwsDBDef.AwsPrimaryElection(
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
         const filterExp: AwsDdbOperations = {
@@ -521,18 +521,19 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         if (filters) {
             filterExp.Expression = filters.map(kv => `${kv.key} = :${kv.value}`).join(' AND ');
         }
-        // ASSERT: there's only 1 matching master record or no matching record.
-        const [record] = await this.adaptee.listItemFromDb<MasterElectionDbItem>(table, filterExp);
-        let masterRecord: MasterRecord;
+        // ASSERT: there's only 1 matching primary record or no matching record.
+        const [record] = await this.adaptee.listItemFromDb<PrimaryElectionDbItem>(table, filterExp);
+        let primaryRecord: PrimaryRecord;
         if (record) {
-            const [voteState] = Object.entries(MasterRecordVoteState)
+            const [voteState] = Object.entries(PrimaryRecordVoteState)
                 .filter(([, value]) => {
                     return record.voteState === value;
                 })
                 .map(([, v]) => v);
             const voteTimedOut =
-                voteState !== MasterRecordVoteState.Done && Number(record.voteEndTime) < Date.now();
-            masterRecord = {
+                voteState !== PrimaryRecordVoteState.Done &&
+                Number(record.voteEndTime) < Date.now();
+            primaryRecord = {
                 id: record.id,
                 vmId: record.vmId,
                 ip: record.ip,
@@ -540,12 +541,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 virtualNetworkId: record.virtualNetworkId,
                 subnetId: record.subnetId,
                 voteEndTime: Number(record.voteEndTime),
-                voteState: (voteTimedOut && MasterRecordVoteState.Timeout) || voteState
+                voteState: (voteTimedOut && PrimaryRecordVoteState.Timeout) || voteState
             };
         }
 
-        this.proxy.logAsInfo('called getMasterRecord');
-        return masterRecord;
+        this.proxy.logAsInfo('called getPrimaryRecord');
+        return primaryRecord;
     }
     equalToVm(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean {
         if (!(vmA && vmB) || JSON.stringify(vmA) !== JSON.stringify(vmB)) {
@@ -569,7 +570,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             vmId: rec.vmId,
             scalingGroupName: rec.scalingGroupName,
             ip: rec.ip,
-            masterIp: rec.masterIp,
+            primaryIp: rec.primaryIp,
             heartBeatInterval: rec.heartbeatInterval,
             heartBeatLossCount: rec.heartbeatLossCount,
             nextHeartBeatTime: rec.nextHeartbeatTime,
@@ -598,7 +599,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             vmId: rec.vmId,
             scalingGroupName: rec.scalingGroupName,
             ip: rec.ip,
-            masterIp: rec.masterIp,
+            primaryIp: rec.primaryIp,
             heartBeatInterval: rec.heartbeatInterval,
             heartBeatLossCount: rec.heartbeatLossCount,
             nextHeartBeatTime: rec.nextHeartbeatTime,
@@ -612,14 +613,14 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         await this.adaptee.saveItemToDb<AutoscaleDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called updateHealthCheckRecord');
     }
-    async createMasterRecord(rec: MasterRecord, oldRec: MasterRecord | null): Promise<void> {
-        this.proxy.logAsInfo('calling createMasterRecord.');
+    async createPrimaryRecord(rec: PrimaryRecord, oldRec: PrimaryRecord | null): Promise<void> {
+        this.proxy.logAsInfo('calling createPrimaryRecord.');
         try {
             const settings = await this.getSettings();
-            const table = new AwsDBDef.AwsMasterElection(
+            const table = new AwsDBDef.AwsPrimaryElection(
                 settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
             );
-            const item: MasterElectionDbItem = {
+            const item: PrimaryElectionDbItem = {
                 id: rec.id,
                 scalingGroupName: rec.scalingGroupName,
                 ip: rec.ip,
@@ -644,24 +645,24 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 };
             }
 
-            await this.adaptee.saveItemToDb<MasterElectionDbItem>(table, item, conditionExp);
-            this.proxy.logAsInfo('called createMasterRecord.');
+            await this.adaptee.saveItemToDb<PrimaryElectionDbItem>(table, item, conditionExp);
+            this.proxy.logAsInfo('called createPrimaryRecord.');
         } catch (error) {
             if (error.code && error.code === 'ConditionalCheckFailedException') {
-                this.proxy.logAsInfo('Master record exists');
+                this.proxy.logAsInfo('Primary record exists');
             }
-            this.proxy.logForError('called createMasterRecord.', error);
+            this.proxy.logForError('called createPrimaryRecord.', error);
             throw error;
         }
     }
-    async updateMasterRecord(rec: MasterRecord): Promise<void> {
-        this.proxy.logAsInfo('calling updateMasterRecord.');
+    async updatePrimaryRecord(rec: PrimaryRecord): Promise<void> {
+        this.proxy.logAsInfo('calling updatePrimaryRecord.');
         try {
             const settings = await this.getSettings();
-            const table = new AwsDBDef.AwsMasterElection(
+            const table = new AwsDBDef.AwsPrimaryElection(
                 settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
             );
-            const item: MasterElectionDbItem = {
+            const item: PrimaryElectionDbItem = {
                 id: rec.id,
                 scalingGroupName: rec.scalingGroupName,
                 ip: rec.ip,
@@ -679,14 +680,14 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     'voteState = :voteState AND ' +
                     'voteEndTime > :nowTime',
                 ExpressionAttributeValues: {
-                    ':voteState': MasterRecordVoteState.Pending,
+                    ':voteState': PrimaryRecordVoteState.Pending,
                     ':nowTime': Date.now()
                 }
             };
-            await this.adaptee.saveItemToDb<MasterElectionDbItem>(table, item, conditionExp);
-            this.proxy.logAsInfo('called updateMasterRecord.');
+            await this.adaptee.saveItemToDb<PrimaryElectionDbItem>(table, item, conditionExp);
+            this.proxy.logAsInfo('called updatePrimaryRecord.');
         } catch (error) {
-            this.proxy.logForError('called updateMasterRecord.', error);
+            this.proxy.logForError('called updatePrimaryRecord.', error);
             throw error;
         }
     }
@@ -1654,14 +1655,14 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called tagResource.');
     }
 
-    async removeMasterRoleTag(vmIds: string[]): Promise<void> {
-        this.proxy.logAsInfo('calling removeMasterRoleTag.');
+    async removePrimaryRoleTag(vmIds: string[]): Promise<void> {
+        this.proxy.logAsInfo('calling removePrimaryRoleTag.');
         const tag: ResourceFilter = {
             key: TAG_KEY_AUTOSCALE_ROLE,
-            value: 'master'
+            value: 'primary'
         };
         await this.adaptee.untagResource(vmIds, [tag]);
-        this.proxy.logAsInfo('called removeMasterRoleTag.');
+        this.proxy.logAsInfo('called removePrimaryRoleTag.');
     }
 
     createAutoscaleFunctionInvocationKey(functionName: string, payload: JSONable): string {

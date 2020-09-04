@@ -1,7 +1,7 @@
 {
     "AmiLaunchIndex": 0,
     "ImageId": "ami-0b32d672dfa76305f",
-    "InstanceId": "i-000000000000slave",
+    "InstanceId": "i-00000000000primary",
     "InstanceType": "c5.large",
     "KeyName": "cmock-2018",
     "LaunchTime": "2018-11-22T05:24:55.000Z",
@@ -14,7 +14,7 @@
         "Tenancy": "default"
     },
     "PrivateDnsName": "ip-10-253-0-173.us-west-2.compute.internal",
-    "PrivateIpAddress": "10.0.0.2",
+    "PrivateIpAddress": "10.0.0.1",
     "ProductCodes": [
         {
             "ProductCodeId": "dlaioq277sglm5mw1y1dmeuqa",
@@ -22,7 +22,7 @@
         }
     ],
     "PublicDnsName": "",
-    "PublicIpAddress": "8.8.4.4",
+    "PublicIpAddress": "8.8.8.8",
     "State": {
         "Code": 16,
         "Name": "running"

@@ -8,10 +8,10 @@ import { AwsPlatformAdapter } from './aws-platform-adapter';
 
 /**
  * This strategy updates the route table associated with the private subnets which need outgoing
- * traffic capability. It adds/replace the route to the master FortiGate vm in the Autoscale cluster
+ * traffic capability. It adds/replace the route to the primary FortiGate vm in the Autoscale cluster
  * so the FortiGate can handle such egress traffic.
  */
-export class AwsRoutingEgressTrafficViaMasterVmStrategy implements RoutingEgressTrafficStrategy {
+export class AwsRoutingEgressTrafficViaPrimaryVmStrategy implements RoutingEgressTrafficStrategy {
     protected platform: AwsPlatformAdapter;
     protected proxy: CloudFunctionProxyAdapter;
     protected env: AutoscaleEnvironment;
@@ -25,7 +25,7 @@ export class AwsRoutingEgressTrafficViaMasterVmStrategy implements RoutingEgress
         this.env = env;
     }
     async apply(): Promise<void> {
-        this.proxy.logAsInfo('calling RoutingEgressTrafficViaMasterVmStrategy.apply');
+        this.proxy.logAsInfo('calling RoutingEgressTrafficViaPrimaryVmStrategy.apply');
         const settings: Settings = await this.platform.getSettings();
         const enableNic2: SettingItem = settings.get(AwsFortiGateAutoscaleSetting.EnableNic2);
         const routeTableIdList: SettingItem = settings.get(
@@ -39,14 +39,14 @@ export class AwsRoutingEgressTrafficViaMasterVmStrategy implements RoutingEgress
                 'Route table is required but non is provided. The process is now skipped.' +
                     " If it is just a mistake, the setting item should've been mis-configured."
             );
-            this.proxy.logAsInfo('called RoutingEgressTrafficViaMasterVmStrategy.apply');
+            this.proxy.logAsInfo('called RoutingEgressTrafficViaPrimaryVmStrategy.apply');
             return;
         }
 
-        // check if master vm is available
-        if (!this.env.masterVm) {
-            this.proxy.logAsWarning('No master vm is found. The process is now skipped.');
-            this.proxy.logAsInfo('called RoutingEgressTrafficViaMasterVmStrategy.apply');
+        // check if primary vm is available
+        if (!this.env.primaryVm) {
+            this.proxy.logAsWarning('No primary vm is found. The process is now skipped.');
+            this.proxy.logAsInfo('called RoutingEgressTrafficViaPrimaryVmStrategy.apply');
             return;
         }
 
@@ -56,8 +56,8 @@ export class AwsRoutingEgressTrafficViaMasterVmStrategy implements RoutingEgress
         // route traffic via nic2
         if (enableNic2 && enableNic2.truthValue) {
             // find the nic that has  DeviceIndex === 1 (property and value set by AWS EC2)
-            if (this.env.masterVm.networkInterfaces.length >= 1) {
-                [networkInterfaceId] = this.env.masterVm.networkInterfaces
+            if (this.env.primaryVm.networkInterfaces.length >= 1) {
+                [networkInterfaceId] = this.env.primaryVm.networkInterfaces
                     .filter(eni => eni.index === 1)
                     .map(eni => eni.id);
             }
@@ -70,14 +70,14 @@ export class AwsRoutingEgressTrafficViaMasterVmStrategy implements RoutingEgress
         }
         // route traffic via nic1
         else {
-            if (this.env.masterVm.networkInterfaces.length >= 1) {
-                [networkInterfaceId] = this.env.masterVm.networkInterfaces
+            if (this.env.primaryVm.networkInterfaces.length >= 1) {
+                [networkInterfaceId] = this.env.primaryVm.networkInterfaces
                     .filter(eni => eni.index === 0)
                     .map(eni => eni.id);
             }
             if (!networkInterfaceId) {
                 throw new Error(
-                    `No network interface found on the master vm (id: ${this.env.masterVm.id}).` +
+                    `No network interface found on the primary vm (id: ${this.env.primaryVm.id}).` +
                         ' This is a fatal error and an impposible situation!'
                 );
             }
@@ -86,7 +86,7 @@ export class AwsRoutingEgressTrafficViaMasterVmStrategy implements RoutingEgress
         // add / replace the route in each provided route table
         await this.updateRouteTables('0.0.0.0/0', networkInterfaceId, routeTableIds);
 
-        this.proxy.logAsInfo('called RoutingEgressTrafficViaMasterVmStrategy.apply');
+        this.proxy.logAsInfo('called RoutingEgressTrafficViaPrimaryVmStrategy.apply');
     }
 
     async updateRouteTables(

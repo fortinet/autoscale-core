@@ -4,7 +4,7 @@ import {
     TypeRef,
     TypeRefMap,
     Autoscale,
-    MasterElection,
+    PrimaryElection,
     FortiAnalyzer,
     Settings,
     NicAttachment,
@@ -43,7 +43,7 @@ export class AwsAutoscale extends Autoscale {
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
-export class AwsMasterElection extends MasterElection {
+export class AwsPrimaryElection extends PrimaryElection {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
