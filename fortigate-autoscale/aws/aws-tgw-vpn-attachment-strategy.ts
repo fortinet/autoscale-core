@@ -217,7 +217,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
                 ...request
             },
             handlerName,
-            AwsTgwLambdaInvocable.UpdateTgwAttachmentRoutTable
+            AwsTgwLambdaInvocable.UpdateTgwAttachmentRouteTable
         );
 
         // save the tgw vpn attachment record

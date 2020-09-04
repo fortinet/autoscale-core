@@ -9,5 +9,5 @@ export interface AwsLambdaInvocationPayload extends JSONable {
 export class AwsLambdaInvocableExecutionTimeOutError extends Error {}
 
 export const AwsTgwLambdaInvocable: { [key: string]: string } = {
-    UpdateTgwAttachmentRoutTable: 'UpdateTgwAttachmentRoutTable'
+    UpdateTgwAttachmentRouteTable: 'UpdateTgwAttachmentRouteTable'
 };

@@ -409,7 +409,7 @@ export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler {
             );
             let shouldExtendExecution: boolean;
             try {
-                if (invocable === AwsTgwLambdaInvocable.UpdateTgwAttachmentRoutTable) {
+                if (invocable === AwsTgwLambdaInvocable.UpdateTgwAttachmentRouteTable) {
                     // KNOWN ISSUE: Sep. 01, 2020. AWS takes over 10 minutes to stablize a VPN
                     // creation where the time was usually approx. 3 mins. The Lambda function that
                     // handles the updateTgwAttachmentRouteTable process used to have a 5 minutes
