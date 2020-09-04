@@ -212,7 +212,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
         const handlerName = settings.get(
             AwsFortiGateAutoscaleSetting.AwsTransitGatewayVpnHandlerName
         ).value;
-        this.platform.invokeAutoscaleFunction(
+        await this.platform.invokeAutoscaleFunction(
             {
                 ...request
             },

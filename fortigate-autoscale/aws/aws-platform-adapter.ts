@@ -1665,20 +1665,17 @@ export class AwsPlatformAdapter implements PlatformAdapter {
     }
 
     createAutoscaleFunctionInvocationKey(functionName: string, payload: JSONable): string {
-        this.proxy.logAsInfo(functionName);
-        this.proxy.logAsInfo(JSON.stringify(payload));
         const psk = this.settings.get(AwsFortiGateAutoscaleSetting.FortiGatePskSecret).value;
         return genChecksum(`${functionName}:${psk}:${JSON.stringify(payload)}`, 'sha256');
     }
 
-    invokeAutoscaleFunction(
+    async invokeAutoscaleFunction(
         payload: JSONable,
         functionEndpoint: string,
         invocable: string,
         executionTime?: number
-    ): void {
-        this.proxy.logAsInfo('calling invokeAwsLambda');
-
+    ): Promise<number> {
+        this.proxy.logAsInfo('calling invokeAutoscaleFunction');
         const secretKey = this.createAutoscaleFunctionInvocationKey(functionEndpoint, payload);
         const p: AwsLambdaInvocationPayload = {
             invocable: invocable,
@@ -1686,8 +1683,14 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             executionTime: executionTime
         };
         Object.assign(p, payload);
-        this.adaptee.invokeLambda(functionEndpoint, JSON.stringify(p));
-        this.proxy.logAsInfo('called invokeAwsLambda');
+        const response = await this.adaptee.invokeLambda(
+            functionEndpoint,
+            'Event',
+            JSON.stringify(p)
+        );
+        this.proxy.logAsInfo(`invocation response status code: ${response.StatusCode}`);
+        this.proxy.logAsInfo('called invokeAutoscaleFunction');
+        return response.StatusCode;
     }
 
     async updateScalingGroupSize(

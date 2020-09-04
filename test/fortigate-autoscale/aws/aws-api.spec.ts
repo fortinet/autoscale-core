@@ -434,7 +434,7 @@ describe('AWS api test', () => {
         callCount = mockLambda.getStub('invoke').callCount;
         await awsPlatformAdapter.invokeAutoscaleFunction(
             payload,
-            'fakeLambdaEndpoint',
+            'fake-lambda-endpoint',
             lambdaInvocable
         );
         Sinon.assert.match(mockLambda.getStub('invoke').callCount - callCount > 0, true);

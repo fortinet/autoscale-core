@@ -453,7 +453,7 @@ export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler {
 
                     // if max execution time not reached, create a new invocation to continue
                     if (totalExecutionTime < maxExecutionTime) {
-                        this.platform.invokeAutoscaleFunction(
+                        await this.platform.invokeAutoscaleFunction(
                             payload,
                             functionEndpoint,
                             invocable,
@@ -462,15 +462,15 @@ export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler {
                         );
                         this.proxy.logAsInfo(
                             'AutoscaleFunctionExtendExecution is enabled.' +
-                                ` Current total execution time is: ${totalExecutionTime}.` +
-                                ` Max execution time allowed is: ${maxExecutionTime}.` +
+                                ` Current total execution time is: ${totalExecutionTime} seconds.` +
+                                ` Max execution time allowed is: ${maxExecutionTime} seconds.` +
                                 ' Now invoke a new Lambda function to continue.'
                         );
                     } else {
                         this.proxy.logAsError(
                             'AutoscaleFunctionExtendExecution is enabled.' +
-                                ` Current total execution time is: ${totalExecutionTime}.` +
-                                ` Max execution time allowed is: ${maxExecutionTime}.` +
+                                ` Current total execution time is: ${totalExecutionTime} seconds.` +
+                                ` Max execution time allowed is: ${maxExecutionTime} seconds.` +
                                 ' No more time allowed to wait so it timed out and failed.'
                         );
                         // extended execution reached max execution time allowed.
