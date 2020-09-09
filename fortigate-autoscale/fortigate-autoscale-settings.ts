@@ -27,9 +27,9 @@ export const FortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
     [FortiGateAutoscaleSetting.EgressTrafficRouteTableList]: {
         keyName: FortiGateAutoscaleSetting.EgressTrafficRouteTableList,
         description:
-            'The comma-separeted list of route tables associated with any subnets,' +
-            ' which should bet configured to contain a route 0.0.0.0/0 to the' +
-            ' primary fortigate to handle egress traffic.',
+	            'The comma-separated list of route tables associated with any subnets,' +
+            ' which should be configured to contain a route 0.0.0.0/0 to the' +
+            ' primary FortiGate to handle egress traffic.',
         editable: false,
         jsonEncoded: false,
         booleanType: false
@@ -37,7 +37,7 @@ export const FortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
     [FortiGateAutoscaleSetting.EnableFazIntegration]: {
         keyName: FortiGateAutoscaleSetting.EnableFazIntegration,
         description:
-            'Enable FortiAnalyzer integration with the FortiGates cluster in the Autoscale.',
+            'Enable FortiAnalyzer integration with the Autoscale FortiGate cluster.',
         editable: false,
         jsonEncoded: false,
         booleanType: true
@@ -51,7 +51,7 @@ export const FortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
     },
     [FortiGateAutoscaleSetting.FortiGateAdminPort]: {
         keyName: FortiGateAutoscaleSetting.FortiGateAdminPort,
-        description: 'The port number for administrative login to FortiGate.',
+        description: 'The port number for administrative login to a FortiGate.',
         editable: true,
         jsonEncoded: false,
         booleanType: false
@@ -88,14 +88,14 @@ export const FortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
     },
     [FortiGateAutoscaleSetting.FortiGatePskSecret]: {
         keyName: FortiGateAutoscaleSetting.FortiGatePskSecret,
-        description: 'The PSK for FortiGate Autoscale Synchronization.',
+        description: 'The PSK for FortiGate Autoscale synchronization.',
         editable: true,
         jsonEncoded: false,
         booleanType: false
     },
     [FortiGateAutoscaleSetting.FortiGateAutoscaleSubnetIdList]: {
         keyName: FortiGateAutoscaleSetting.FortiGateAutoscaleSubnetIdList,
-        description: 'The list of ID of the subnet of the FortiGate Autoscale. Comma separated.',
+        description: 'A comma-separated list of FortiGate Autoscale subnet IDs.',
         editable: false,
         jsonEncoded: false,
         booleanType: false
@@ -103,7 +103,7 @@ export const FortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
     [FortiGateAutoscaleSetting.FortiGateAutoscaleSubnetPairs]: {
         keyName: FortiGateAutoscaleSetting.FortiGateAutoscaleSubnetPairs,
         description:
-            'A list of paired subnet for the north-south traffic routing purposes.' +
+            'A list of paired subnets for north-south traffic routing purposes.' +
             ' Format: [{subnetId: [pairId1, pairId2, ...]}, ...]',
         editable: false,
         jsonEncoded: true,
@@ -119,8 +119,8 @@ export const FortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
     [FortiGateAutoscaleSetting.FortiGateTrafficPort]: {
         keyName: FortiGateAutoscaleSetting.FortiGateTrafficPort,
         description:
-            'The port number for load balancer to route traffic through ' +
-            'FortiGate to the protected services behind the load balancer.',
+            'The port number for the load balancer to route traffic through ' +
+            'the FortiGate to the protected services behind the load balancer.',
         editable: true,
         jsonEncoded: false,
         booleanType: false

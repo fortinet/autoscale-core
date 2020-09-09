@@ -78,7 +78,7 @@ export class AwsRoutingEgressTrafficViaPrimaryVmStrategy implements RoutingEgres
             if (!networkInterfaceId) {
                 throw new Error(
                     `No network interface found on the primary vm (id: ${this.env.primaryVm.id}).` +
-                        ' This is a fatal error and an impposible situation!'
+                        ' This is a fatal error and an impossible situation!'
                 );
             }
         }
