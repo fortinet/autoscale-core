@@ -57,14 +57,14 @@ export const FortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
     },
     [FortiGateAutoscaleSetting.FortiGateAutoscaleVirtualNetworkId]: {
         keyName: FortiGateAutoscaleSetting.FortiGateAutoscaleVirtualNetworkId,
-        description: 'Virtual Network ID of the FortiGate Autoscale.',
+        description: 'ID of the Virtual Network that contains FortiGate Autoscale.',
         editable: false,
         jsonEncoded: false,
         booleanType: false
     },
     [FortiGateAutoscaleSetting.FortiGateAutoscaleVirtualNetworkCidr]: {
         keyName: FortiGateAutoscaleSetting.FortiGateAutoscaleVirtualNetworkCidr,
-        description: 'Virtual Network CIDR of the FortiGate Autoscale.',
+        description: 'CIDR of the Virtual Network that contains FortiGate Autoscale.',
         editable: false,
         jsonEncoded: false,
         booleanType: false
@@ -80,7 +80,8 @@ export const FortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
         keyName: FortiGateAutoscaleSetting.FortiGateInternalElbDns,
         description:
             'The DNS name of the elastic load balancer for the scaling ' +
-            'groups of services protected by FortiGate.',
+            'The DNS name of the internal elastic load balancer ' +
+            'used by the FortiGate Autoscale solution.',
         editable: false,
         jsonEncoded: false,
         booleanType: false
