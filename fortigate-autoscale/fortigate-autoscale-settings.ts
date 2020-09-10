@@ -27,7 +27,7 @@ export const FortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
     [FortiGateAutoscaleSetting.EgressTrafficRouteTableList]: {
         keyName: FortiGateAutoscaleSetting.EgressTrafficRouteTableList,
         description:
-	            'The comma-separated list of route tables associated with any subnets,' +
+            'The comma-separated list of route tables associated with any subnets,' +
             ' which should be configured to contain a route 0.0.0.0/0 to the' +
             ' primary FortiGate to handle egress traffic.',
         editable: false,
@@ -36,8 +36,7 @@ export const FortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
     },
     [FortiGateAutoscaleSetting.EnableFazIntegration]: {
         keyName: FortiGateAutoscaleSetting.EnableFazIntegration,
-        description:
-            'Enable FortiAnalyzer integration with the Autoscale FortiGate cluster.',
+        description: 'Enable FortiAnalyzer integration with the Autoscale FortiGate cluster.',
         editable: false,
         jsonEncoded: false,
         booleanType: true
@@ -120,7 +119,7 @@ export const FortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
         keyName: FortiGateAutoscaleSetting.FortiGateTrafficPort,
         description:
             'The port number for the load balancer to route traffic through ' +
-            'the FortiGate to the protected services behind the load balancer.',
+            'FortiGates to the protected services behind the load balancer.',
         editable: true,
         jsonEncoded: false,
         booleanType: false
@@ -129,7 +128,7 @@ export const FortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
         keyName: FortiGateAutoscaleSetting.FortiGateTrafficProtocol,
         description:
             'The protocol for the traffic to be routed by the load balancer through ' +
-            'FortiGate to the protected services behind the load balancer.',
+            'FortiGates to the protected services behind the load balancer.',
         editable: true,
         jsonEncoded: false,
         booleanType: false
