@@ -79,7 +79,6 @@ export const FortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
     [FortiGateAutoscaleSetting.FortiGateInternalElbDns]: {
         keyName: FortiGateAutoscaleSetting.FortiGateInternalElbDns,
         description:
-            'The DNS name of the elastic load balancer for the scaling ' +
             'The DNS name of the internal elastic load balancer ' +
             'used by the FortiGate Autoscale solution.',
         editable: false,
