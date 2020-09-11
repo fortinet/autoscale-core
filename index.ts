@@ -1,24 +1,36 @@
-/*
-Author: Fortinet
-*/
+/**
+ * export core modules
+ */
+import * as DBDef from './db-definitions';
 
-import * as dbDefinitions from './db-definitions'
-import * as PredefinedSettingItems from './setting-items'
-import * as Functions from './core-functions'
-import * as MasterElection from './master-election'
+export * from './autoscale-core';
+export * from './autoscale-environment';
+export * from './autoscale-setting';
+export * from './cloud-function-proxy';
+export * from './primary-election';
+export * from './platform-adapter';
+export * from './virtual-machine';
+export * from './fortigate-autoscale';
+export * from './context-strategy/autoscale-context';
+export * from './context-strategy/nic-attachment-context';
+export * from './context-strategy/scaling-group-context';
+export * from './context-strategy/vpn-attachment-context';
+export * from './context-strategy/bootstrap-context';
+export * from './context-strategy/licensing-context';
+export * from './helper-function';
+export { DBDef };
 
-// TODO: how to re export the moduleRuntimeId, DefaultLogger from core-functions ?
-export { Functions, dbDefinitions, PredefinedSettingItems, MasterElection }
+/**
+ * export fortigate-autoscale modules
+ */
+export * from './fortigate-autoscale/index';
 
-export * from './virtual-machine'
-export * from './virtual-network'
-export * from './cloud-platform'
-export * from './autoscale-handler'
-export * from './logger'
-export * from './lifecycle-item'
-export * from './license-item'
-export * from './license-record'
-export * from './setting-items/setting-item'
-export * from './blob'
-export * from './health-check-record'
-export * from './nic-attachment'
+/**
+ * export scripts
+ */
+export * from './scripts/code-packman';
+
+/**
+ * export test-helpers
+ */
+export * from './test-helper';

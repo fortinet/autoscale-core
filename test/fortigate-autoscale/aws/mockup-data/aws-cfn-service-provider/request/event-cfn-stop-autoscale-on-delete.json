@@ -1,0 +1,13 @@
+{
+    "RequestType": "Delete",
+    "ServiceToken": "arn:aws:lambda:no-where-1:123456789012:function:mockup-lambda-function-AAAAAAAAAAAAA",
+    "ResponseURL": "https://cloudformation-custom-resource-response-nowhere1.s3-no-where-1.amazonaws.com/arn%3Aaws%3Acloudformation%3Aus-west-2%3A123456789012%3Astack/mockup-stack/65036720-eea0-11e8-9dec-02e2b9ae2f96%7CFazRegistrationService%7C85fd50ee-0659-4a08-b0c0-5a61d6fde555?AWSAccessKeyId=AKIAIEIQ6VGCAT7UFODQ&Expires=1542930736&Signature=r8vZ8OX6tIvKFUPBD2u9Ii%2BPTjI%3D",
+    "StackId": "arn:aws:cloudformation:us-west-2:123456789012:stack/mockup-stack/65036720-eea0-11e8-9dec-02e2b9ae2f96",
+    "RequestId": "85fd50ee-0659-4a08-b0c0-5a61d6fde555",
+    "LogicalResourceId": "StartAutoscaleService",
+    "ResourceType": "AWS::CloudFormation::CustomResource",
+    "ResourceProperties": {
+        "ServiceToken": "arn:aws:lambda:no-where-1:123456789012:function:mockup-lambda-function-AAAAAAAAAAAAA",
+        "ServiceType": "stopAutoscale"
+    }
+}

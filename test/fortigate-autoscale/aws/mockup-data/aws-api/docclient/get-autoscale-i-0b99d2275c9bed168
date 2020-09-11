@@ -1,0 +1,28 @@
+{
+    "Item": {
+            "autoScalingGroupName": {
+                "S": "fortigate-autoscale-has-a-very-long-res-tag-prefix-69e58ed0-fortigate-byol-auto-scaling-group"
+            },
+            "heartBeatInterval": {
+                "N": 30
+            },
+            "heartBeatLossCount": {
+                "N": 0
+            },
+            "instanceId": {
+                "S": "i-0b99d2275c9bed168"
+            },
+            "ip": {
+                "S": "192.168.0.133"
+            },
+            "primaryIp": {
+                "S": "192.168.1.220"
+            },
+            "nextHeartBeatTime": {
+                "N": 1687962940421
+            },
+            "syncState": {
+                "S": "in-sync"
+            }
+        }
+}
