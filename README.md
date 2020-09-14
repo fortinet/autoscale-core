@@ -22,7 +22,7 @@ To use this project as a dependency:
 
 ## Documentation
 
-  1. Technical diagrams are available in the [docs/diagrams](https://github.com/fortinet/autoscale-core/docs/diagrams) directory.
+  1. Technical diagrams are available in the [docs/diagrams](./docs/diagrams) directory.
 
 # Support
 Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.
