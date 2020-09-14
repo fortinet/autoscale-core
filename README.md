@@ -1,7 +1,28 @@
-# FortiGate Autoscale Core module
-This is the Autoscale Core module written in TypeScript.
+# Autoscale Core
+The Core Library for the Fortinet Autoscale project.
 
-Note: This is a pre-release for internal development purposes.
+The Autoscale project provides a cloud-based multi-group auto scaling functionality for virtual machines of Fortinet products which have native HA features to form a cluster with failover protection.
+
+This project provides the fundamental, generic logics of a Hybrid Licensing architecture. It also includes implementations for certain popular cloud platforms.
+
+This project has the following features:
+ * Multi-group Hybrid Licensing models. (Hybrid, BYOL-Only, PAYG-Only)
+ * AWS Transit Gateway Integration (see: https://github.com/fortinet/fortigate-autoscale-aws)
+
+
+## Supported platforms
+This project supports autoscaling for the cloud platforms listed below:
+* Amazon AWS
+
+## NodeJS dependency
+
+To use this project as a dependency:
+
+  1. Run `npm install https://github.com/fortinet/autoscale-core --save` at the project root directory.
+
+## Documentation
+
+  1. Technical diagrams are available in the [docs/diagrams](https://github.com/fortinet/autoscale-core/docs/diagrams) directory.
 
 # Support
 Fortinet-provided scripts in this and other GitHub projects do not fall under the regular Fortinet technical support scope and are not supported by FortiCare Support Services.
