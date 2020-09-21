@@ -14,11 +14,11 @@ This project has the following features:
 This project supports auto scaling for the cloud platforms listed below:
 * Amazon AWS
 
-## NodeJS dependency
+## Installation
 
-To use this project as a dependency:
+This project can be used as a NodeJS dependency. To install using NPM, run the following command from the project root directory:
 
-  1. Run `npm install https://github.com/fortinet/autoscale-core --save` at the project root directory.
+`npm install https://github.com/fortinet/autoscale-core --save`
 
 ## Documentation
 
