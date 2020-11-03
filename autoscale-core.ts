@@ -151,6 +151,12 @@ export class Autoscale implements AutoscaleCore {
         this.proxy.logAsInfo('called handleLaunchedVm.');
         return result;
     }
+    async handleVmNotLaunched(): Promise<string> {
+        this.proxy.logAsInfo('calling handleVmNotLaunched.');
+        const result = await this.scalingGroupStrategy.onLaunchedVm();
+        this.proxy.logAsInfo('called handleVmNotLaunched.');
+        return result;
+    }
     async handleTerminatingVm(): Promise<string> {
         this.proxy.logAsInfo('calling handleTerminatingVm.');
         // in terminating vm, should do:
