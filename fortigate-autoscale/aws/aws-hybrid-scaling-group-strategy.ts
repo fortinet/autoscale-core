@@ -114,6 +114,17 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         this.proxy.logAsInfo('called AwsHybridScalingGroupStrategy.onLaunchedVm');
         return Promise.resolve('');
     }
+    async onVmNotLaunched(): Promise<string> {
+        this.proxy.logAsInfo('calling AwsHybridScalingGroupStrategy.onVmNotLaunched');
+        // NOTE: Sometimes vm not launched for some reasons, such as launching lifecycle hook
+        // timed out.
+        // In the case of 'launching lifecycle hook timeout', the vm instance may or may not have
+        // been spun up. However, the outcome is the same: a termination will be initiated.
+        // Terminating process will handle the deleting of the vm and those additional resources
+        // attached to it.
+        this.proxy.logAsInfo('called AwsHybridScalingGroupStrategy.onVmNotLaunched');
+        return await Promise.resolve('');
+    }
     async onTerminatingVm(): Promise<string> {
         this.proxy.logAsInfo('calling AwsHybridScalingGroupStrategy.onTerminatingVm');
         const settings = await this.platform.getSettings();

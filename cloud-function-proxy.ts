@@ -15,7 +15,8 @@ export enum ReqType {
     ServiceProviderRequest = 'ServiceProviderRequest',
     StatusMessage = 'StatusMessage',
     TerminatedVm = 'TerminatedVm',
-    TerminatingVm = 'TerminatingVm'
+    TerminatingVm = 'TerminatingVm',
+    VmNotLaunched = 'VmNotLaunched'
 }
 
 export enum ReqMethod {

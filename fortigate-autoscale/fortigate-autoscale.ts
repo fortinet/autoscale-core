@@ -42,6 +42,8 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
                 responseBody = await this.handleLaunchingVm();
             } else if (requestType === ReqType.LaunchedVm) {
                 responseBody = await this.handleLaunchedVm();
+            } else if (requestType === ReqType.VmNotLaunched) {
+                responseBody = await this.handleLaunchedVm();
             } else if (requestType === ReqType.BootstrapConfig) {
                 responseBody = await this.handleBootstrap();
             } else if (requestType === ReqType.HeartbeatSync) {

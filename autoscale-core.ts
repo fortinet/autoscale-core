@@ -151,28 +151,46 @@ export class Autoscale implements AutoscaleCore {
         this.proxy.logAsInfo('called handleLaunchedVm.');
         return result;
     }
+    async handleVmNotLaunched(): Promise<string> {
+        this.proxy.logAsInfo('calling handleVmNotLaunched.');
+        const result = await this.scalingGroupStrategy.onLaunchedVm();
+        this.proxy.logAsInfo('called handleVmNotLaunched.');
+        return result;
+    }
     async handleTerminatingVm(): Promise<string> {
         this.proxy.logAsInfo('calling handleTerminatingVm.');
-        // in terminating vm, should do:
-        // 1. mark it as heartbeat out-of-sync to prevent it from syncing again.
-        // load target vm
+        // NOTE: There are some rare cases when vm is terminating before being added to monitor,
+        // for instance, vm launch unsuccessful.
+        // In such case, no health check record for the vm is created in the DB. Need to check
+        // if it is needed to update heartbeat sync status so do additional checking as below:
+
         const targetVm = this.env.targetVm || (await this.platform.getTargetVm());
-        this.heartbeatSyncStrategy.prepare(targetVm);
-        const success = await this.heartbeatSyncStrategy.forceOutOfSync();
-        if (success) {
-            this.env.targetHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                this.env.targetVm.id
-            );
-        }
-        // 2. if it is a primary vm, remove its primary tag
-        if (this.platform.vmEquals(targetVm, this.env.primaryVm)) {
-            const vmTaggings: VmTagging[] = [
-                {
-                    vmId: targetVm.id,
-                    clear: true
-                }
-            ];
-            await this.handleTaggingAutoscaleVm(vmTaggings);
+        // fetch the health check record
+        this.env.targetHealthCheckRecord = await this.platform.getHealthCheckRecord(
+            this.env.targetVm.id
+        );
+        // the following handling are conditional
+        if (this.env.targetHealthCheckRecord) {
+            // in terminating vm, should do:
+            // 1. mark it as heartbeat out-of-sync to prevent it from syncing again.
+            // load target vm
+            this.heartbeatSyncStrategy.prepare(targetVm);
+            const success = await this.heartbeatSyncStrategy.forceOutOfSync();
+            if (success) {
+                this.env.targetHealthCheckRecord = await this.platform.getHealthCheckRecord(
+                    this.env.targetVm.id
+                );
+            }
+            // 2. if it is a primary vm, remove its primary tag
+            if (this.platform.vmEquals(targetVm, this.env.primaryVm)) {
+                const vmTaggings: VmTagging[] = [
+                    {
+                        vmId: targetVm.id,
+                        clear: true
+                    }
+                ];
+                await this.handleTaggingAutoscaleVm(vmTaggings);
+            }
         }
         // ASSERT: this.scalingGroupStrategy.onTerminatingVm() creates a terminating lifecycle item
         await this.scalingGroupStrategy.onTerminatingVm();

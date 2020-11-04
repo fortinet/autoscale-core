@@ -159,6 +159,8 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     return Promise.resolve(ReqType.LaunchingVm);
                 } else if (String(body['detail-type']) === 'EC2 Instance Launch Successful') {
                     return Promise.resolve(ReqType.LaunchedVm);
+                } else if (String(body['detail-type']) === 'EC2 Instance Launch Unsuccessful') {
+                    return Promise.resolve(ReqType.VmNotLaunched);
                 } else if (
                     String(body['detail-type']) === 'EC2 Instance-terminate Lifecycle Action'
                 ) {

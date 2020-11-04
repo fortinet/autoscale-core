@@ -10,6 +10,7 @@ export interface ScalingGroupContext {
     handleLaunchedVm(): Promise<string>;
     handleTerminatingVm(): Promise<string>;
     handleTerminatedVm(): Promise<string>;
+    handleVmNotLaunched(): Promise<string>;
 }
 
 export interface ScalingGroupStrategy {
@@ -17,6 +18,7 @@ export interface ScalingGroupStrategy {
     onLaunchedVm(): Promise<string>;
     onTerminatingVm(): Promise<string>;
     onTerminatedVm(): Promise<string>;
+    onVmNotLaunched(): Promise<string>;
     completeLaunching(success?: boolean): Promise<string>;
     completeTerminating(success?: boolean): Promise<string>;
 }
@@ -27,6 +29,10 @@ export class NoopScalingGroupStrategy implements ScalingGroupStrategy {
     constructor(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter) {
         this.platform = platform;
         this.proxy = proxy;
+    }
+    onVmNotLaunched(): Promise<string> {
+        this.proxy.logAsInfo('Noop on vm launching unsucessful.');
+        return Promise.resolve('');
     }
     onLaunchingVm(): Promise<string> {
         this.proxy.logAsInfo('Noop on launching.');
