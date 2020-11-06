@@ -74,6 +74,22 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
     }
     /**
      *
+     * load the configset content for tgw specific setting
+     * @returns {Promise<string>} configset content
+     */
+    async loadTgwSpecificConfig(): Promise<string> {
+        this.settings = this.settings || (await this.platform.getSettings());
+        try {
+            return await this.platform.loadConfigSet('tgwspecific');
+        } catch (error) {
+            this.proxy.logAsWarning("tgwspecific configset doesn't exist in the assets storage.");
+            // NOTE: even though not loading the tgw specific configset, return empty string instead
+            // of throwing errors
+            return '';
+        }
+    }
+    /**
+     *
      * @override for loading bootstrap config with additional AWS Transit Gateway VPN connections
      * @returns {Promise<string>} configset content
      */
@@ -82,6 +98,7 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
         // if transit gateway vpn attachment is enabled.
         if (this.settings.get(AwsFortiGateAutoscaleSetting.AwsEnableTransitGatewayVpn).truthValue) {
             baseConfig += await this.loadVpn(this.env.targetVm);
+            baseConfig += await this.loadTgwSpecificConfig();
         }
         return baseConfig;
     }
