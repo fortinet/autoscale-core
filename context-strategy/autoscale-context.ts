@@ -314,7 +314,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 ` heartbeat interval: ${oldInterval}->${newInterval} ms,` +
                 ` heartbeat loss count: ${oldLossCount}->${newLossCount}.`
         );
-        this.proxy.logAsInfo('appled ConstantIntervalHeartbeatSyncStrategy strategy.');
+        this.proxy.logAsInfo('applied ConstantIntervalHeartbeatSyncStrategy strategy.');
         return this.result;
     }
     get targetHealthCheckRecord(): HealthCheckRecord {
