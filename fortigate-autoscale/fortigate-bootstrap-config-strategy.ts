@@ -46,7 +46,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         // target is the primary? return config sets for active role
         if (this.platform.vmEquals(this.env.targetVm, this.env.primaryVm)) {
             this.config = await this.getPrimaryRoleConfig(config, this.env.targetVm);
-            this.proxy.logAsInfo('loaded configuration for active role.');
+            this.proxy.logAsInfo('loaded configuration for primary role.');
         }
         // else return config sets for passive device role
         else {
@@ -55,7 +55,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
                 this.env.targetVm,
                 this.env.primaryVm
             );
-            this.proxy.logAsInfo('loaded configuration for passive role.');
+            this.proxy.logAsInfo('loaded configuration for secondary role.');
         }
         return BootstrapConfigStrategyResult.SUCCESS;
     }
