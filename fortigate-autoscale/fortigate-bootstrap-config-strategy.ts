@@ -272,6 +272,11 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
             config = this.processConfigV2(config, sourceData);
         }
 
+        // NOTE: All those values to pass to FOS CLI must be normalized, then be enclosed with
+        // double quotes.
+        // Also, enclosure with double quotes is not part of normalizeFOSCmdInput()'s functionality.
+        // We enclose the placeholders with double quotes in configset files and programatically
+        // replace the placeholders with the normalized values.
         const psksecret = this.normalizeFOSCmdInput(
             this.settings.get(FortiGateAutoscaleSetting.FortiGatePskSecret).value
         );
@@ -356,12 +361,17 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
 
     /**
      * To normalize a string in order for a safe use as the input value for the FOS commands.
+     * Keep in mind that this function does not wrap the output string with an extra double quotes.
      *
      * @param {string} input the input string to normalize
      * @returns {string} the normalized input string
      */
     protected normalizeFOSCmdInput(input: string): string {
-        return (input && input.replace(/\\/g, '\\\\').replace(/"/g, '\\"')) || null;
+        // NOTE:
+        // FOS CLI has a better input acceptance for string literal enclosing with double quotes
+        // than single quotes. Every symbol on the keyboard except for \ and " is accepted in a
+        // double-quoted string literal. Symbol \ and " need to add a leading \ (escape character).
+        return (input && input.replace(/\\"/g, m => `\\${m}`)) || null;
     }
     /**
      * get bootstrap configuration for a FGT vm which's role will be primary
