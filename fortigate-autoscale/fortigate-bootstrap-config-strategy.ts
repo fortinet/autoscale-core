@@ -272,23 +272,45 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
             config = this.processConfigV2(config, sourceData);
         }
 
-        const psksecret = this.settings.get(FortiGateAutoscaleSetting.FortiGatePskSecret).value;
+        // NOTE: All those values to pass to FOS CLI must be normalized, then be enclosed with
+        // double quotes.
+        // Also, enclosure with double quotes is not part of normalizeFOSCmdInput()'s functionality.
+        // We enclose the placeholders with double quotes in configset files and programatically
+        // replace the placeholders with the normalized values.
+        const psksecret = this.normalizeFOSCmdInput(
+            this.settings.get(FortiGateAutoscaleSetting.FortiGatePskSecret).value
+        );
         const syncInterface =
-            this.settings.get(FortiGateAutoscaleSetting.FortiGateSyncInterface).value || 'port1';
+            this.normalizeFOSCmdInput(
+                this.settings.get(FortiGateAutoscaleSetting.FortiGateSyncInterface).value
+            ) || 'port1';
         const trafficPort =
-            this.settings.get(FortiGateAutoscaleSetting.FortiGateTrafficPort).value || '443';
+            this.normalizeFOSCmdInput(
+                this.settings.get(FortiGateAutoscaleSetting.FortiGateTrafficPort).value
+            ) || '443';
         const trafficProtocol =
-            this.settings.get(FortiGateAutoscaleSetting.FortiGateTrafficProtocol).value || 'ALL';
+            this.normalizeFOSCmdInput(
+                this.settings.get(FortiGateAutoscaleSetting.FortiGateTrafficProtocol).value
+            ) || 'ALL';
         const adminPort =
-            this.settings.get(FortiGateAutoscaleSetting.FortiGateAdminPort).value || '8443';
-        const intElbDns = this.settings.get(FortiGateAutoscaleSetting.FortiGateInternalElbDns)
-            .value;
-        const hbInterval = this.settings.get(FortiGateAutoscaleSetting.HeartbeatInterval).value;
+            this.normalizeFOSCmdInput(
+                this.settings.get(FortiGateAutoscaleSetting.FortiGateAdminPort).value
+            ) || '8443';
+        const intElbDns = this.normalizeFOSCmdInput(
+            this.settings.get(FortiGateAutoscaleSetting.FortiGateInternalElbDns).value
+        );
+        const hbInterval = this.normalizeFOSCmdInput(
+            this.settings.get(FortiGateAutoscaleSetting.HeartbeatInterval).value
+        );
         const hbCallbackUrl =
-            this.settings.get(FortiGateAutoscaleSetting.AutoscaleHandlerUrl).value || '';
+            this.normalizeFOSCmdInput(
+                this.settings.get(FortiGateAutoscaleSetting.AutoscaleHandlerUrl).value
+            ) || '';
         const virtualNetworkCidr =
-            this.settings.get(FortiGateAutoscaleSetting.FortiGateAutoscaleVirtualNetworkCidr)
-                .value || '';
+            this.normalizeFOSCmdInput(
+                this.settings.get(FortiGateAutoscaleSetting.FortiGateAutoscaleVirtualNetworkCidr)
+                    .value
+            ) || '';
         return config
             .replace(new RegExp('{SYNC_INTERFACE}', 'gm'), syncInterface)
             .replace(new RegExp('{VIRTUAL_NETWORK_CIDR}', 'gm'), virtualNetworkCidr)
@@ -335,6 +357,21 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
             // if error occurs, return the original config
             return config;
         }
+    }
+
+    /**
+     * To normalize a string in order for a safe use as the input value for the FOS commands.
+     * Keep in mind that this function does not wrap the output string with an extra double quotes.
+     *
+     * @param {string} input the input string to normalize
+     * @returns {string} the normalized input string
+     */
+    protected normalizeFOSCmdInput(input: string): string {
+        // NOTE:
+        // FOS CLI has a better input acceptance for string literal enclosing with double quotes
+        // than single quotes. Every symbol on the keyboard except for \ and " is accepted in a
+        // double-quoted string literal. Symbol \ and " need to add a leading \ (escape character).
+        return (input && input.replace(/\\"/g, m => `\\${m}`)) || null;
     }
     /**
      * get bootstrap configuration for a FGT vm which's role will be primary

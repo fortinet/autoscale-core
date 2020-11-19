@@ -7,7 +7,7 @@ end
 
 config router static
     edit 1
-        set dst {VIRTUAL_NETWORK_CIDR}
+        set dst "{VIRTUAL_NETWORK_CIDR}"
         set device "port2"
         set dynamic-gateway enable
     next

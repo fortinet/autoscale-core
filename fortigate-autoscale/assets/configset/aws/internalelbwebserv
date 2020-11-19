@@ -15,9 +15,9 @@ config firewall vip
         set type fqdn
         set mapped-addr internal-elb-web
         set portforward enable
-        set extintf {EXTERNAL_INTERFACE}
-        set extport {TRAFFIC_PORT}
-        set mappedport {TRAFFIC_PORT}
+        set extintf "{EXTERNAL_INTERFACE}"
+        set extport "{TRAFFIC_PORT}"
+        set mappedport "{TRAFFIC_PORT}"
     next
 end
 

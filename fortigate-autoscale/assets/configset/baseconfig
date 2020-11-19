@@ -3,13 +3,13 @@ config system dns
     unset secondary
 end
 config system global
-    set admin-sport {ADMIN_PORT}
+    set admin-sport "{ADMIN_PORT}"
 end
 config system auto-scale
     set status enable
     set sync-interface "{SYNC_INTERFACE}"
-    set hb-interval {HEART_BEAT_INTERVAL}
+    set hb-interval "{HEART_BEAT_INTERVAL}"
     set role master
-    set callback-url {CALLBACK_URL}
-    set psksecret {PSK_SECRET}
+    set callback-url "{CALLBACK_URL}"
+    set psksecret "{PSK_SECRET}"
 end

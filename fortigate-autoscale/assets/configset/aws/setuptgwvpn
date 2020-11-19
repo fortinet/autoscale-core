@@ -34,7 +34,7 @@ config router prefix-list
     edit "pflist-port1"
         config rule
             edit 1
-                set prefix {@device.networkInterfaces#0.privateIpAddress} 255.255.255.255
+                set prefix "{@device.networkInterfaces#0.privateIpAddress}" 255.255.255.255
                 unset ge
                 unset le
             next
@@ -60,13 +60,13 @@ end
 config vpn ipsec phase1-interface
     edit "tgw-vpn-1"
         set interface "port1"
-        set local-gw {@device.networkInterfaces#0.privateIpAddress}
+        set local-gw "{@device.networkInterfaces#0.privateIpAddress}"
         set dhgrp 2
         set proposal aes128-sha1
         set keylife 28800
         set net-device enable
-        set remote-gw {@vpn_connection.ipsec_tunnel.vpn_gateway.tunnel_outside_address.ip_address}
-        set psksecret {@vpn_connection.ipsec_tunnel.ike.pre_shared_key}
+        set remote-gw "{@vpn_connection.ipsec_tunnel.vpn_gateway.tunnel_outside_address.ip_address}"
+        set psksecret "{@vpn_connection.ipsec_tunnel.ike.pre_shared_key}"
         set dpd-retryinterval 10
         # set transit-gateway command is added in FOS 6.4.2. In any prior FOS version, the 'command fail' errors can be safely ignored if you see them.
         set transit-gateway enable
@@ -87,32 +87,32 @@ end
 config system interface
     edit "tgw-vpn-1"
         set interface "port1"
-        set ip {@vpn_connection.ipsec_tunnel.customer_gateway.tunnel_inside_address.ip_address} 255.255.255.255
+        set ip "{@vpn_connection.ipsec_tunnel.customer_gateway.tunnel_inside_address.ip_address}" 255.255.255.255
         set allowaccess ping
         set type tunnel
         set tcp-mss 1379
-        set remote-ip {@vpn_connection.ipsec_tunnel.vpn_gateway.tunnel_inside_address.ip_address} {@vpn_connection.ipsec_tunnel.vpn_gateway.tunnel_inside_address.network_mask}
+        set remote-ip "{@vpn_connection.ipsec_tunnel.vpn_gateway.tunnel_inside_address.ip_address}" "{@vpn_connection.ipsec_tunnel.vpn_gateway.tunnel_inside_address.network_mask}"
     next
 end
 
 #4: Border Gateway Protocol (BGP) Configuration
 config router bgp
-    set as {@vpn_connection.ipsec_tunnel.customer_gateway.bgp.asn}
-    set router-id {@device.networkInterfaces#0.privateIpAddress}
+    set as "{@vpn_connection.ipsec_tunnel.customer_gateway.bgp.asn}"
+    set router-id "{@device.networkInterfaces#0.privateIpAddress}"
     set ebgp-multipath enable
     set network-import-check disable
     config neighbor
-        edit {@vpn_connection.ipsec_tunnel.vpn_gateway.tunnel_inside_address.ip_address}
+        edit "{@vpn_connection.ipsec_tunnel.vpn_gateway.tunnel_inside_address.ip_address}"
             set capability-default-originate enable
             set link-down-failover enable
             set description "{@vpn_connection.id}-1"
-            set remote-as {@vpn_connection.ipsec_tunnel.vpn_gateway.bgp.asn}
+            set remote-as "{@vpn_connection.ipsec_tunnel.vpn_gateway.bgp.asn}"
             set route-map-out "rmap-outbound"
         next
     end
     config network
         edit 1
-            set prefix {@device.networkInterfaces#0.privateIpAddress} 255.255.255.255
+            set prefix "{@device.networkInterfaces#0.privateIpAddress}" 255.255.255.255
         next
     end
 end
@@ -122,13 +122,13 @@ end
 config vpn ipsec phase1-interface
     edit "tgw-vpn-2"
         set interface "port1"
-        set local-gw {@device.networkInterfaces#0.privateIpAddress}
+        set local-gw "{@device.networkInterfaces#0.privateIpAddress}"
         set dhgrp 2
         set proposal aes128-sha1
         set keylife 28800
         set net-device enable
-        set remote-gw {@vpn_connection.ipsec_tunnel#1.vpn_gateway.tunnel_outside_address.ip_address}
-        set psksecret {@vpn_connection.ipsec_tunnel#1.ike.pre_shared_key}
+        set remote-gw "{@vpn_connection.ipsec_tunnel#1.vpn_gateway.tunnel_outside_address.ip_address}"
+        set psksecret "{@vpn_connection.ipsec_tunnel#1.ike.pre_shared_key}"
         set dpd-retryinterval 10
         # set transit-gateway command is added in FOS 6.4.2. In any prior FOS version, the 'command fail' errors can be safely ignored if you see them.
         set transit-gateway enable
@@ -149,32 +149,32 @@ end
 config system interface
     edit "tgw-vpn-2"
         set interface "port1"
-        set ip {@vpn_connection.ipsec_tunnel#1.customer_gateway.tunnel_inside_address.ip_address} 255.255.255.255
+        set ip "{@vpn_connection.ipsec_tunnel#1.customer_gateway.tunnel_inside_address.ip_address}" 255.255.255.255
         set allowaccess ping
         set type tunnel
         set tcp-mss 1379
-        set remote-ip {@vpn_connection.ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.ip_address} {@vpn_connection.ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.network_mask}
+        set remote-ip "{@vpn_connection.ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.ip_address}" "{@vpn_connection.ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.network_mask}"
     next
 end
 
 #4: Border Gateway Protocol (BGP) Configuration
 config router bgp
-    set as {@vpn_connection.ipsec_tunnel.customer_gateway.bgp.asn}
-    set router-id {@device.networkInterfaces#0.privateIpAddress}
+    set as "{@vpn_connection.ipsec_tunnel.customer_gateway.bgp.asn}"
+    set router-id "{@device.networkInterfaces#0.privateIpAddress}"
     set ebgp-multipath enable
     set network-import-check disable
     config neighbor
-        edit {@vpn_connection.ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.ip_address}
+        edit "{@vpn_connection.ipsec_tunnel#1.vpn_gateway.tunnel_inside_address.ip_address}"
             set capability-default-originate enable
             set link-down-failover enable
             set description "{@vpn_connection.id}-2"
-            set remote-as {@vpn_connection.ipsec_tunnel#1.vpn_gateway.bgp.asn}
+            set remote-as "{@vpn_connection.ipsec_tunnel#1.vpn_gateway.bgp.asn}"
             set route-map-out "rmap-outbound"
         next
     end
     config network
         edit 1
-            set prefix {@device.networkInterfaces#0.privateIpAddress} 255.255.255.255
+            set prefix "{@device.networkInterfaces#0.privateIpAddress}" 255.255.255.255
         next
     end
 end
@@ -183,8 +183,8 @@ end
 
 config firewall ippool
     edit "ippool"
-        set startip {@device.networkInterfaces#0.privateIpAddress}
-        set endip {@device.networkInterfaces#0.privateIpAddress}
+        set startip "{@device.networkInterfaces#0.privateIpAddress}"
+        set endip "{@device.networkInterfaces#0.privateIpAddress}"
     next
 end
 
