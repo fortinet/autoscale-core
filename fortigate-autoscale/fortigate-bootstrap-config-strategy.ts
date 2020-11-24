@@ -371,7 +371,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         // FOS CLI has a better input acceptance for string literal enclosing with double quotes
         // than single quotes. Every symbol on the keyboard except for \ and " is accepted in a
         // double-quoted string literal. Symbol \ and " need to add a leading \ (escape character).
-        return (input && input.replace(/\\"/g, m => `\\${m}`)) || null;
+        return (input && input.replace(/[\\"]/g, m => `\\${m}`)) || null;
     }
     /**
      * get bootstrap configuration for a FGT vm which's role will be primary
