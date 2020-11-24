@@ -6,7 +6,7 @@
     "types": "dist/types/index.d.ts",
     "scripts": {
         "postinstall": "npm run build",
-        "pre-commit": "npm-run-all lint-check audit-production test build",
+        "pre-push": "npm-run-all lint-check audit-production test build",
         "audit-production": "npm audit --production",
         "bundle": "webpack",
         "compile": "tsc",
@@ -17,6 +17,12 @@
         "test": "mocha --timeout 3600000 -r ts-node/register test/{*,**/**/*}.spec.ts",
         "lint-check": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js c -fl  -F .eslintignore -L .eslintignore \"{*,**/*}{.js,.json,.ts}\"",
         "lint-fix": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js f -fl  -F .eslintignore -L .eslintignore \"**/*{.js,.json,.ts}\""
+    },
+    "husky": {
+        "hooks": {
+            "pre-commit": "npm run lint-check",
+            "pre-push": "npm run pre-push"
+        }
     },
     "keywords": [],
     "author": "Fortinet <github@fortinet.com>",
@@ -33,6 +39,7 @@
         "eslint-plugin-mocha": "^6.3.0",
         "eslint-plugin-prettier": "^3.1.2",
         "ftnt-devops-ci": "github:fortinet/ftnt-devops-ci",
+        "husky": "^4.3.0",
         "json-loader": "^0.5.7",
         "mocha": "^7.1.1",
         "mocha-loader": "^5.0.0",
