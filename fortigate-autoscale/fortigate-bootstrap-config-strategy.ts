@@ -71,7 +71,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         } catch (error) {
             this.proxy.logForError(
                 "[baseconfig] configset doesn't exist in the assets storage. " +
-                    'Configset Not loaded.',
+                'Configset Not loaded.',
                 error
             );
             throw new Error('baseconfig is required but not found.');
@@ -89,7 +89,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         } catch (error) {
             this.proxy.logForError(
                 "[port2config] configset doesn't exist in the assets storage. " +
-                    'Configset Not loaded.',
+                'Configset Not loaded.',
                 error
             );
             return '';
@@ -107,7 +107,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         } catch (error) {
             this.proxy.logAsWarning(
                 "[internalelbwebserv] configset doesn't exist in the assets storage. " +
-                    'Configset Not loaded.'
+                'Configset Not loaded.'
             );
             return '';
         }
@@ -124,7 +124,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         } catch (error) {
             this.proxy.logAsWarning(
                 "[fazintegration] configset doesn't exist in the assets storage. " +
-                    'Configset Not loaded.'
+                'Configset Not loaded.'
             );
             return '';
         }
@@ -156,7 +156,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
                         errorCount++;
                         this.proxy.logAsWarning(
                             `[${name}] configset doesn't exist in the assets storage. ` +
-                                'Configset Not loaded.'
+                            'Configset Not loaded.'
                         );
                         return '';
                     })
@@ -371,7 +371,7 @@ export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationS
         // FOS CLI has a better input acceptance for string literal enclosing with double quotes
         // than single quotes. Every symbol on the keyboard except for \ and " is accepted in a
         // double-quoted string literal. Symbol \ and " need to add a leading \ (escape character).
-        return (input && input.replace(/\\"/g, m => `\\${m}`)) || null;
+        return (input && input.replace(/[\\"]/g, m => `\\${m}`)) || null;
     }
     /**
      * get bootstrap configuration for a FGT vm which's role will be primary
