@@ -49,6 +49,7 @@ jobs:
         uses: svenstaro/upload-release-action@2.2.0
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ./autoscale-core*.tgz
           tag: ${{ github.ref }}
+          file: ./autoscale-core*.tgz
+          file_glob: true
           overwrite: true
