@@ -28,6 +28,7 @@ import {
 } from './primary-election';
 import { PlatformAdapter } from './platform-adapter';
 import { VirtualMachine } from './virtual-machine';
+import { FazIntegrationStrategy } from 'fortigate-autoscale/fortigate-faz-integration-strategy';
 
 export class HttpError extends Error {
     public readonly name: string;
@@ -112,6 +113,7 @@ export class Autoscale implements AutoscaleCore {
     heartbeatSyncStrategy: HeartbeatSyncStrategy;
     primaryElectionStrategy: PrimaryElectionStrategy;
     licensingStrategy: LicensingStrategy;
+    fazIntegrationStrategy: FazIntegrationStrategy;
     constructor(p: PlatformAdapter, e: AutoscaleEnvironment, x: CloudFunctionProxyAdapter) {
         this.platform = p;
         this.env = e;
@@ -134,6 +136,9 @@ export class Autoscale implements AutoscaleCore {
     }
     setLicensingStrategy(strategy: LicensingStrategy): void {
         this.licensingStrategy = strategy;
+    }
+    setFazIntegrationStrategy(strategy: FazIntegrationStrategy): void {
+        this.fazIntegrationStrategy = strategy;
     }
     async init(): Promise<void> {
         await this.platform.init();

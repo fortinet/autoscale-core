@@ -10,6 +10,7 @@ import {
 import { LicensingModelContext } from '../context-strategy/licensing-context';
 import { PlatformAdapter } from '../platform-adapter';
 import { VmTagging } from '../context-strategy/autoscale-context';
+import { FortiGateAutoscaleSetting } from './fortigate-autoscale-settings';
 
 export const PRODUCT_NAME_FORTIGATE = 'fortigate';
 
@@ -189,5 +190,21 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
         this.proxy.logAsDebug(`configuration: ${bootstrapConfig}`);
         this.proxy.logAsInfo('called handleBootstrap.');
         return bootstrapConfig;
+    }
+
+    /**
+     * @override
+     */
+    async onVmFullyConfigured(): Promise<void> {
+        this.proxy.logAsInfo('calling FortiGateAutoscale.onVmFullyConfigured.');
+        // NOTE: if enable FAZ integration, register vm in FAZ
+        const settings = await this.platform.getSettings();
+        if (settings.get(FortiGateAutoscaleSetting.EnableFazIntegration).truthValue) {
+            this.proxy.logAsInfo('FAZ integration is enabled.');
+            await this.fazIntegrationStrategy.apply();
+        }
+        // call the same method in the parent
+        super.onVmFullyConfigured();
+        this.proxy.logAsInfo('called FortiGateAutoscale.onVmFullyConfigured.');
     }
 }
