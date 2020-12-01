@@ -524,9 +524,10 @@ export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler extends AwsFortiGat
  * FORTIANALYZER_IP: contain the public ip of the (only one) FortiAnalyzer registered to the Autoscale
  * FORTIANALYZER_PORT: contains the api port of the (only one) FortiAnalyzer registered to the Autoscale
  */
-export class AwsFortiGateAutoscaleFazIntegrationHandler {
+export class AwsFortiGateAutoscaleFazIntegrationHandler extends AwsFortiGateAutoscaleLambdaInvocationHandler {
     autoscale: AwsFortiGateAutoscale<JSONable, Context, void>;
     constructor(autoscale: AwsFortiGateAutoscale<JSONable, Context, void>) {
+        super();
         this.autoscale = autoscale;
     }
     get proxy(): AwsLambdaInvocationProxy {
