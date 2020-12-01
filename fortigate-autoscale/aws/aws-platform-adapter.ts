@@ -14,7 +14,8 @@ import {
     PrimaryElectionDbItem,
     NicAttachmentDbItem,
     SettingsDbItem,
-    VpnAttachmentDbItem
+    VpnAttachmentDbItem,
+    FortiAnalyzerDbItem
 } from '../../db-definitions';
 import {
     genChecksum,
@@ -1853,5 +1854,30 @@ export class AwsPlatformAdapter implements PlatformAdapter {
 
     async getEnvironmentVariabes(functionName: string): Promise<{ [key: string]: string }> {
         return await this.adaptee.getFunctionEnvironmentVariables(functionName);
+    }
+
+    async registerFortiAnalyzer(
+        vmId: string,
+        privateIp: string,
+        primary: boolean,
+        vip: string
+    ): Promise<void> {
+        this.proxy.logAsInfo('calling registerFortiAnalyzer');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsFortiAnalyzer(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+        );
+        const item: FortiAnalyzerDbItem = {
+            vmId: vmId,
+            ip: privateIp,
+            primary: primary,
+            vip: vip
+        };
+        const conditionExp: AwsDdbOperations = {
+            Expression: '',
+            type: CreateOrUpdate.CreateOrReplace
+        };
+        await this.adaptee.saveItemToDb<FortiAnalyzerDbItem>(table, item, conditionExp);
+        this.proxy.logAsInfo('called registerFortiAnalyzer');
     }
 }

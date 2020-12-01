@@ -207,4 +207,15 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
         super.onVmFullyConfigured();
         this.proxy.logAsInfo('called FortiGateAutoscale.onVmFullyConfigured.');
     }
+
+    /**
+     * Register a FortiAnalyzer to the FortiGate Autoscale
+     * @param {string} vmId the vmId of the FortiAnalyzer
+     * @param {string} privateIp the privateIp of the FortiAnalyzer
+     */
+    async registerFortiAnalyzer(vmId: string, privateIp: string): Promise<void> {
+        this.proxy.logAsInfo('calling FortiGateAutoscale.registerFortiAnalyzer.');
+        await this.platform.registerFortiAnalyzer(vmId, privateIp, true, privateIp);
+        this.proxy.logAsInfo('called FortiGateAutoscale.registerFortiAnalyzer.');
+    }
 }

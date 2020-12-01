@@ -225,6 +225,14 @@ class TestPlatformAdapter implements PlatformAdapter {
     updatePrimaryRecord(rec: PrimaryRecord): Promise<void> {
         throw new Error('Method not implemented.');
     }
+    registerFortiAnalyzer(
+        vmId: string,
+        privateIp: string,
+        primary: boolean,
+        vip: string
+    ): Promise<void> {
+        throw new Error('Method not implemented.');
+    }
 }
 
 class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {

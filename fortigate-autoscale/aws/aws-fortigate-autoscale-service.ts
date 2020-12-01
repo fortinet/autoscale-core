@@ -16,6 +16,7 @@ export type AwsFortiGateAutoscaleServiceEvent =
     | AwsFortiGateAutoscaleServiceEventStartAutoscale
     | AwsFortiGateAutoscaleServiceEventStopAutoscale
     | AwsFortiGateAutoscaleServiceEventSaveSettings
+    | AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer
     | AwsFortiGateAutoscaleServiceEventUnknown;
 export interface AwsFortiGateAutoscaleServiceEventBase {
     ServiceToken: string;
@@ -38,6 +39,13 @@ export interface AwsFortiGateAutoscaleServiceEventSaveSettings
     extends AwsFortiGateAutoscaleServiceEventBase {
     ServiceType: 'saveSettings';
     [key: string]: string;
+}
+
+export interface AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer
+    extends AwsFortiGateAutoscaleServiceEventBase {
+    ServiceType: 'registerFortiAnalyzer';
+    InstanceId?: string;
+    PrivateIp?: string;
 }
 
 export interface AwsFortiGateAutoscaleServiceEventUnknown
@@ -90,6 +98,9 @@ export class AwsFortiGateAutoscaleServiceProvider implements AutoscaleServicePro
                                     `ServiceType: [${serviceEvent.ServiceType}] is skipped in ` +
                                         `the RequestType: [${serviceEventType}]`
                                 );
+                                break;
+                            case 'registerFortiAnalyzer':
+                                await this.registerFortiAnalyzer(serviceEvent);
                                 break;
                             case undefined:
                             default:
@@ -246,6 +257,19 @@ export class AwsFortiGateAutoscaleServiceProvider implements AutoscaleServicePro
         delete props.ServiceType;
         await this.autoscale.saveSettings(props, AwsFortiGateAutoscaleSettingItemDictionary);
         this.proxy.logAsInfo('called SaveAutoscaleSettings');
+        return true;
+    }
+
+    async registerFortiAnalyzer(
+        event: AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer
+    ): Promise<boolean> {
+        this.proxy.logAsInfo('calling RegisterFortiAnalyzer');
+        const props: { [key: string]: string } = { ...event };
+        delete props.ServiceToken;
+        delete props.ServiceType;
+        await this.autoscale;
+        await this.autoscale.saveSettings(props, AwsFortiGateAutoscaleSettingItemDictionary);
+        this.proxy.logAsInfo('called RegisterFortiAnalyzer');
         return true;
     }
 }

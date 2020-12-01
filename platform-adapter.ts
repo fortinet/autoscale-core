@@ -139,4 +139,10 @@ export interface PlatformAdapter {
     detachNetworkInterface(vmId: string, nicId: string): Promise<void>;
     listNetworkInterfaces(tags: ResourceFilter[], status?: string): Promise<NetworkInterface[]>;
     tagNetworkInterface(nicId: string, tags: ResourceFilter[]): Promise<void>;
+    registerFortiAnalyzer(
+        vmId: string,
+        privateIp: string,
+        primary: boolean,
+        vip: string
+    ): Promise<void>;
 }

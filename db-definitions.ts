@@ -402,7 +402,7 @@ export abstract class PrimaryElection extends Table<PrimaryElectionDbItem> {
 export interface FortiAnalyzerDbItem {
     vmId: string;
     ip: string;
-    primary: string;
+    primary: boolean;
     vip: string;
 }
 
@@ -442,7 +442,7 @@ export abstract class FortiAnalyzer extends Table<FortiAnalyzerDbItem> {
         const item: FortiAnalyzerDbItem = {
             vmId: this.typeConvert.valueToString(record.vmId),
             ip: this.typeConvert.valueToString(record.ip),
-            primary: this.typeConvert.valueToString(record.primary),
+            primary: this.typeConvert.valueToBoolean(record.primary),
             vip: this.typeConvert.valueToString(record.vip)
         };
         return item;
