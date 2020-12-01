@@ -1,6 +1,6 @@
 import { PlatformAdapter } from '../platform-adapter';
 import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
-import { VirtualMachine } from 'virtual-machine';
+import { VirtualMachine } from '../virtual-machine';
 
 export interface FazDeviceRegistration {
     vmId: string;
