@@ -28,7 +28,7 @@ import {
 } from './primary-election';
 import { PlatformAdapter } from './platform-adapter';
 import { VirtualMachine } from './virtual-machine';
-import { FazIntegrationStrategy } from 'fortigate-autoscale/fortigate-faz-integration-strategy';
+import { FazIntegrationStrategy } from './fortigate-autoscale/fortigate-faz-integration-strategy';
 
 export class HttpError extends Error {
     public readonly name: string;
