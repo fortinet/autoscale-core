@@ -201,7 +201,7 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
         const settings = await this.platform.getSettings();
         if (settings.get(FortiGateAutoscaleSetting.EnableFazIntegration).truthValue) {
             this.proxy.logAsInfo('FAZ integration is enabled.');
-            await this.fazIntegrationStrategy.apply();
+            await this.fazIntegrationStrategy.registerDevice(this.env.targetVm);
         }
         // call the same method in the parent
         super.onVmFullyConfigured();

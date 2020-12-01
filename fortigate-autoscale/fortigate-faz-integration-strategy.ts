@@ -1,30 +1,22 @@
 import { PlatformAdapter } from '../platform-adapter';
 import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
-import { AutoscaleEnvironment } from '../autoscale-environment';
+import { VirtualMachine } from 'virtual-machine';
 
-export interface FazIntegrationStrategy {
-    apply(): Promise<void>;
+export interface FazDeviceRegistration {
+    vmId: string;
+    privateIp: string;
+    publicIp: string;
 }
 
-export class FazReactiveRegsitrationStrategy implements FazIntegrationStrategy {
-    platform: PlatformAdapter;
-    proxy: CloudFunctionProxyAdapter;
-    env: AutoscaleEnvironment;
-    constructor(
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        env: AutoscaleEnvironment
-    ) {
-        this.platform = platform;
-        this.proxy = proxy;
-        this.env = env;
-    }
-    apply(): Promise<void> {
-        this.proxy.logAsInfo('calling FazReactiveRegsitrationStrategy.apply.');
-        // TODO: require implementation
-        this.proxy.logAsInfo('called FazReactiveRegsitrationStrategy.apply.');
-        return Promise.resolve();
-    }
+export interface FazIntegrationStrategy {
+    registerDevice(vm: VirtualMachine): Promise<void>;
+    authorizeDevice(
+        device: FazDeviceRegistration,
+        host: string,
+        port: string,
+        username: string,
+        password: string
+    ): Promise<void>;
 }
 
 export class NoopFazIntegrationStrategy implements FazIntegrationStrategy {
@@ -34,9 +26,17 @@ export class NoopFazIntegrationStrategy implements FazIntegrationStrategy {
         this.platform = platform;
         this.proxy = proxy;
     }
-    apply(): Promise<void> {
-        this.proxy.logAsInfo('calling NoopFazIntegrationStrategy.apply.');
-        this.proxy.logAsInfo('called NoopFazIntegrationStrategy.apply.');
+    registerDevice(): Promise<void> {
+        this.proxy.logAsInfo('calling NoopFazIntegrationStrategy.registerDevice.');
+        this.proxy.logAsInfo('no operation required.');
+        this.proxy.logAsInfo('called NoopFazIntegrationStrategy.registerDevice.');
+        return Promise.resolve();
+    }
+
+    authorizeDevice(): Promise<void> {
+        this.proxy.logAsInfo('calling NoopFazIntegrationStrategy.authorizeDevice.');
+        this.proxy.logAsInfo('no operation required.');
+        this.proxy.logAsInfo('called NoopFazIntegrationStrategy.authorizeDevice.');
         return Promise.resolve();
     }
 }

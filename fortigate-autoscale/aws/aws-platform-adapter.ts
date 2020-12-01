@@ -1830,4 +1830,28 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             return false;
         }
     }
+
+    async getDecryptedEnvironmentVariable(name): Promise<string> {
+        const encrypted = process.env[name];
+        try {
+            const decrypted = await this.adaptee.kmsDecrypt(encrypted);
+            this.proxy.logAsInfo('Environment variable is decrypted. Use the decrpted value.');
+            return decrypted;
+        } catch (error) {
+            // if the string cannot be decrypted, use the original one
+            if (error.code && error.code === 'InvalidCiphertextException') {
+                this.proxy.logAsWarning(
+                    'Unseccessfully decrypt the given varable, probably because ' +
+                        'the input is a non-encrypted value. Use its original value instead.'
+                );
+            } else {
+                throw error;
+            }
+        }
+        return encrypted;
+    }
+
+    async getEnvironmentVariabes(functionName: string): Promise<{ [key: string]: string }> {
+        return await this.adaptee.getFunctionEnvironmentVariables(functionName);
+    }
 }

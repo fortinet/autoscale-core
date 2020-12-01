@@ -41,7 +41,7 @@ import {
 import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../virtual-machine';
 import { compare } from '../helper-function';
 import { AwsFortiGateAutoscaleSetting } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
-import { NoopFazIntegrationStrategy } from 'fortigate-autoscale/fortigate-faz-integration-strategy';
+import { NoopFazIntegrationStrategy } from '../fortigate-autoscale/fortigate-faz-integration-strategy';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 

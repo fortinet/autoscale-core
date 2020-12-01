@@ -19,7 +19,7 @@ import {
     AwsTgwVpnUpdateAttachmentRouteTableRequest
 } from './transit-gateway-context';
 import {
-    AwsTgwLambdaInvocable,
+    AwsLambdaInvocable,
     AwsLambdaInvocableExecutionTimeOutError
 } from './aws-lambda-invocable';
 
@@ -217,7 +217,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
                 ...request
             },
             handlerName,
-            AwsTgwLambdaInvocable.UpdateTgwAttachmentRouteTable
+            AwsLambdaInvocable.UpdateTgwAttachmentRouteTable
         );
 
         // save the tgw vpn attachment record
