@@ -88,6 +88,16 @@ const TEST_PRIMARY_ELECTION: PrimaryElection = {
     signature: '12345'
 };
 
+class TestAutoscale extends Autoscale {
+    constructor(
+        readonly platform: TestPlatformAdapter,
+        readonly env: AutoscaleEnvironment,
+        readonly proxy: CloudFunctionProxyAdapter
+    ) {
+        super();
+    }
+}
+
 class TestPlatformAdapter implements PlatformAdapter {
     saveSettingItem(
         key: string,
@@ -318,7 +328,7 @@ describe('sanity test', () => {
         ms = new PreferredGroupPrimaryElection(p, x);
         hs = new ConstantIntervalHeartbeatSyncStrategy(p, x);
         ss = new NoopScalingGroupStrategy(p, x);
-        autoscale = new Autoscale(p, e, x);
+        autoscale = new TestAutoscale(p, e, x);
         autoscale.setPrimaryElectionStrategy(ms);
         autoscale.setHeartbeatSyncStrategy(hs);
         autoscale.setScalingGroupStrategy(ss);
