@@ -20,7 +20,6 @@ import {
 import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../../helper-function';
 import { VirtualMachineState } from '../../virtual-machine';
 import { FortiGateAutoscale } from '../fortigate-autoscale';
-import { FortiGateBootstrapConfigStrategy } from '../fortigate-bootstrap-config-strategy';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsFortiGateBootstrapTgwStrategy } from './aws-fortigate-bootstrap-config-strategy';
 import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strategy';
@@ -70,7 +69,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         this.setTaggingAutoscaleVmStrategy(new AwsTaggingAutoscaleVmStrategy(platform, proxy));
         // use FortiGate bootstrap configuration strategy
         this.setBootstrapConfigurationStrategy(
-            new FortiGateBootstrapConfigStrategy(platform, proxy, env)
+            new AwsFortiGateBootstrapTgwStrategy(platform, proxy, env)
         );
         // use the Resuable licensing strategy
         this.setLicensingStrategy(new ReusableLicensingStrategy(platform, proxy));
