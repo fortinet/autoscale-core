@@ -24,7 +24,6 @@ import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../../h
 import { JSONable } from '../../jsonable';
 import { VirtualMachineState } from '../../virtual-machine';
 import { FortiGateAutoscale } from '../fortigate-autoscale';
-import { FortiGateBootstrapConfigStrategy } from '../fortigate-bootstrap-config-strategy';
 import { AwsLambdaInvocationProxy } from './aws-cloud-function-proxy';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsFortiGateBootstrapTgwStrategy } from './aws-fortigate-bootstrap-config-strategy';
@@ -57,37 +56,37 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
     implements NicAttachmentContext, TransitGatewayContext {
     nicAttachmentStrategy: NicAttachmentStrategy;
     vpnAttachmentStrategy: VpnAttachmentStrategy;
-    get platform(): AwsPlatformAdapter {
-        return super.platform as AwsPlatformAdapter;
-    }
-    set platform(p: AwsPlatformAdapter) {
-        super.platform = p;
-    }
-    constructor(p: AwsPlatformAdapter, e: AutoscaleEnvironment, x: CloudFunctionProxyAdapter) {
-        super(p, e, x);
+    constructor(
+        readonly platform: AwsPlatformAdapter,
+        readonly env: AutoscaleEnvironment,
+        readonly proxy: CloudFunctionProxyAdapter
+    ) {
+        super();
         // use AWS Hybrid scaling group strategy
-        this.setScalingGroupStrategy(new AwsHybridScalingGroupStrategy(p, x));
+        this.setScalingGroupStrategy(new AwsHybridScalingGroupStrategy(platform, proxy));
         // use peferred group primary election for Hybrid licensing model
-        this.setPrimaryElectionStrategy(new PreferredGroupPrimaryElection(p, x));
+        this.setPrimaryElectionStrategy(new PreferredGroupPrimaryElection(platform, proxy));
         // use a constant interval heartbeat sync strategy
-        this.setHeartbeatSyncStrategy(new ConstantIntervalHeartbeatSyncStrategy(p, x));
+        this.setHeartbeatSyncStrategy(new ConstantIntervalHeartbeatSyncStrategy(platform, proxy));
         // use AWS resource tagging strategy
-        this.setTaggingAutoscaleVmStrategy(new AwsTaggingAutoscaleVmStrategy(p, x));
+        this.setTaggingAutoscaleVmStrategy(new AwsTaggingAutoscaleVmStrategy(platform, proxy));
         // use FortiGate bootstrap configuration strategy
-        this.setBootstrapConfigurationStrategy(new FortiGateBootstrapConfigStrategy(p, x, e));
+        this.setBootstrapConfigurationStrategy(
+            new AwsFortiGateBootstrapTgwStrategy(platform, proxy, env)
+        );
         // use the Resuable licensing strategy
-        this.setLicensingStrategy(new ReusableLicensingStrategy(p, x));
+        this.setLicensingStrategy(new ReusableLicensingStrategy(platform, proxy));
         // use the secondary nic attachment strategy to create and attach an additional nic
         // during launching
-        this.setNicAttachmentStrategy(new AwsNicAttachmentStrategy(p, x));
+        this.setNicAttachmentStrategy(new AwsNicAttachmentStrategy(platform, proxy));
         // use Noop vpn attachment strategy
-        this.setVpnAttachmentStrategy(new NoopVpnAttachmentStrategy(p, x));
+        this.setVpnAttachmentStrategy(new NoopVpnAttachmentStrategy(platform, proxy));
         // use the routing egress traffic via primary vm strategy
         this.setRoutingEgressTrafficStrategy(
-            new AwsRoutingEgressTrafficViaPrimaryVmStrategy(p, x, e)
+            new AwsRoutingEgressTrafficViaPrimaryVmStrategy(platform, proxy, env)
         );
         // use the reactive registration strategy for FAZ integration
-        this.setFazIntegrationStrategy(new AwsFazReactiveRegsitrationStrategy(p, x));
+        this.setFazIntegrationStrategy(new AwsFazReactiveRegsitrationStrategy(platform, proxy));
     }
     setNicAttachmentStrategy(strategy: NicAttachmentStrategy): void {
         this.nicAttachmentStrategy = strategy;

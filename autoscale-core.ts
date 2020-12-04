@@ -90,6 +90,9 @@ export interface AutoscaleCore
     extends AutoscaleContext,
         ScalingGroupContext,
         LicensingModelContext {
+    platform: PlatformAdapter;
+    proxy: CloudFunctionProxyAdapter;
+    env: AutoscaleEnvironment;
     init(): Promise<void>;
     saveSettings(
         input: { [key: string]: string },
@@ -102,10 +105,7 @@ export interface HAActivePassiveBoostrapStrategy {
     result(): Promise<PrimaryElection>;
 }
 
-export class Autoscale implements AutoscaleCore {
-    platform: PlatformAdapter;
-    proxy: CloudFunctionProxyAdapter;
-    env: AutoscaleEnvironment;
+export abstract class Autoscale implements AutoscaleCore {
     settings: Settings;
     taggingAutoscaleVmStrategy: TaggingVmStrategy;
     routingEgressTrafficStrategy: RoutingEgressTrafficStrategy;
@@ -114,11 +114,12 @@ export class Autoscale implements AutoscaleCore {
     primaryElectionStrategy: PrimaryElectionStrategy;
     licensingStrategy: LicensingStrategy;
     fazIntegrationStrategy: FazIntegrationStrategy;
-    constructor(p: PlatformAdapter, e: AutoscaleEnvironment, x: CloudFunctionProxyAdapter) {
-        this.platform = p;
-        this.env = e;
-        this.proxy = x;
-    }
+    abstract get platform(): PlatformAdapter;
+    abstract set platform(p: PlatformAdapter);
+    abstract get proxy(): CloudFunctionProxyAdapter;
+    abstract set proxy(x: CloudFunctionProxyAdapter);
+    abstract get env(): AutoscaleEnvironment;
+    abstract set env(e: AutoscaleEnvironment);
     setScalingGroupStrategy(strategy: ScalingGroupStrategy): void {
         this.scalingGroupStrategy = strategy;
     }
