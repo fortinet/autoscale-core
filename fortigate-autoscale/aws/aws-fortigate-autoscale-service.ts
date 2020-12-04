@@ -103,13 +103,15 @@ export class AwsFortiGateAutoscaleCfnServiceProvider implements AutoscaleService
                             case 'stopAutoscale':
                                 this.proxy.logAsWarning(
                                     `ServiceType: [${serviceEvent.ServiceType}] is skipped in ` +
-                                        `the RequestType: [${serviceEventType}]`
+                                    `the RequestType: [${serviceEventType}]`
                                 );
                                 break;
                             case 'registerFortiAnalyzer':
+                                await this.autoscale.init();
                                 await this.registerFortiAnalyzer(serviceEvent);
                                 break;
                             case 'triggerFazDeviceAuth':
+                                await this.autoscale.init();
                                 await this.triggerFazDeviceAuth(serviceEvent);
                                 break;
                             case undefined:
@@ -126,7 +128,7 @@ export class AwsFortiGateAutoscaleCfnServiceProvider implements AutoscaleService
                             case 'saveSettings':
                                 this.proxy.logAsWarning(
                                     `ServiceType: [${serviceEvent.ServiceType}] is skipped in ` +
-                                        `the RequestType: [${serviceEventType}]`
+                                    `the RequestType: [${serviceEventType}]`
                                 );
                                 break;
                             case 'stopAutoscale':
