@@ -374,9 +374,9 @@ describe('FortiGate Autoscale AWS CloudFormation service provider.', () => {
     describe('Calling enable attachment service.', () => {
         // TODO: FortiAnalyzer integration service may be needed later. Keep a dummy test for now
         // required test cases:
-        // registration
+        // registerFortiAnalyzer
         // retrieveSettings
-        // authorizeFgt
+        // authorizeDevice
     });
     describe('Calling enable nic2 attachment service.', () => {
         // TODO: may need the start nic attachment service later but not now. Keep a dummy test for now

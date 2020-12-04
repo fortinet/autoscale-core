@@ -16,5 +16,5 @@ export class AwsLambdaInvocableExecutionTimeOutError extends Error {
 
 export enum AwsLambdaInvocable {
     UpdateTgwAttachmentRouteTable = 'UpdateTgwAttachmentRouteTable',
-    RegisterDeviceInFortiAnalyzer = 'RegisterDeviceInFortiAnalyzer'
+    TriggerFazDeviceAuth = 'TriggerFazDeviceAuth'
 }

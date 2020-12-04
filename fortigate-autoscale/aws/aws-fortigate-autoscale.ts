@@ -1,5 +1,5 @@
 import { Context } from 'aws-lambda';
-import { FazDeviceRegistration } from 'fortigate-autoscale/fortigate-faz-integration-strategy';
+import { FazDeviceAuthorization } from 'fortigate-autoscale/fortigate-faz-integration-strategy';
 
 import { AutoscaleEnvironment } from '../../autoscale-environment';
 import { CloudFunctionProxyAdapter, ReqType } from '../../cloud-function-proxy';
@@ -85,7 +85,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         this.setRoutingEgressTrafficStrategy(
             new AwsRoutingEgressTrafficViaPrimaryVmStrategy(platform, proxy, env)
         );
-        // use the reactive registration strategy for FAZ integration
+        // use the reactive authorization strategy for FAZ integration
         this.setFazIntegrationStrategy(new AwsFazReactiveRegsitrationStrategy(platform, proxy));
     }
     setNicAttachmentStrategy(strategy: NicAttachmentStrategy): void {
@@ -538,8 +538,8 @@ export class AwsFortiGateAutoscaleFazIntegrationHandler extends AwsFortiGateAuto
     }
 
     async executeInvocable(payload: JSONable, invocable: string): Promise<void> {
-        if (invocable === AwsLambdaInvocable.RegisterDeviceInFortiAnalyzer) {
-            const deviceRegistration: FazDeviceRegistration = {
+        if (invocable === AwsLambdaInvocable.TriggerFazDeviceAuth) {
+            const deviceAuthorization: FazDeviceAuthorization = {
                 vmId: payload.vmId as string,
                 privateIp: payload.privateIp && String(payload.privateIp),
                 publicIp: payload.publicIp && String(payload.publicIp)
@@ -566,7 +566,13 @@ export class AwsFortiGateAutoscaleFazIntegrationHandler extends AwsFortiGateAuto
             const fazPort: string = process.env.FORTIANALYZER_PORT;
 
             await this.autoscale.fazIntegrationStrategy
-                .authorizeDevice(deviceRegistration, fazIp, fazPort, username, password)
+                .processAuthorizationRequest(
+                    deviceAuthorization,
+                    fazIp,
+                    fazPort,
+                    username,
+                    password
+                )
                 .catch(e => {
                     const error: AwsLambdaInvocableExecutionTimeOutError = e;
                     error.extendExecution = false;

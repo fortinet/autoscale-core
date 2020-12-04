@@ -17,6 +17,7 @@ export type AwsFortiGateAutoscaleServiceEvent =
     | AwsFortiGateAutoscaleServiceEventStopAutoscale
     | AwsFortiGateAutoscaleServiceEventSaveSettings
     | AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer
+    | AwsFortiGateAutoscaleServiceEventTriggerFazDeviceAuth
     | AwsFortiGateAutoscaleServiceEventUnknown;
 export interface AwsFortiGateAutoscaleServiceEventBase {
     ServiceToken: string;
@@ -46,6 +47,12 @@ export interface AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer
     ServiceType: 'registerFortiAnalyzer';
     InstanceId?: string;
     PrivateIp?: string;
+}
+
+export interface AwsFortiGateAutoscaleServiceEventTriggerFazDeviceAuth
+    extends AwsFortiGateAutoscaleServiceEventBase {
+    ServiceType: 'triggerFazDeviceAuth';
+    InstanceId?: string;
 }
 
 export interface AwsFortiGateAutoscaleServiceEventUnknown
@@ -101,6 +108,9 @@ export class AwsFortiGateAutoscaleCfnServiceProvider implements AutoscaleService
                                 break;
                             case 'registerFortiAnalyzer':
                                 await this.registerFortiAnalyzer(serviceEvent);
+                                break;
+                            case 'triggerFazDeviceAuth':
+                                await this.triggerFazDeviceAuth(serviceEvent);
                                 break;
                             case undefined:
                             default:
@@ -248,28 +258,55 @@ export class AwsFortiGateAutoscaleCfnServiceProvider implements AutoscaleService
         return s1 && s2;
     }
 
+    /**
+     * Save those setting values collected from the CloudFormation template deployment
+     * into Autoscale system.
+     * @param {AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer} event the trigger event
+     * for the certain FortiGate Autoscale service.
+     */
     async SaveAutoscaleSettings(
         event: AwsFortiGateAutoscaleServiceEventSaveSettings
     ): Promise<boolean> {
-        this.proxy.logAsInfo('calling SaveAutoscaleSettings');
+        this.proxy.logAsInfo('calling saveAutoscaleSettings');
         const props: { [key: string]: string } = { ...event };
         delete props.ServiceToken;
         delete props.ServiceType;
         await this.autoscale.saveSettings(props, AwsFortiGateAutoscaleSettingItemDictionary);
-        this.proxy.logAsInfo('called SaveAutoscaleSettings');
+        this.proxy.logAsInfo('called saveAutoscaleSettings');
         return true;
     }
 
+    /**
+     * Register a FortiAnalyzer to the Autoscale system.
+     * @param {AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer} event the trigger event
+     * for the certain FortiGate Autoscale service.
+     */
     async registerFortiAnalyzer(
         event: AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer
     ): Promise<boolean> {
-        this.proxy.logAsInfo('calling RegisterFortiAnalyzer');
+        this.proxy.logAsInfo('calling registerFortiAnalyzer');
         const props: { [key: string]: string } = { ...event };
         delete props.ServiceToken;
         delete props.ServiceType;
-        await this.autoscale;
-        await this.autoscale.saveSettings(props, AwsFortiGateAutoscaleSettingItemDictionary);
-        this.proxy.logAsInfo('called RegisterFortiAnalyzer');
+        await this.autoscale.registerFortiAnalyzer(event.InstanceId, event.PrivateIp);
+        this.proxy.logAsInfo('called registerFortiAnalyzer');
+        return true;
+    }
+
+    /**
+     * Authorize all new devices connected to the FortiAnalyer
+     * @param {AwsFortiGateAutoscaleServiceEventTriggerFazDeviceAuth} event the trigger event
+     * for the certain FortiGate Autoscale service.
+     */
+    async triggerFazDeviceAuth(
+        event: AwsFortiGateAutoscaleServiceEventTriggerFazDeviceAuth
+    ): Promise<boolean> {
+        this.proxy.logAsInfo('calling triggerFazDeviceAuth');
+        const props: { [key: string]: string } = { ...event };
+        delete props.ServiceToken;
+        delete props.ServiceType;
+        await this.autoscale.triggerFazDeviceAuth(event.InstanceId);
+        this.proxy.logAsInfo('called triggerFazDeviceAuth');
         return true;
     }
 }
