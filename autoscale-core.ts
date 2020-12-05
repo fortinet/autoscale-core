@@ -86,6 +86,10 @@ export interface AutoscaleServiceProvider<TRes> {
     SaveAutoscaleSettings(props: { [key: string]: string }): Promise<boolean>;
 }
 
+export interface FazIntegrationServiceProvider<TReq, TRes> {
+    handleServiceRequest(request: TReq): Promise<TRes>;
+}
+
 export interface AutoscaleCore
     extends AutoscaleContext,
         ScalingGroupContext,

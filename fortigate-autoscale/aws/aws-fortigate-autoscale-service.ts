@@ -103,16 +103,12 @@ export class AwsFortiGateAutoscaleCfnServiceProvider implements AutoscaleService
                             case 'stopAutoscale':
                                 this.proxy.logAsWarning(
                                     `ServiceType: [${serviceEvent.ServiceType}] is skipped in ` +
-                                    `the RequestType: [${serviceEventType}]`
+                                        `the RequestType: [${serviceEventType}]`
                                 );
                                 break;
                             case 'registerFortiAnalyzer':
                                 await this.autoscale.init();
                                 await this.registerFortiAnalyzer(serviceEvent);
-                                break;
-                            case 'triggerFazDeviceAuth':
-                                await this.autoscale.init();
-                                await this.triggerFazDeviceAuth(serviceEvent);
                                 break;
                             case undefined:
                             default:
@@ -126,9 +122,10 @@ export class AwsFortiGateAutoscaleCfnServiceProvider implements AutoscaleService
                             case 'initiateAutoscale':
                             case 'startAutoscale':
                             case 'saveSettings':
+                            case 'registerFortiAnalyzer':
                                 this.proxy.logAsWarning(
                                     `ServiceType: [${serviceEvent.ServiceType}] is skipped in ` +
-                                    `the RequestType: [${serviceEventType}]`
+                                        `the RequestType: [${serviceEventType}]`
                                 );
                                 break;
                             case 'stopAutoscale':
@@ -292,23 +289,6 @@ export class AwsFortiGateAutoscaleCfnServiceProvider implements AutoscaleService
         delete props.ServiceType;
         await this.autoscale.registerFortiAnalyzer(event.InstanceId, event.PrivateIp);
         this.proxy.logAsInfo('called registerFortiAnalyzer');
-        return true;
-    }
-
-    /**
-     * Authorize all new devices connected to the FortiAnalyer
-     * @param {AwsFortiGateAutoscaleServiceEventTriggerFazDeviceAuth} event the trigger event
-     * for the certain FortiGate Autoscale service.
-     */
-    async triggerFazDeviceAuth(
-        event: AwsFortiGateAutoscaleServiceEventTriggerFazDeviceAuth
-    ): Promise<boolean> {
-        this.proxy.logAsInfo('calling triggerFazDeviceAuth');
-        const props: { [key: string]: string } = { ...event };
-        delete props.ServiceToken;
-        delete props.ServiceType;
-        await this.autoscale.triggerFazDeviceAuth(event.InstanceId);
-        this.proxy.logAsInfo('called triggerFazDeviceAuth');
         return true;
     }
 }

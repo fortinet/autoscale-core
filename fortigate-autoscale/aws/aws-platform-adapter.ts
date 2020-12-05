@@ -174,6 +174,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                             `Unsupported request detail-type: [${body['detail-type']}]`
                     );
                 }
+            } else if (body.source === 'fortinet.autoscale') {
+                if (String(body['detail-type']) === 'FortiAnalyzer Authorization Request') {
+                    return Promise.resolve(ReqType.ServiceProviderRequest);
+                }
             }
             throw new Error(`Unknown supported source: [${body.source}]`);
         } else if (this.proxy instanceof AwsCloudFormationCustomResourceEventProxy) {
