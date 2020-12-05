@@ -54,7 +54,7 @@ export interface AwsFortiGateAutoscaleServiceEventUnknown
     [key: string]: string;
 }
 
-export class AwsFortiGateAutoscaleServiceProvider implements AutoscaleServiceProvider<void> {
+export class AwsFortiGateAutoscaleCfnServiceProvider implements AutoscaleServiceProvider<void> {
     autoscale: AwsFortiGateAutoscale<CloudFormationCustomResourceEvent, Context, void>;
     constructor(
         autoscale: AwsFortiGateAutoscale<CloudFormationCustomResourceEvent, Context, void>
