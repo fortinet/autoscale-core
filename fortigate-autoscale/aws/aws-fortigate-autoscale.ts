@@ -510,9 +510,12 @@ export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler extends AwsFortiGat
                 error.extendExecution = true;
                 throw error;
             });
+            return;
         }
         // otherwise, no matching invocable, throw error
-        throw new AwsLambdaInvocableExecutionTimeOutError(`No matchin invocable for: ${invocable}`);
+        throw new AwsLambdaInvocableExecutionTimeOutError(
+            `No matching invocable for: ${invocable}`
+        );
     }
 }
 
@@ -578,8 +581,11 @@ export class AwsFortiGateAutoscaleFazIntegrationHandler extends AwsFortiGateAuto
                     error.extendExecution = false;
                     throw error;
                 });
+            return;
         }
         // otherwise, no matching invocable, throw error
-        throw new AwsLambdaInvocableExecutionTimeOutError(`No matchin invocable for: ${invocable}`);
+        throw new AwsLambdaInvocableExecutionTimeOutError(
+            `No matching invocable for: ${invocable}`
+        );
     }
 }
