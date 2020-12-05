@@ -5,19 +5,26 @@ import { AwsScheduledEventProxy } from './aws-cloud-function-proxy';
 import { AwsFortiGateAutoscale } from './aws-fortigate-autoscale';
 import { AwsPlatformAdapter } from './aws-platform-adapter';
 
-export interface FazAuthorizationServiceDetail {
-    ServiceType: FazAuthorizationServiceType;
+export interface AwsFazAuthorizationServiceDetail {
+    ServiceType: AwsFazAuthorizationServiceType;
     ServiceToken: string;
 }
 
-export type FazAuthorizationServiceType = 'triggerFazDeviceAuth' | string;
-export type FazAuthorizationEventSource = 'fortinet.autoscale' | string;
+export interface AwsFazAuthorizationServiceEvent {
+    source: AwsFazAuthorizationEventSource;
+    'detail-type': AwsFazAuthorizationEventDetailType;
+    detail: AwsFazAuthorizationServiceDetail;
+}
+
+export type AwsFazAuthorizationServiceType = 'triggerFazDeviceAuth' | string;
+export type AwsFazAuthorizationEventSource = 'fortinet.autoscale' | string;
+export type AwsFazAuthorizationEventDetailType = 'FortiAnalyzer Authorization Request' | string;
 
 export class AwsFortiGateAutoscaleFazIntegrationServiceProvider
-    implements FazIntegrationServiceProvider<ScheduledEvent<FazAuthorizationServiceDetail>, void> {
+    implements FazIntegrationServiceProvider<AwsFazAuthorizationServiceEvent, void> {
     constructor(
         readonly autoscale: AwsFortiGateAutoscale<
-            ScheduledEvent<FazAuthorizationServiceDetail>,
+            ScheduledEvent<AwsFazAuthorizationServiceDetail>,
             Context,
             void
         >
@@ -36,9 +43,9 @@ export class AwsFortiGateAutoscaleFazIntegrationServiceProvider
             const reqType: ReqType = await this.platform.getRequestType();
             this.proxy.logAsInfo(`RequestBody ${this.proxy.getReqBody()}`);
             // NOTE: source now supports 'fortinet.autoscale' only
-            const source: FazAuthorizationEventSource = this.proxy.getReqBody().source;
+            const source: AwsFazAuthorizationEventSource = this.proxy.getReqBody().source;
             // NOTE: detail must be type: FazAuthorizationServiceDetail
-            const serviceDetail: FazAuthorizationServiceDetail = {
+            const serviceDetail: AwsFazAuthorizationServiceDetail = {
                 ServiceType: undefined,
                 ServiceToken: undefined
             };
