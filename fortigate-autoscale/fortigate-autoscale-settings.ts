@@ -9,6 +9,7 @@ export const FortiGateAutoscaleSetting = {
     EgressTrafficRouteTableList: 'egress-traffic-route-table',
     EnableFazIntegration: 'enable-fortianalyzer-integration',
     FortiAnalyzerHandlerName: 'faz-handler-name',
+    FortiAnalyzerIp: 'faz-ip',
     FortiGateAdminPort: 'fortigate-admin-port',
     FortiGateAutoscaleSubnetIdList: 'fortigate-autoscale-subnet-id-list',
     FortiGateAutoscaleSubnetPairs: 'fortigate-autoscale-subnet-pairs',
@@ -44,6 +45,13 @@ export const FortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
     [FortiGateAutoscaleSetting.FortiAnalyzerHandlerName]: {
         keyName: FortiGateAutoscaleSetting.FortiAnalyzerHandlerName,
         description: 'The FortiGate Autoscale - FortiAnalyzer handler function name.',
+        editable: false,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [FortiGateAutoscaleSetting.FortiAnalyzerIp]: {
+        keyName: FortiGateAutoscaleSetting.FortiAnalyzerIp,
+        description: 'The FortiGate Autoscale - FortiAnalyzer ip address.',
         editable: false,
         jsonEncoded: false,
         booleanType: false

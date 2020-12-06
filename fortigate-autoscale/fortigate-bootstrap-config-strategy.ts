@@ -305,6 +305,10 @@ export abstract class FortiGateBootstrapConfigStrategy implements BootstrapConfi
                 this.settings.get(FortiGateAutoscaleSetting.FortiGateAutoscaleVirtualNetworkCidr)
                     .value
             ) || '';
+        const fazIp =
+            this.normalizeFOSCmdInput(
+                this.settings.get(FortiGateAutoscaleSetting.FortiAnalyzerIp).value
+            ) || '';
         return config
             .replace(new RegExp('{SYNC_INTERFACE}', 'gm'), syncInterface)
             .replace(new RegExp('{VIRTUAL_NETWORK_CIDR}', 'gm'), virtualNetworkCidr)
@@ -316,7 +320,8 @@ export abstract class FortiGateBootstrapConfigStrategy implements BootstrapConfi
             .replace(new RegExp('{ADMIN_PORT}', 'gm'), adminPort)
             .replace(new RegExp('{INTERNAL_ELB_DNS}', 'gm'), intElbDns)
             .replace(new RegExp('{CALLBACK_URL}', 'gm'), hbCallbackUrl)
-            .replace(new RegExp('{HEART_BEAT_INTERVAL}', 'gm'), hbInterval);
+            .replace(new RegExp('{HEART_BEAT_INTERVAL}', 'gm'), hbInterval)
+            .replace(new RegExp('{FAZ_PRIVATE_IP}', 'gm'), fazIp);
     }
     /**
      * Process config using a given source data
