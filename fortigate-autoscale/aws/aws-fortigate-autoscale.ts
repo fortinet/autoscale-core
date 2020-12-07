@@ -1,5 +1,5 @@
 import { Context } from 'aws-lambda';
-import { FazDeviceAuthorization } from 'fortigate-autoscale/fortigate-faz-integration-strategy';
+import { FazDeviceAuthorization } from '../fortigate-faz-integration-strategy';
 
 import { AutoscaleEnvironment } from '../../autoscale-environment';
 import { CloudFunctionProxyAdapter, ReqType } from '../../cloud-function-proxy';
@@ -26,8 +26,11 @@ import { VirtualMachineState } from '../../virtual-machine';
 import { FortiGateAutoscale } from '../fortigate-autoscale';
 import { AwsLambdaInvocationProxy } from './aws-cloud-function-proxy';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsFortiGateBootstrapTgwStrategy } from './aws-fortigate-bootstrap-config-strategy';
-import { AwsFazReactiveRegsitrationStrategy } from './aws-fortigate-faz-integration-strategy';
+import {
+    AwsFortiGateBootstrapStrategy,
+    AwsFortiGateBootstrapTgwStrategy
+} from './aws-fortigate-bootstrap-config-strategy';
+import { AwsFazReactiveAuthorizationStrategy } from './aws-fortigate-faz-integration-strategy';
 import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strategy';
 import {
     AwsLambdaInvocableExecutionTimeOutError,
@@ -72,7 +75,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         this.setTaggingAutoscaleVmStrategy(new AwsTaggingAutoscaleVmStrategy(platform, proxy));
         // use FortiGate bootstrap configuration strategy
         this.setBootstrapConfigurationStrategy(
-            new AwsFortiGateBootstrapTgwStrategy(platform, proxy, env)
+            new AwsFortiGateBootstrapStrategy(platform, proxy, env)
         );
         // use the Resuable licensing strategy
         this.setLicensingStrategy(new ReusableLicensingStrategy(platform, proxy));
@@ -86,7 +89,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
             new AwsRoutingEgressTrafficViaPrimaryVmStrategy(platform, proxy, env)
         );
         // use the reactive authorization strategy for FAZ integration
-        this.setFazIntegrationStrategy(new AwsFazReactiveRegsitrationStrategy(platform, proxy));
+        this.setFazIntegrationStrategy(new AwsFazReactiveAuthorizationStrategy(platform, proxy));
     }
     setNicAttachmentStrategy(strategy: NicAttachmentStrategy): void {
         this.nicAttachmentStrategy = strategy;
