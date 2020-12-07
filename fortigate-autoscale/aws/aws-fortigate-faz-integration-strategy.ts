@@ -9,7 +9,7 @@ import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings
 import { AwsLambdaInvocable } from './aws-lambda-invocable';
 import { AwsPlatformAdapter } from './aws-platform-adapter';
 
-export class AwsFazReactiveRegsitrationStrategy implements FazIntegrationStrategy {
+export class AwsFazReactiveAuthorizationStrategy implements FazIntegrationStrategy {
     constructor(readonly platform: AwsPlatformAdapter, readonly proxy: CloudFunctionProxyAdapter) {
         this.platform = platform;
         this.proxy = proxy;
