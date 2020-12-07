@@ -1,7 +1,7 @@
 import {
     AutoscaleSetting,
-    SettingItemDictionary,
-    AutoscaleSettingItemDictionary
+    AutoscaleSettingItemDictionary,
+    SettingItemDictionary
 } from '../autoscale-setting';
 
 export const FortiGateAutoscaleSetting = {

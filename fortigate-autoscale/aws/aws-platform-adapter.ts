@@ -8,14 +8,14 @@ import { NicAttachmentRecord } from '../../context-strategy/nic-attachment-conte
 import {
     AutoscaleDbItem,
     CreateOrUpdate,
+    FortiAnalyzerDbItem,
     KeyValue,
     LicenseStockDbItem,
     LicenseUsageDbItem,
-    PrimaryElectionDbItem,
     NicAttachmentDbItem,
+    PrimaryElectionDbItem,
     SettingsDbItem,
-    VpnAttachmentDbItem,
-    FortiAnalyzerDbItem
+    VpnAttachmentDbItem
 } from '../../db-definitions';
 import {
     genChecksum,
@@ -25,12 +25,6 @@ import {
 } from '../../helper-function';
 import { JSONable } from '../../jsonable';
 import {
-    HealthCheckRecord,
-    HealthCheckSyncState,
-    PrimaryRecord,
-    PrimaryRecordVoteState
-} from '../../primary-election';
-import {
     LicenseFile,
     LicenseStockRecord,
     LicenseUsageRecord,
@@ -38,6 +32,12 @@ import {
     ResourceFilter,
     TgwVpnAttachmentRecord
 } from '../../platform-adapter';
+import {
+    HealthCheckRecord,
+    HealthCheckSyncState,
+    PrimaryRecord,
+    PrimaryRecordVoteState
+} from '../../primary-election';
 import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../../virtual-machine';
 import {
     AwsApiGatewayEventProxy,

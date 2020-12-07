@@ -1,14 +1,15 @@
+import path from 'path';
+
+import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
+import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../helper-function';
 import {
-    PlatformAdapter,
+    LicenseFile,
     LicenseStockRecord,
     LicenseUsageRecord,
-    LicenseFile
+    PlatformAdapter
 } from '../platform-adapter';
-import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
-import { VirtualMachine } from '../virtual-machine';
-import path from 'path';
 import { HealthCheckSyncState } from '../primary-election';
-import { waitFor, WaitForPromiseEmitter, WaitForConditionChecker } from '../helper-function';
+import { VirtualMachine } from '../virtual-machine';
 
 export enum LicensingStrategyResult {
     LicenseAssigned = 'license-assigned',

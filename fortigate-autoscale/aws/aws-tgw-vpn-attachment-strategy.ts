@@ -6,22 +6,22 @@ import {
 import {
     waitFor,
     WaitForConditionChecker,
-    WaitForPromiseEmitter,
-    WaitForMaxCount
+    WaitForMaxCount,
+    WaitForPromiseEmitter
 } from '../../helper-function';
 import { ResourceFilter, TgwVpnAttachmentRecord } from '../../platform-adapter';
 import { VirtualMachine } from '../../virtual-machine';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsPlatformAdapter } from './aws-platform-adapter';
-import {
-    AwsVpnAttachmentState,
-    AwsVpnConnection,
-    AwsTgwVpnUpdateAttachmentRouteTableRequest
-} from './transit-gateway-context';
 import {
     AwsLambdaInvocable,
     AwsLambdaInvocableExecutionTimeOutError
 } from './aws-lambda-invocable';
+import { AwsPlatformAdapter } from './aws-platform-adapter';
+import {
+    AwsTgwVpnUpdateAttachmentRouteTableRequest,
+    AwsVpnAttachmentState,
+    AwsVpnConnection
+} from './transit-gateway-context';
 
 const TAG_KEY_AUTOSCALE_TGW_VPN_RESOURCE = 'AutoscaleTgwVpnResource';
 const TAG_KEY_RESOURCE_GROUP = 'ResourceGroup';

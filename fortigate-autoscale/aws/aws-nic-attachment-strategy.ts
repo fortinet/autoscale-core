@@ -6,11 +6,11 @@ import {
     NicAttachmentStrategy,
     NicAttachmentStrategyResult
 } from '../../context-strategy/nic-attachment-context';
+import { JSONable } from '../../jsonable';
 import { ResourceFilter } from '../../platform-adapter';
 import { NetworkInterface, VirtualMachine } from '../../virtual-machine';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsPlatformAdapter } from './aws-platform-adapter';
-import { JSONable } from '../../jsonable';
 
 export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
     vm: VirtualMachine;

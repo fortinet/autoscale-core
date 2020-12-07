@@ -1,5 +1,5 @@
-import { PlatformAdapter } from '../platform-adapter';
 import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
+import { PlatformAdapter } from '../platform-adapter';
 import { VirtualMachine } from '../virtual-machine';
 
 export interface FazDeviceAuthorization {

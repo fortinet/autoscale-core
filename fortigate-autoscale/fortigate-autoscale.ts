@@ -3,15 +3,15 @@ import * as HttpStatusCodes from 'http-status-codes';
 import { Autoscale, AutoscaleHandler, HttpError } from '../autoscale-core';
 import { AutoscaleEnvironment } from '../autoscale-environment';
 import { CloudFunctionProxy, ReqType } from '../cloud-function-proxy';
+import { VmTagging } from '../context-strategy/autoscale-context';
 import {
     BootstrapConfigurationStrategy,
     BootstrapContext
 } from '../context-strategy/bootstrap-context';
 import { LicensingModelContext } from '../context-strategy/licensing-context';
 import { PlatformAdapter } from '../platform-adapter';
-import { VmTagging } from '../context-strategy/autoscale-context';
-import { FortiGateAutoscaleSetting } from './fortigate-autoscale-settings';
 import { VirtualMachine } from '../virtual-machine';
+import { FortiGateAutoscaleSetting } from './fortigate-autoscale-settings';
 
 export const PRODUCT_NAME_FORTIGATE = 'fortigate';
 

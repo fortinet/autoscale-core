@@ -1,11 +1,11 @@
 import { Settings } from './autoscale-setting';
+import { Blob } from './blob';
 import { ReqType } from './cloud-function-proxy';
 import { NicAttachmentRecord } from './context-strategy/nic-attachment-context';
 import { KeyValue } from './db-definitions';
 import { JSONable } from './jsonable';
 import { HealthCheckRecord, PrimaryRecord } from './primary-election';
 import { NetworkInterface, VirtualMachine } from './virtual-machine';
-import { Blob } from './blob';
 
 export interface ResourceFilter {
     key: string;

@@ -4,14 +4,15 @@ import AutoScaling, {
 } from 'aws-sdk/clients/autoscaling';
 import {
     DocumentClient,
-    ExpressionAttributeValueMap,
-    ExpressionAttributeNameMap
+    ExpressionAttributeNameMap,
+    ExpressionAttributeValueMap
 } from 'aws-sdk/clients/dynamodb';
 import EC2 from 'aws-sdk/clients/ec2';
 import ELBv2 from 'aws-sdk/clients/elbv2';
+import KMS from 'aws-sdk/clients/kms';
 import Lambda from 'aws-sdk/clients/lambda';
 import S3 from 'aws-sdk/clients/s3';
-import KMS from 'aws-sdk/clients/kms';
+import { AWSError } from 'aws-sdk/lib/error';
 import fs from 'fs';
 import { isIPv4 } from 'net';
 import path from 'path';
@@ -24,7 +25,6 @@ import { ResourceFilter } from '../../platform-adapter';
 import * as AwsDBDef from './aws-db-definitions';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsDdbOperations } from './aws-platform-adapter';
-import { AWSError } from 'aws-sdk/lib/error';
 
 export class AwsPlatformAdaptee implements PlatformAdaptee {
     protected docClient: DocumentClient;
