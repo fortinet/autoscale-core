@@ -8,18 +8,11 @@ import { parseStringPromise as xml2jsParserPromise } from 'xml2js';
 import { JSONable } from '../../jsonable';
 export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigStrategy {
     constructor(
-        platform: AwsPlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        env: AutoscaleEnvironment
+        readonly platform: AwsPlatformAdapter,
+        readonly proxy: CloudFunctionProxyAdapter,
+        readonly env: AutoscaleEnvironment
     ) {
-        super(platform, proxy, env);
-    }
-    get platform(): AwsPlatformAdapter {
-        return super.platform as AwsPlatformAdapter;
-    }
-
-    set platform(p: AwsPlatformAdapter) {
-        super.platform = p;
+        super();
     }
 
     /**

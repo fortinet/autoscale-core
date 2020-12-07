@@ -11,24 +11,18 @@ import { FortiGateAutoscaleSetting } from './fortigate-autoscale-settings';
 import { AutoscaleEnvironment } from '../autoscale-environment';
 import { Blob } from '../blob';
 
-export class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationStrategy {
+export abstract class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationStrategy {
     static SUCCESS = 'SUCCESS';
     static FAILED = 'FAILED';
     private config: string;
     protected settings: Settings;
     protected alreadyLoaded = [];
-    platform: PlatformAdapter;
-    proxy: CloudFunctionProxyAdapter;
-    env: AutoscaleEnvironment;
-    constructor(
-        platform: PlatformAdapter,
-        proxy: CloudFunctionProxyAdapter,
-        env: AutoscaleEnvironment
-    ) {
-        this.platform = platform;
-        this.proxy = proxy;
-        this.env = env;
-    }
+    abstract get platform(): PlatformAdapter;
+    abstract set platform(p: PlatformAdapter);
+    abstract get proxy(): CloudFunctionProxyAdapter;
+    abstract set proxy(x: CloudFunctionProxyAdapter);
+    abstract get env(): AutoscaleEnvironment;
+    abstract set env(e: AutoscaleEnvironment);
     /**
      * get the bootstrap configuration for a certain role determined by the apply()
      * @returns {string} configuration
