@@ -1,8 +1,9 @@
+import { JSONable } from 'jsonable';
+
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import { ScalingGroupStrategy } from '../../context-strategy/scaling-group-context';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsPlatformAdapter, LifecycleState, LifecycleActionResult } from './aws-platform-adapter';
-import { JSONable } from 'jsonable';
+import { AwsPlatformAdapter, LifecycleActionResult, LifecycleState } from './aws-platform-adapter';
 
 export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
     platform: AwsPlatformAdapter;

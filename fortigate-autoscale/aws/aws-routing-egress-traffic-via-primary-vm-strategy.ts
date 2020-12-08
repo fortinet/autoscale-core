@@ -1,9 +1,9 @@
+import { AutoscaleEnvironment } from '../../autoscale-environment';
+import { SettingItem, Settings } from '../../autoscale-setting';
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import { RoutingEgressTrafficStrategy } from '../../context-strategy/autoscale-context';
-import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AutoscaleEnvironment } from '../../autoscale-environment';
-import { Settings, SettingItem } from '../../autoscale-setting';
 import { isIpV4 } from '../../helper-function';
+import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsPlatformAdapter } from './aws-platform-adapter';
 
 /**

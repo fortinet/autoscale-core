@@ -1,6 +1,6 @@
-import { FortiAnalyzerConnector } from '../fortianalyzer-connector';
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import { VirtualMachine } from '../../virtual-machine';
+import { FortiAnalyzerConnector } from '../fortianalyzer-connector';
 import {
     FazDeviceAuthorization,
     FazIntegrationStrategy

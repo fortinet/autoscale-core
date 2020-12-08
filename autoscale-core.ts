@@ -1,15 +1,15 @@
 import path from 'path';
 
 import { AutoscaleEnvironment } from './autoscale-environment';
-import { AutoscaleSetting, Settings, SettingItemDictionary } from './autoscale-setting';
+import { AutoscaleSetting, SettingItemDictionary, Settings } from './autoscale-setting';
 import { CloudFunctionProxy, CloudFunctionProxyAdapter, ReqMethod } from './cloud-function-proxy';
 import {
     AutoscaleContext,
     HeartbeatSyncStrategy,
     PrimaryElectionStrategy,
+    RoutingEgressTrafficStrategy,
     TaggingVmStrategy,
-    VmTagging,
-    RoutingEgressTrafficStrategy
+    VmTagging
 } from './context-strategy/autoscale-context';
 import {
     LicensingModelContext,
@@ -20,15 +20,15 @@ import {
     ScalingGroupContext,
     ScalingGroupStrategy
 } from './context-strategy/scaling-group-context';
+import { FazIntegrationStrategy } from './fortigate-autoscale/fortigate-faz-integration-strategy';
+import { PlatformAdapter } from './platform-adapter';
 import {
     HealthCheckResult,
     HealthCheckSyncState,
     PrimaryElection,
     PrimaryRecordVoteState
 } from './primary-election';
-import { PlatformAdapter } from './platform-adapter';
 import { VirtualMachine } from './virtual-machine';
-import { FazIntegrationStrategy } from './fortigate-autoscale/fortigate-faz-integration-strategy';
 
 export class HttpError extends Error {
     public readonly name: string;

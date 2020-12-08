@@ -1,5 +1,5 @@
-import https from 'https';
 import axios, { AxiosRequestConfig } from 'axios';
+import https from 'https';
 
 // NOTE: Due to FortiAnalyer API schema and limitation, cannot use strict code style so
 // disable the following eslint rules:

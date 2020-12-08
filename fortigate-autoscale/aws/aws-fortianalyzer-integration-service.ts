@@ -1,6 +1,7 @@
 import { Context, ScheduledEvent } from 'aws-lambda';
-import { ReqType } from '../../cloud-function-proxy';
+
 import { FazIntegrationServiceProvider } from '../../autoscale-core';
+import { ReqType } from '../../cloud-function-proxy';
 import { AwsScheduledEventProxy } from './aws-cloud-function-proxy';
 import { AwsFortiGateAutoscale } from './aws-fortigate-autoscale';
 import { AwsPlatformAdapter } from './aws-platform-adapter';

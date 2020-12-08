@@ -1,5 +1,5 @@
-import { VirtualMachine } from './virtual-machine';
 import { HealthCheckRecord, PrimaryRecord } from './primary-election';
+import { VirtualMachine } from './virtual-machine';
 
 export interface AutoscaleEnvironment {
     primaryId?: string;

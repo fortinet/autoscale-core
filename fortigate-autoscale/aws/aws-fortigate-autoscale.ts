@@ -1,5 +1,4 @@
 import { Context } from 'aws-lambda';
-import { FazDeviceAuthorization } from '../fortigate-faz-integration-strategy';
 
 import { AutoscaleEnvironment } from '../../autoscale-environment';
 import { CloudFunctionProxyAdapter, ReqType } from '../../cloud-function-proxy';
@@ -24,6 +23,7 @@ import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../../h
 import { JSONable } from '../../jsonable';
 import { VirtualMachineState } from '../../virtual-machine';
 import { FortiGateAutoscale } from '../fortigate-autoscale';
+import { FazDeviceAuthorization } from '../fortigate-faz-integration-strategy';
 import { AwsLambdaInvocationProxy } from './aws-cloud-function-proxy';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import {
@@ -33,9 +33,9 @@ import {
 import { AwsFazReactiveAuthorizationStrategy } from './aws-fortigate-faz-integration-strategy';
 import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strategy';
 import {
+    AwsLambdaInvocable,
     AwsLambdaInvocableExecutionTimeOutError,
-    AwsLambdaInvocationPayload,
-    AwsLambdaInvocable
+    AwsLambdaInvocationPayload
 } from './aws-lambda-invocable';
 import { AwsNicAttachmentStrategy } from './aws-nic-attachment-strategy';
 import { AwsPlatformAdapter, ScalingGroupState } from './aws-platform-adapter';
