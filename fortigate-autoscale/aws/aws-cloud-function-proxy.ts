@@ -1,11 +1,12 @@
 import {
     APIGatewayProxyEvent,
     APIGatewayProxyResult,
+    CloudFormationCustomResourceEvent,
     Context,
-    ScheduledEvent,
-    CloudFormationCustomResourceEvent
+    ScheduledEvent
 } from 'aws-lambda';
 
+import { mapHttpMethod } from '../../autoscale-core';
 import {
     CloudFunctionProxy,
     CloudFunctionResponseBody,
@@ -14,8 +15,6 @@ import {
     ReqHeaders,
     ReqMethod
 } from '../../cloud-function-proxy';
-
-import { mapHttpMethod } from '../../autoscale-core';
 import { JSONable } from '../../jsonable';
 import * as AwsCfnResponse from './aws-cfn-response';
 

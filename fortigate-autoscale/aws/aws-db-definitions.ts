@@ -1,20 +1,20 @@
 import {
-    Table,
     Attribute,
-    TypeRef,
-    TypeRefMap,
     Autoscale,
-    PrimaryElection,
+    CustomLog,
     FortiAnalyzer,
-    Settings,
-    NicAttachment,
-    VmInfoCache,
     LicenseStock,
     LicenseUsage,
-    CustomLog,
-    VpnAttachment,
+    NicAttachment,
+    PrimaryElection,
     Record,
-    TypeConverter
+    Settings,
+    Table,
+    TypeConverter,
+    TypeRef,
+    TypeRefMap,
+    VmInfoCache,
+    VpnAttachment
 } from '../../db-definitions';
 
 export const AwsTypeRefs: TypeRefMap = new Map<TypeRef, string>([

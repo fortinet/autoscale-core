@@ -4,13 +4,15 @@ import AutoScaling, {
 } from 'aws-sdk/clients/autoscaling';
 import {
     DocumentClient,
-    ExpressionAttributeValueMap,
-    ExpressionAttributeNameMap
+    ExpressionAttributeNameMap,
+    ExpressionAttributeValueMap
 } from 'aws-sdk/clients/dynamodb';
 import EC2 from 'aws-sdk/clients/ec2';
 import ELBv2 from 'aws-sdk/clients/elbv2';
+import KMS from 'aws-sdk/clients/kms';
 import Lambda from 'aws-sdk/clients/lambda';
 import S3 from 'aws-sdk/clients/s3';
+import { AWSError } from 'aws-sdk/lib/error';
 import fs from 'fs';
 import { isIPv4 } from 'net';
 import path from 'path';
@@ -23,7 +25,6 @@ import { ResourceFilter } from '../../platform-adapter';
 import * as AwsDBDef from './aws-db-definitions';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsDdbOperations } from './aws-platform-adapter';
-import { AWSError } from 'aws-sdk/lib/error';
 
 export class AwsPlatformAdaptee implements PlatformAdaptee {
     protected docClient: DocumentClient;
@@ -32,6 +33,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
     protected autoscaling: AutoScaling;
     protected elbv2: ELBv2;
     protected lambda: Lambda;
+    protected kms: KMS;
     constructor() {
         this.docClient = new DocumentClient({ apiVersion: '2012-08-10' });
         this.s3 = new S3({ apiVersion: '2006-03-01' });
@@ -39,6 +41,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         this.autoscaling = new AutoScaling({ apiVersion: '2011-01-01' });
         this.elbv2 = new ELBv2({ apiVersion: '2015-12-01' });
         this.lambda = new Lambda({ apiVersion: '2015-03-31' });
+        this.kms = new KMS({ apiVersion: '2014-11-01' });
     }
     async loadSettings(): Promise<Settings> {
         const table = new AwsDBDef.AwsSettings(process.env.RESOURCE_TAG_PREFIX || '');
@@ -789,5 +792,27 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         };
         const result = await this.ec2.replaceRoute(request).promise();
         return JSON.stringify(result) === '{}';
+    }
+
+    async kmsDecrypt(encryptedValue: string): Promise<string> {
+        const data = await this.kms
+            .decrypt({ CiphertextBlob: Buffer.from(encryptedValue, 'base64') })
+            .promise();
+        return data.Plaintext.toString('ascii');
+    }
+
+    /**
+     * need lambda:GetFunction permission on the function arn.
+     * @param {string} functionName the name of function to get variable
+     * @returns {Lambda.Types.EnvironmentVariables} object of {[key:string]:string}
+     */
+    async getFunctionEnvironmentVariables(
+        functionName: string
+    ): Promise<Lambda.Types.EnvironmentVariables> {
+        const request: Lambda.Types.GetFunctionEventInvokeConfigRequest = {
+            FunctionName: functionName
+        };
+        const data = await this.lambda.getFunctionConfiguration(request).promise();
+        return data.Environment.Variables;
     }
 }

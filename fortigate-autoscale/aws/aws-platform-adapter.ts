@@ -8,11 +8,12 @@ import { NicAttachmentRecord } from '../../context-strategy/nic-attachment-conte
 import {
     AutoscaleDbItem,
     CreateOrUpdate,
+    FortiAnalyzerDbItem,
     KeyValue,
     LicenseStockDbItem,
     LicenseUsageDbItem,
-    PrimaryElectionDbItem,
     NicAttachmentDbItem,
+    PrimaryElectionDbItem,
     SettingsDbItem,
     VpnAttachmentDbItem
 } from '../../db-definitions';
@@ -24,12 +25,6 @@ import {
 } from '../../helper-function';
 import { JSONable } from '../../jsonable';
 import {
-    HealthCheckRecord,
-    HealthCheckSyncState,
-    PrimaryRecord,
-    PrimaryRecordVoteState
-} from '../../primary-election';
-import {
     LicenseFile,
     LicenseStockRecord,
     LicenseUsageRecord,
@@ -37,6 +32,12 @@ import {
     ResourceFilter,
     TgwVpnAttachmentRecord
 } from '../../platform-adapter';
+import {
+    HealthCheckRecord,
+    HealthCheckSyncState,
+    PrimaryRecord,
+    PrimaryRecordVoteState
+} from '../../primary-election';
 import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../../virtual-machine';
 import {
     AwsApiGatewayEventProxy,
@@ -172,6 +173,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                         'Invalid request. ' +
                             `Unsupported request detail-type: [${body['detail-type']}]`
                     );
+                }
+            } else if (body.source === 'fortinet.autoscale') {
+                if (String(body['detail-type']) === 'FortiAnalyzer Authorization Request') {
+                    return Promise.resolve(ReqType.ServiceProviderRequest);
                 }
             }
             throw new Error(`Unknown supported source: [${body.source}]`);
@@ -1829,5 +1834,54 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             );
             return false;
         }
+    }
+
+    async getDecryptedEnvironmentVariable(name): Promise<string> {
+        const encrypted = process.env[name];
+        try {
+            const decrypted = await this.adaptee.kmsDecrypt(encrypted);
+            this.proxy.logAsInfo('Environment variable is decrypted. Use the decrpted value.');
+            return decrypted;
+        } catch (error) {
+            // if the string cannot be decrypted, use the original one
+            if (error.code && error.code === 'InvalidCiphertextException') {
+                this.proxy.logAsWarning(
+                    'Unseccessfully decrypt the given varable, probably because ' +
+                        'the input is a non-encrypted value. Use its original value instead.'
+                );
+            } else {
+                throw error;
+            }
+        }
+        return encrypted;
+    }
+
+    async getEnvironmentVariabes(functionName: string): Promise<{ [key: string]: string }> {
+        return await this.adaptee.getFunctionEnvironmentVariables(functionName);
+    }
+
+    async registerFortiAnalyzer(
+        vmId: string,
+        privateIp: string,
+        primary: boolean,
+        vip: string
+    ): Promise<void> {
+        this.proxy.logAsInfo('calling registerFortiAnalyzer');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsFortiAnalyzer(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+        );
+        const item: FortiAnalyzerDbItem = {
+            vmId: vmId,
+            ip: privateIp,
+            primary: primary,
+            vip: vip
+        };
+        const conditionExp: AwsDdbOperations = {
+            Expression: '',
+            type: CreateOrUpdate.CreateOrReplace
+        };
+        await this.adaptee.saveItemToDb<FortiAnalyzerDbItem>(table, item, conditionExp);
+        this.proxy.logAsInfo('called registerFortiAnalyzer');
     }
 }

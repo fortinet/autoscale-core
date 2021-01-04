@@ -1,9 +1,11 @@
+import { Context } from 'aws-lambda';
+
 import { AutoscaleEnvironment } from '../../autoscale-environment';
 import { CloudFunctionProxyAdapter, ReqType } from '../../cloud-function-proxy';
 import {
     ConstantIntervalHeartbeatSyncStrategy,
-    PreferredGroupPrimaryElection,
-    NoopRoutingEgressTrafficStrategy
+    NoopRoutingEgressTrafficStrategy,
+    PreferredGroupPrimaryElection
 } from '../../context-strategy/autoscale-context';
 import { ReusableLicensingStrategy } from '../../context-strategy/licensing-context';
 import {
@@ -18,28 +20,32 @@ import {
     VpnAttachmentStrategyResult
 } from '../../context-strategy/vpn-attachment-context';
 import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../../helper-function';
+import { JSONable } from '../../jsonable';
 import { VirtualMachineState } from '../../virtual-machine';
 import { FortiGateAutoscale } from '../fortigate-autoscale';
+import { FazDeviceAuthorization } from '../fortigate-faz-integration-strategy';
+import { AwsLambdaInvocationProxy } from './aws-cloud-function-proxy';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsFortiGateBootstrapTgwStrategy } from './aws-fortigate-bootstrap-config-strategy';
+import {
+    AwsFortiGateBootstrapStrategy,
+    AwsFortiGateBootstrapTgwStrategy
+} from './aws-fortigate-bootstrap-config-strategy';
+import { AwsFazReactiveAuthorizationStrategy } from './aws-fortigate-faz-integration-strategy';
 import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strategy';
+import {
+    AwsLambdaInvocable,
+    AwsLambdaInvocableExecutionTimeOutError,
+    AwsLambdaInvocationPayload
+} from './aws-lambda-invocable';
 import { AwsNicAttachmentStrategy } from './aws-nic-attachment-strategy';
 import { AwsPlatformAdapter, ScalingGroupState } from './aws-platform-adapter';
+import { AwsRoutingEgressTrafficViaPrimaryVmStrategy } from './aws-routing-egress-traffic-via-primary-vm-strategy';
 import { AwsTaggingAutoscaleVmStrategy } from './aws-tagging-autoscale-vm-strategy';
 import { AwsTgwVpnAttachmentStrategy } from './aws-tgw-vpn-attachment-strategy';
 import {
-    TransitGatewayContext,
-    AwsTgwVpnUpdateAttachmentRouteTableRequest
+    AwsTgwVpnUpdateAttachmentRouteTableRequest,
+    TransitGatewayContext
 } from './transit-gateway-context';
-import {
-    AwsLambdaInvocationPayload,
-    AwsTgwLambdaInvocable,
-    AwsLambdaInvocableExecutionTimeOutError
-} from './aws-lambda-invocable';
-import { JSONable } from '../../jsonable';
-import { AwsLambdaInvocationProxy } from './aws-cloud-function-proxy';
-import { Context } from 'aws-lambda';
-import { AwsRoutingEgressTrafficViaPrimaryVmStrategy } from './aws-routing-egress-traffic-via-primary-vm-strategy';
 
 /** ./aws-fortigate-autoscale-lambda-invocable
  * AWS FortiGate Autoscale - class, with capabilities:
@@ -69,7 +75,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         this.setTaggingAutoscaleVmStrategy(new AwsTaggingAutoscaleVmStrategy(platform, proxy));
         // use FortiGate bootstrap configuration strategy
         this.setBootstrapConfigurationStrategy(
-            new AwsFortiGateBootstrapTgwStrategy(platform, proxy, env)
+            new AwsFortiGateBootstrapStrategy(platform, proxy, env)
         );
         // use the Resuable licensing strategy
         this.setLicensingStrategy(new ReusableLicensingStrategy(platform, proxy));
@@ -82,6 +88,8 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         this.setRoutingEgressTrafficStrategy(
             new AwsRoutingEgressTrafficViaPrimaryVmStrategy(platform, proxy, env)
         );
+        // use the reactive authorization strategy for FAZ integration
+        this.setFazIntegrationStrategy(new AwsFazReactiveAuthorizationStrategy(platform, proxy));
     }
     setNicAttachmentStrategy(strategy: NicAttachmentStrategy): void {
         this.nicAttachmentStrategy = strategy;
@@ -331,19 +339,15 @@ export class AwsFortiGateAutoscaleTgw<TReq, TContext, TRes> extends AwsFortiGate
     }
 }
 
-export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler {
-    autoscale: AwsFortiGateAutoscaleTgw<JSONable, Context, void>;
-    constructor(autoscale: AwsFortiGateAutoscaleTgw<JSONable, Context, void>) {
-        this.autoscale = autoscale;
-    }
-    get proxy(): AwsLambdaInvocationProxy {
-        return this.autoscale.proxy as AwsLambdaInvocationProxy;
-    }
-
-    get platform(): AwsPlatformAdapter {
-        return this.autoscale.platform;
-    }
-
+export abstract class AwsFortiGateAutoscaleLambdaInvocationHandler {
+    abstract get proxy(): AwsLambdaInvocationProxy;
+    abstract get platform(): AwsPlatformAdapter;
+    /**
+     *
+     * @param {JSONable} payload the payload to pass to the invoked lambda function
+     * @param {AwsLambdaInvocable} invocable the defined invocable options.
+     */
+    abstract executeInvocable(payload: JSONable, invocable: string): Promise<void>;
     async handleLambdaPeerInvocation(): Promise<void> {
         this.proxy.logAsInfo('calling handleLambdaPeerInvocation.');
         try {
@@ -406,36 +410,15 @@ export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler {
             const extendExecution = settings.get(
                 AwsFortiGateAutoscaleSetting.AwsAutoscaleFunctionExtendExecution
             );
-            let shouldExtendExecution: boolean;
+            const shouldExtendExecution: boolean = extendExecution && extendExecution.truthValue;
             try {
-                if (invocable === AwsTgwLambdaInvocable.UpdateTgwAttachmentRouteTable) {
-                    // KNOWN ISSUE: Sep. 01, 2020. AWS takes over 10 minutes to stablize a VPN
-                    // creation where the time was usually approx. 3 mins. The Lambda function that
-                    // handles the updateTgwAttachmentRouteTable process used to have a 5 minutes
-                    // execution time out which isn't enough in this situation.
-                    // updateTgwAttachmentRouteTable will time out and fail.
-                    // The solution:
-                    // The caller detects the 'Execution timeout' type error and create a new
-                    // request to continue to wait until the accumulated processing time
-                    // hit the maximum execution time: AwsAutoscaleFunctionMaxExecutionTime in the
-                    // settings. The ultimate time out ends the waiting with a proper error message,
-                    // and will not proceed. The waitFor time out will rely on the Lambda
-                    // function execution timeout time. It ends 10 seconds before the Lambda timeout
-                    // (can be retrieved with proxy.getRemainingExecutionTime()), invokes a new
-                    // Lambda function request to continue, passing the accumulated processing time
-                    // in the new request. Unless the VPN stablized, the process keeps creating new
-                    // invocation to wait.
-                    // There's a switch to toggle such feature on and off: AwsAutoscaleFunctionExtendExecution
-
-                    // NOTE: The invocable must be designed to support for running in extended invocations.
-                    await this.autoscale.handleTgwAttachmentRouteTable(payload).catch(e => {
-                        shouldExtendExecution =
-                            true && extendExecution && extendExecution.truthValue;
-                        throw e;
-                    });
-                }
+                await this.executeInvocable(payload, invocable);
             } catch (e) {
-                if (e instanceof AwsLambdaInvocableExecutionTimeOutError && shouldExtendExecution) {
+                if (
+                    e instanceof AwsLambdaInvocableExecutionTimeOutError &&
+                    e.extendExecution &&
+                    shouldExtendExecution
+                ) {
                     const maxExecutionTimeItem = settings.get(
                         AwsFortiGateAutoscaleSetting.AwsAutoscaleFunctionMaxExecutionTime
                     );
@@ -486,5 +469,126 @@ export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler {
             // ASSERT: error is always an instance of Error
             this.proxy.logForError('called handleLambdaPeerInvocation.', error);
         }
+    }
+}
+
+export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler extends AwsFortiGateAutoscaleLambdaInvocationHandler {
+    autoscale: AwsFortiGateAutoscaleTgw<JSONable, Context, void>;
+    constructor(autoscale: AwsFortiGateAutoscaleTgw<JSONable, Context, void>) {
+        super();
+        this.autoscale = autoscale;
+    }
+
+    get proxy(): AwsLambdaInvocationProxy {
+        return this.autoscale.proxy as AwsLambdaInvocationProxy;
+    }
+
+    get platform(): AwsPlatformAdapter {
+        return this.autoscale.platform;
+    }
+
+    async executeInvocable(payload: JSONable, invocable: string): Promise<void> {
+        if (invocable === AwsLambdaInvocable.UpdateTgwAttachmentRouteTable) {
+            // KNOWN ISSUE: Sep. 01, 2020. AWS takes over 10 minutes to stablize a VPN
+            // creation where the time was usually approx. 3 mins. The Lambda function that
+            // handles the updateTgwAttachmentRouteTable process used to have a 5 minutes
+            // execution time out which isn't enough in this situation.
+            // updateTgwAttachmentRouteTable will time out and fail.
+            // The solution:
+            // The caller detects the 'Execution timeout' type error and create a new
+            // request to continue to wait until the accumulated processing time
+            // hit the maximum execution time: AwsAutoscaleFunctionMaxExecutionTime in the
+            // settings. The ultimate time out ends the waiting with a proper error message,
+            // and will not proceed. The waitFor time out will rely on the Lambda
+            // function execution timeout time. It ends 10 seconds before the Lambda timeout
+            // (can be retrieved with proxy.getRemainingExecutionTime()), invokes a new
+            // Lambda function request to continue, passing the accumulated processing time
+            // in the new request. Unless the VPN stablized, the process keeps creating new
+            // invocation to wait.
+            // There's a switch to toggle such feature on and off: AwsAutoscaleFunctionExtendExecution
+
+            // NOTE: The invocable must be designed to support for running in extended invocations.
+            await this.autoscale.handleTgwAttachmentRouteTable(payload).catch(e => {
+                const error: AwsLambdaInvocableExecutionTimeOutError = e;
+                error.extendExecution = true;
+                throw error;
+            });
+            return;
+        }
+        // otherwise, no matching invocable, throw error
+        throw new AwsLambdaInvocableExecutionTimeOutError(
+            `No matching invocable for: ${invocable}`
+        );
+    }
+}
+
+/**
+ * This handler must be deployed into a Lambda function with the following Environment Variables:
+ * AUTOSCALE_ADMIN_USERNAME: contains the Autoscale admin user created in the FAZ (can be kms-encrypted)
+ * AUTOSCALE_ADMIN_PASSWORD: contains the Autoscale admin password created in the FAZ (can be kms-encrypted)
+ * FORTIANALYZER_IP: contain the public ip of the (only one) FortiAnalyzer registered to the Autoscale
+ * FORTIANALYZER_PORT: contains the api port of the (only one) FortiAnalyzer registered to the Autoscale
+ */
+export class AwsFortiGateAutoscaleFazIntegrationHandler extends AwsFortiGateAutoscaleLambdaInvocationHandler {
+    autoscale: AwsFortiGateAutoscale<JSONable, Context, void>;
+    constructor(autoscale: AwsFortiGateAutoscale<JSONable, Context, void>) {
+        super();
+        this.autoscale = autoscale;
+    }
+    get proxy(): AwsLambdaInvocationProxy {
+        return this.autoscale.proxy as AwsLambdaInvocationProxy;
+    }
+
+    get platform(): AwsPlatformAdapter {
+        return this.autoscale.platform;
+    }
+
+    async executeInvocable(payload: JSONable, invocable: string): Promise<void> {
+        if (invocable === AwsLambdaInvocable.TriggerFazDeviceAuth) {
+            const deviceAuthorization: FazDeviceAuthorization = {
+                vmId: payload.vmId as string,
+                privateIp: payload.privateIp && String(payload.privateIp),
+                publicIp: payload.publicIp && String(payload.publicIp)
+            };
+            // verify the required Lambda function environment variables.
+            if (
+                !(
+                    process.env.AUTOSCALE_ADMIN_USERNAME &&
+                    process.env.AUTOSCALE_ADMIN_PASSWORD &&
+                    process.env.FORTIANALYZER_IP &&
+                    process.env.FORTIANALYZER_PORT
+                )
+            ) {
+                throw new Error("Lambda function doesn't have all required environment variables.");
+            }
+            // extract the autoscale admin user and faz info
+            const username: string = await this.platform.getDecryptedEnvironmentVariable(
+                'AUTOSCALE_ADMIN_USERNAME'
+            );
+            const password: string = await this.platform.getDecryptedEnvironmentVariable(
+                'AUTOSCALE_ADMIN_PASSWORD'
+            );
+            const fazIp: string = process.env.FORTIANALYZER_IP;
+            const fazPort: string = process.env.FORTIANALYZER_PORT;
+
+            await this.autoscale.fazIntegrationStrategy
+                .processAuthorizationRequest(
+                    deviceAuthorization,
+                    fazIp,
+                    fazPort,
+                    username,
+                    password
+                )
+                .catch(e => {
+                    const error: AwsLambdaInvocableExecutionTimeOutError = e;
+                    error.extendExecution = false;
+                    throw error;
+                });
+            return;
+        }
+        // otherwise, no matching invocable, throw error
+        throw new AwsLambdaInvocableExecutionTimeOutError(
+            `No matching invocable for: ${invocable}`
+        );
     }
 }

@@ -6,8 +6,15 @@ export interface AwsLambdaInvocationPayload extends JSONable {
     executionTime?: number;
 }
 
-export class AwsLambdaInvocableExecutionTimeOutError extends Error {}
+export class AwsLambdaInvocableExecutionTimeOutError extends Error {
+    extendExecution: boolean;
+    constructor(message?: string, extendExecution = false) {
+        super(message);
+        this.extendExecution = extendExecution;
+    }
+}
 
-export const AwsTgwLambdaInvocable: { [key: string]: string } = {
-    UpdateTgwAttachmentRouteTable: 'UpdateTgwAttachmentRouteTable'
-};
+export enum AwsLambdaInvocable {
+    UpdateTgwAttachmentRouteTable = 'UpdateTgwAttachmentRouteTable',
+    TriggerFazDeviceAuth = 'TriggerFazDeviceAuth'
+}

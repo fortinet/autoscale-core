@@ -1,15 +1,15 @@
 import path from 'path';
 
 import { AutoscaleEnvironment } from './autoscale-environment';
-import { AutoscaleSetting, Settings, SettingItemDictionary } from './autoscale-setting';
+import { AutoscaleSetting, SettingItemDictionary, Settings } from './autoscale-setting';
 import { CloudFunctionProxy, CloudFunctionProxyAdapter, ReqMethod } from './cloud-function-proxy';
 import {
     AutoscaleContext,
     HeartbeatSyncStrategy,
     PrimaryElectionStrategy,
+    RoutingEgressTrafficStrategy,
     TaggingVmStrategy,
-    VmTagging,
-    RoutingEgressTrafficStrategy
+    VmTagging
 } from './context-strategy/autoscale-context';
 import {
     LicensingModelContext,
@@ -20,13 +20,14 @@ import {
     ScalingGroupContext,
     ScalingGroupStrategy
 } from './context-strategy/scaling-group-context';
+import { FazIntegrationStrategy } from './fortigate-autoscale/fortigate-faz-integration-strategy';
+import { PlatformAdapter } from './platform-adapter';
 import {
     HealthCheckResult,
     HealthCheckSyncState,
     PrimaryElection,
     PrimaryRecordVoteState
 } from './primary-election';
-import { PlatformAdapter } from './platform-adapter';
 import { VirtualMachine } from './virtual-machine';
 
 export class HttpError extends Error {
@@ -85,6 +86,10 @@ export interface AutoscaleServiceProvider<TRes> {
     SaveAutoscaleSettings(props: { [key: string]: string }): Promise<boolean>;
 }
 
+export interface FazIntegrationServiceProvider<TReq, TRes> {
+    handleServiceRequest(request: TReq): Promise<TRes>;
+}
+
 export interface AutoscaleCore
     extends AutoscaleContext,
         ScalingGroupContext,
@@ -112,6 +117,7 @@ export abstract class Autoscale implements AutoscaleCore {
     heartbeatSyncStrategy: HeartbeatSyncStrategy;
     primaryElectionStrategy: PrimaryElectionStrategy;
     licensingStrategy: LicensingStrategy;
+    fazIntegrationStrategy: FazIntegrationStrategy;
     abstract get platform(): PlatformAdapter;
     abstract set platform(p: PlatformAdapter);
     abstract get proxy(): CloudFunctionProxyAdapter;
@@ -135,6 +141,9 @@ export abstract class Autoscale implements AutoscaleCore {
     }
     setLicensingStrategy(strategy: LicensingStrategy): void {
         this.licensingStrategy = strategy;
+    }
+    setFazIntegrationStrategy(strategy: FazIntegrationStrategy): void {
+        this.fazIntegrationStrategy = strategy;
     }
     async init(): Promise<void> {
         await this.platform.init();

@@ -1,17 +1,17 @@
-import { AutoscaleSetting } from '../autoscale-setting';
-import {
-    PrimaryElection,
-    PrimaryRecordVoteState,
-    PrimaryRecord,
-    HealthCheckResult,
-    HealthCheckRecord,
-    HealthCheckSyncState as HeartbeatSyncState
-} from '../primary-election';
-import { PlatformAdapter } from '../platform-adapter';
-import { CloudFunctionProxyAdapter, LogLevel } from '../cloud-function-proxy';
-import { VirtualMachine } from '../virtual-machine';
-import { waitFor, WaitForPromiseEmitter, WaitForConditionChecker } from '../helper-function';
 import { AutoscaleEnvironment } from '../autoscale-environment';
+import { AutoscaleSetting } from '../autoscale-setting';
+import { CloudFunctionProxyAdapter, LogLevel } from '../cloud-function-proxy';
+import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../helper-function';
+import { PlatformAdapter } from '../platform-adapter';
+import {
+    HealthCheckRecord,
+    HealthCheckResult,
+    HealthCheckSyncState as HeartbeatSyncState,
+    PrimaryElection,
+    PrimaryRecord,
+    PrimaryRecordVoteState
+} from '../primary-election';
+import { VirtualMachine } from '../virtual-machine';
 
 /**
  * To provide Autoscale basic logics

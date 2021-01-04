@@ -7,7 +7,7 @@ import {
     AwsFortiGateBootstrapTgwStrategy,
     LicensingStrategy
 } from '../index';
-import { AwsFortiGateAutoscaleServiceProvider } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-service';
+import { AwsFortiGateAutoscaleCfnServiceProvider } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-service';
 import { AwsNicAttachmentStrategy, AwsTgwVpnAttachmentStrategy } from '../fortigate-autoscale';
 
 export class TestAwsFortiGateAutoscale<TReq, TContext, TRes> extends AwsFortiGateAutoscale<
@@ -49,7 +49,7 @@ export class TestAwsTgwFortiGateAutoscale<TReq, TContext, TRes> extends AwsForti
     }
 }
 
-export class TestAwsFortiGateAutoscaleServiceProvider extends AwsFortiGateAutoscaleServiceProvider {
+export class TestAwsFortiGateAutoscaleServiceProvider extends AwsFortiGateAutoscaleCfnServiceProvider {
     expose(): {
         nicAttachmentStrategy: AwsNicAttachmentStrategy;
         vpnAttachmentStrategy: AwsTgwVpnAttachmentStrategy;

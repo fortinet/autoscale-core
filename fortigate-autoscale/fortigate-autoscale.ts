@@ -3,13 +3,15 @@ import * as HttpStatusCodes from 'http-status-codes';
 import { Autoscale, AutoscaleHandler, HttpError } from '../autoscale-core';
 import { AutoscaleEnvironment } from '../autoscale-environment';
 import { CloudFunctionProxy, ReqType } from '../cloud-function-proxy';
+import { VmTagging } from '../context-strategy/autoscale-context';
 import {
     BootstrapConfigurationStrategy,
     BootstrapContext
 } from '../context-strategy/bootstrap-context';
 import { LicensingModelContext } from '../context-strategy/licensing-context';
 import { PlatformAdapter } from '../platform-adapter';
-import { VmTagging } from '../context-strategy/autoscale-context';
+import { VirtualMachine } from '../virtual-machine';
+import { FortiGateAutoscaleSetting } from './fortigate-autoscale-settings';
 
 export const PRODUCT_NAME_FORTIGATE = 'fortigate';
 
@@ -189,5 +191,51 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
         this.proxy.logAsDebug(`configuration: ${bootstrapConfig}`);
         this.proxy.logAsInfo('called handleBootstrap.');
         return bootstrapConfig;
+    }
+
+    /**
+     * @override
+     */
+    async onVmFullyConfigured(): Promise<void> {
+        this.proxy.logAsInfo('calling FortiGateAutoscale.onVmFullyConfigured.');
+        // NOTE: if enable FAZ integration, register vm in FAZ
+        const settings = await this.platform.getSettings();
+        if (settings.get(FortiGateAutoscaleSetting.EnableFazIntegration).truthValue) {
+            this.proxy.logAsInfo('FAZ integration is enabled.');
+            await this.fazIntegrationStrategy.createAuthorizationRequest(this.env.targetVm);
+        }
+        // call the same method in the parent
+        super.onVmFullyConfigured();
+        this.proxy.logAsInfo('called FortiGateAutoscale.onVmFullyConfigured.');
+    }
+
+    /**
+     * Register a FortiAnalyzer to the FortiGate Autoscale
+     * @param {string} vmId the vmId of the FortiAnalyzer
+     * @param {string} privateIp the privateIp of the FortiAnalyzer
+     */
+    async registerFortiAnalyzer(vmId: string, privateIp: string): Promise<void> {
+        this.proxy.logAsInfo('calling FortiGateAutoscale.registerFortiAnalyzer.');
+        await this.platform.registerFortiAnalyzer(vmId, privateIp, true, privateIp);
+        this.proxy.logAsInfo('called FortiGateAutoscale.registerFortiAnalyzer.');
+    }
+
+    /**
+     * authorize new devices already connected to the FortiAnalyzer
+     * @param {string} vmId the vmId of the FortiGate to be authorized in in FortiAnalyzer.
+     * Currently with limitation, the FortiAnalyzer will authorize all new device connected to it.
+     */
+    async triggerFazDeviceAuth(vmId?: string): Promise<void> {
+        this.proxy.logAsInfo('calling FortiGateAutoscale.triggerFazDeviceAuth.');
+        let targetVm: VirtualMachine;
+        if (vmId) {
+            // list and match the vm by id
+            const autoscaleVmList = await this.platform.listAutoscaleVm();
+            [targetVm] =
+                (Array.isArray(autoscaleVmList) && autoscaleVmList.filter(vm => vm.id === vmId)) ||
+                [];
+        }
+        await this.fazIntegrationStrategy.createAuthorizationRequest(targetVm);
+        this.proxy.logAsInfo('called FortiGateAutoscale.triggerFazDeviceAuth.');
     }
 }

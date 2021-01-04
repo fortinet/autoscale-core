@@ -1,3 +1,9 @@
+import { CloudFormationCustomResourceEvent, Context } from 'aws-lambda';
+import https from 'https';
+import url from 'url';
+
+import { JSONable } from '../../jsonable';
+
 /*
    This file is a Fortinet-modified version of the original source file from AWS.
    Fortinet uses this file in compliance with the copyright statement and license
@@ -16,12 +22,6 @@
    See the License for the specific language governing permissions and limitations under the
    License.
 */
-
-import https from 'https';
-import url from 'url';
-import { CloudFormationCustomResourceEvent, Context } from 'aws-lambda';
-
-import { JSONable } from '../../jsonable';
 
 export enum ResponseStatus {
     SUCCESS = 'SUCCESS',

@@ -1,10 +1,10 @@
-import * as ShellJs from 'shelljs';
-import fs from 'fs';
-import path from 'path';
+import archiver from 'archiver';
 import chalk from 'chalk';
 import * as commentJson from 'comment-json';
-import archiver from 'archiver';
 import decompress from 'decompress';
+import fs from 'fs';
+import path from 'path';
+import * as ShellJs from 'shelljs';
 
 export type JSONable = {
     [key in string | number]: string | number | boolean | JSONable | JSONable[];

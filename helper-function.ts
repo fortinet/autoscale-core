@@ -1,5 +1,7 @@
 import crypto from 'crypto';
+
 import { CloudFunctionProxyAdapter } from './cloud-function-proxy';
+
 export function genChecksum(str: string, algorithm: string): string {
     return crypto
         .createHash(algorithm)

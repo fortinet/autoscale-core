@@ -16,6 +16,8 @@ export type AwsFortiGateAutoscaleServiceEvent =
     | AwsFortiGateAutoscaleServiceEventStartAutoscale
     | AwsFortiGateAutoscaleServiceEventStopAutoscale
     | AwsFortiGateAutoscaleServiceEventSaveSettings
+    | AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer
+    | AwsFortiGateAutoscaleServiceEventTriggerFazDeviceAuth
     | AwsFortiGateAutoscaleServiceEventUnknown;
 export interface AwsFortiGateAutoscaleServiceEventBase {
     ServiceToken: string;
@@ -40,13 +42,26 @@ export interface AwsFortiGateAutoscaleServiceEventSaveSettings
     [key: string]: string;
 }
 
+export interface AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer
+    extends AwsFortiGateAutoscaleServiceEventBase {
+    ServiceType: 'registerFortiAnalyzer';
+    InstanceId?: string;
+    PrivateIp?: string;
+}
+
+export interface AwsFortiGateAutoscaleServiceEventTriggerFazDeviceAuth
+    extends AwsFortiGateAutoscaleServiceEventBase {
+    ServiceType: 'triggerFazDeviceAuth';
+    InstanceId?: string;
+}
+
 export interface AwsFortiGateAutoscaleServiceEventUnknown
     extends AwsFortiGateAutoscaleServiceEventBase {
     ServiceType: undefined;
     [key: string]: string;
 }
 
-export class AwsFortiGateAutoscaleServiceProvider implements AutoscaleServiceProvider<void> {
+export class AwsFortiGateAutoscaleCfnServiceProvider implements AutoscaleServiceProvider<void> {
     autoscale: AwsFortiGateAutoscale<CloudFormationCustomResourceEvent, Context, void>;
     constructor(
         autoscale: AwsFortiGateAutoscale<CloudFormationCustomResourceEvent, Context, void>
@@ -91,6 +106,10 @@ export class AwsFortiGateAutoscaleServiceProvider implements AutoscaleServicePro
                                         `the RequestType: [${serviceEventType}]`
                                 );
                                 break;
+                            case 'registerFortiAnalyzer':
+                                await this.autoscale.init();
+                                await this.registerFortiAnalyzer(serviceEvent);
+                                break;
                             case undefined:
                             default:
                                 throw new Error(
@@ -103,6 +122,7 @@ export class AwsFortiGateAutoscaleServiceProvider implements AutoscaleServicePro
                             case 'initiateAutoscale':
                             case 'startAutoscale':
                             case 'saveSettings':
+                            case 'registerFortiAnalyzer':
                                 this.proxy.logAsWarning(
                                     `ServiceType: [${serviceEvent.ServiceType}] is skipped in ` +
                                         `the RequestType: [${serviceEventType}]`
@@ -237,15 +257,38 @@ export class AwsFortiGateAutoscaleServiceProvider implements AutoscaleServicePro
         return s1 && s2;
     }
 
+    /**
+     * Save those setting values collected from the CloudFormation template deployment
+     * into Autoscale system.
+     * @param {AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer} event the trigger event
+     * for the certain FortiGate Autoscale service.
+     */
     async SaveAutoscaleSettings(
         event: AwsFortiGateAutoscaleServiceEventSaveSettings
     ): Promise<boolean> {
-        this.proxy.logAsInfo('calling SaveAutoscaleSettings');
+        this.proxy.logAsInfo('calling saveAutoscaleSettings');
         const props: { [key: string]: string } = { ...event };
         delete props.ServiceToken;
         delete props.ServiceType;
         await this.autoscale.saveSettings(props, AwsFortiGateAutoscaleSettingItemDictionary);
-        this.proxy.logAsInfo('called SaveAutoscaleSettings');
+        this.proxy.logAsInfo('called saveAutoscaleSettings');
+        return true;
+    }
+
+    /**
+     * Register a FortiAnalyzer to the Autoscale system.
+     * @param {AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer} event the trigger event
+     * for the certain FortiGate Autoscale service.
+     */
+    async registerFortiAnalyzer(
+        event: AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer
+    ): Promise<boolean> {
+        this.proxy.logAsInfo('calling registerFortiAnalyzer');
+        const props: { [key: string]: string } = { ...event };
+        delete props.ServiceToken;
+        delete props.ServiceType;
+        await this.autoscale.registerFortiAnalyzer(event.InstanceId, event.PrivateIp);
+        this.proxy.logAsInfo('called registerFortiAnalyzer');
         return true;
     }
 }

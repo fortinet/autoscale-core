@@ -13,7 +13,7 @@ import { AutoscaleEnvironment, AwsPlatformAdapter } from '../index';
 import { TestAwsPlatformAdaptee } from './test-aws-platform-adaptee';
 import { TestAwsApiGatewayEventProxy } from './test-aws-api-gateway-event-proxy';
 import { TestAwsScheduledEventProxy } from './test-aws-scheduled-event-proxy';
-import { AwsFortiGateAutoscaleServiceProvider } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-service';
+import { AwsFortiGateAutoscaleCfnServiceProvider } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-service';
 import { AwsCloudFormationCustomResourceEventProxy } from '../fortigate-autoscale/aws/aws-cloud-function-proxy';
 
 export const createAwsApiGatewayEventHandler = (
@@ -161,7 +161,7 @@ export const createAwsCloudFormationCustomResourceEventHandler = (
     platformAdaptee: TestAwsPlatformAdaptee;
     platformAdapter: AwsPlatformAdapter;
     proxy: AwsCloudFormationCustomResourceEventProxy;
-    serviceProvider: AwsFortiGateAutoscaleServiceProvider;
+    serviceProvider: AwsFortiGateAutoscaleCfnServiceProvider;
 } => {
     const env = {} as AutoscaleEnvironment;
     const proxy = new AwsCloudFormationCustomResourceEventProxy(event, context);
@@ -172,7 +172,7 @@ export const createAwsCloudFormationCustomResourceEventHandler = (
         Context,
         void
     >(pa, env, proxy);
-    const serviceProvider: AwsFortiGateAutoscaleServiceProvider = new AwsFortiGateAutoscaleServiceProvider(
+    const serviceProvider: AwsFortiGateAutoscaleCfnServiceProvider = new AwsFortiGateAutoscaleCfnServiceProvider(
         autoscale
     );
     return {

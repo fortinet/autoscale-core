@@ -41,6 +41,7 @@ import {
 import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../virtual-machine';
 import { compare } from '../helper-function';
 import { AwsFortiGateAutoscaleSetting } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
+import { NoopFazIntegrationStrategy } from '../fortigate-autoscale/fortigate-faz-integration-strategy';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 
@@ -234,6 +235,14 @@ class TestPlatformAdapter implements PlatformAdapter {
     updatePrimaryRecord(rec: PrimaryRecord): Promise<void> {
         throw new Error('Method not implemented.');
     }
+    registerFortiAnalyzer(
+        vmId: string,
+        privateIp: string,
+        primary: boolean,
+        vip: string
+    ): Promise<void> {
+        throw new Error('Method not implemented.');
+    }
 }
 
 class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
@@ -333,6 +342,7 @@ describe('sanity test', () => {
         autoscale.setHeartbeatSyncStrategy(hs);
         autoscale.setScalingGroupStrategy(ss);
         autoscale.setTaggingAutoscaleVmStrategy(new NoopTaggingVmStrategy(p, x));
+        autoscale.setFazIntegrationStrategy(new NoopFazIntegrationStrategy(p, x));
     });
     it('No conflicted settings in AutoscaleSettings', () => {
         const conflictCheck = (
