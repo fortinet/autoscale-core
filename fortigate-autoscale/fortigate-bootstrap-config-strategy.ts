@@ -208,6 +208,7 @@ export abstract class FortiGateBootstrapConfigStrategy implements BootstrapConfi
      * @returns {Promise} configset content
      */
     protected async loadConfig(): Promise<string> {
+        this.proxy.logAsInfo('calling FortiGateBootstrapConfigStrategy.loadConfig');
         let baseConfig = '';
         // check if second nic is enabled in the settings
         // configset for the second nic
@@ -250,7 +251,7 @@ export abstract class FortiGateBootstrapConfigStrategy implements BootstrapConfi
         // finally, try to include every configset stored in the user custom location
         // NOTE: user custom configsets should be processed last
         baseConfig += await this.loadUserCustom();
-
+        this.proxy.logAsInfo('called FortiGateBootstrapConfigStrategy.loadConfig');
         return baseConfig;
     }
     /**

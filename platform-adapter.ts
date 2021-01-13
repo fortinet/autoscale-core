@@ -145,4 +145,36 @@ export interface PlatformAdapter {
         primary: boolean,
         vip: string
     ): Promise<void>;
+
+    /**
+     * invoke the Autoscale handler function
+     * @param  {unknown} payload the payload to invoke the function
+     * @param  {string} functionEndpoint the function name or fqdn of the function which is
+     * depending on implementation.
+     * @param  {string} invocable the pre-defined type name of features that is invocable in this
+     * way.
+     * @param  {number} executionTime? the accumulative execution time of one complete invocation.
+     * due to cloud platform limitation, one complete invocation may have to split into two or more
+     * function calls in order to get the final result.
+     * @returns Promise
+     */
+    invokeAutoscaleFunction(
+        payload: unknown,
+        functionEndpoint: string,
+        invocable: string,
+        executionTime?: number
+    ): Promise<number>;
+
+    /**
+     * create an invocation key for authentication between Autoscale Function caller and receiver.
+     * @param  {unknown} payload
+     * @param  {string} functionEndpoint
+     * @param  {string} invocable
+     * @returns string
+     */
+    createAutoscaleFunctionInvocationKey(
+        payload: unknown,
+        functionEndpoint: string,
+        invocable: string
+    ): string;
 }

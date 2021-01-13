@@ -13,16 +13,26 @@ import {
 import {
     ConstantIntervalHeartbeatSyncStrategy,
     HeartbeatSyncStrategy,
-    PrimaryElectionStrategy,
-    PrimaryElectionStrategyResult,
     NoopTaggingVmStrategy,
-    PreferredGroupPrimaryElection
+    PreferredGroupPrimaryElection,
+    PrimaryElectionStrategy,
+    PrimaryElectionStrategyResult
 } from '../context-strategy/autoscale-context';
 import {
     NoopScalingGroupStrategy,
     ScalingGroupStrategy
 } from '../context-strategy/scaling-group-context';
+import { AwsFortiGateAutoscaleSetting } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
 import { FortiGateAutoscaleSetting } from '../fortigate-autoscale/fortigate-autoscale-settings';
+import { NoopFazIntegrationStrategy } from '../fortigate-autoscale/fortigate-faz-integration-strategy';
+import { compare } from '../helper-function';
+import {
+    LicenseFile,
+    LicenseStockRecord,
+    LicenseUsageRecord,
+    PlatformAdapter,
+    ResourceFilter
+} from '../platform-adapter';
 import {
     HealthCheckRecord,
     HealthCheckResult,
@@ -31,17 +41,7 @@ import {
     PrimaryRecord,
     PrimaryRecordVoteState
 } from '../primary-election';
-import {
-    LicenseFile,
-    LicenseStockRecord,
-    LicenseUsageRecord,
-    PlatformAdapter,
-    ResourceFilter
-} from '../platform-adapter';
 import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../virtual-machine';
-import { compare } from '../helper-function';
-import { AwsFortiGateAutoscaleSetting } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
-import { NoopFazIntegrationStrategy } from '../fortigate-autoscale/fortigate-faz-integration-strategy';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 
@@ -100,6 +100,21 @@ class TestAutoscale extends Autoscale {
 }
 
 class TestPlatformAdapter implements PlatformAdapter {
+    invokeAutoscaleFunction(
+        payload: unknown,
+        functionEndpoint: string,
+        invocable: string,
+        executionTime?: number
+    ): Promise<number> {
+        return Promise.resolve(0);
+    }
+    createAutoscaleFunctionInvocationKey(
+        payload: unknown,
+        functionEndpoint: string,
+        invocable: string
+    ): string {
+        return '';
+    }
     saveSettingItem(
         key: string,
         value: string,
@@ -249,6 +264,9 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     private executionStartTime: number;
     constructor() {
         this.executionStartTime = Date.now();
+    }
+    getReqBody(): unknown {
+        return 'fake-body-as-string';
     }
     getRemainingExecutionTime(): number {
         // set it to 60 seconds
