@@ -213,9 +213,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
             AwsFortiGateAutoscaleSetting.AwsTransitGatewayVpnHandlerName
         ).value;
         await this.platform.invokeAutoscaleFunction(
-            {
-                ...request
-            },
+            request,
             handlerName,
             AwsLambdaInvocable.UpdateTgwAttachmentRouteTable
         );

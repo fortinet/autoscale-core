@@ -1,7 +1,8 @@
 import { Context } from 'aws-lambda';
 
 import { AutoscaleEnvironment } from '../../autoscale-environment';
-import { CloudFunctionProxyAdapter, ReqType } from '../../cloud-function-proxy';
+import { CloudFunctionInvocationTimeOutError } from '../../cloud-function-peer-invocation';
+import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import {
     ConstantIntervalHeartbeatSyncStrategy,
     NoopRoutingEgressTrafficStrategy,
@@ -23,6 +24,7 @@ import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../../h
 import { JSONable } from '../../jsonable';
 import { VirtualMachineState } from '../../virtual-machine';
 import { FortiGateAutoscale } from '../fortigate-autoscale';
+import { FortiGateAutoscaleFunctionInvocationHandler } from '../fortigate-autoscale-function-invocation';
 import { FazDeviceAuthorization } from '../fortigate-faz-integration-strategy';
 import { AwsLambdaInvocationProxy } from './aws-cloud-function-proxy';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
@@ -32,11 +34,7 @@ import {
 } from './aws-fortigate-bootstrap-config-strategy';
 import { AwsFazReactiveAuthorizationStrategy } from './aws-fortigate-faz-integration-strategy';
 import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strategy';
-import {
-    AwsLambdaInvocable,
-    AwsLambdaInvocableExecutionTimeOutError,
-    AwsLambdaInvocationPayload
-} from './aws-lambda-invocable';
+import { AwsLambdaInvocable } from './aws-lambda-invocable';
 import { AwsNicAttachmentStrategy } from './aws-nic-attachment-strategy';
 import { AwsPlatformAdapter, ScalingGroupState } from './aws-platform-adapter';
 import { AwsRoutingEgressTrafficViaPrimaryVmStrategy } from './aws-routing-egress-traffic-via-primary-vm-strategy';
@@ -339,140 +337,7 @@ export class AwsFortiGateAutoscaleTgw<TReq, TContext, TRes> extends AwsFortiGate
     }
 }
 
-export abstract class AwsFortiGateAutoscaleLambdaInvocationHandler {
-    abstract get proxy(): AwsLambdaInvocationProxy;
-    abstract get platform(): AwsPlatformAdapter;
-    /**
-     *
-     * @param {JSONable} payload the payload to pass to the invoked lambda function
-     * @param {AwsLambdaInvocable} invocable the defined invocable options.
-     */
-    abstract executeInvocable(payload: JSONable, invocable: string): Promise<void>;
-    async handleLambdaPeerInvocation(): Promise<void> {
-        this.proxy.logAsInfo('calling handleLambdaPeerInvocation.');
-        try {
-            // init the platform. this step is important
-            await this.platform.init();
-            const requestType = await this.platform.getRequestType();
-            const settings = await this.platform.getSettings();
-            if (requestType !== ReqType.CloudFunctionPeerInvocation) {
-                this.proxy.logAsWarning('Not a CloudFunctionPeerInvocation type request. Skip it.');
-                this.proxy.logAsInfo('called handleLambdaPeerInvocation.');
-                return;
-            }
-            const body = this.proxy.getReqBody();
-            const functionEndpoint = this.proxy.context.functionName;
-            if (!body) {
-                throw new Error('Invalid request body.');
-            }
-            const extractPayload = (
-                payload: JSONable
-            ): {
-                invocable: string;
-                secretKey: string;
-                executionTime: number;
-                payload: JSONable;
-            } => {
-                const p: AwsLambdaInvocationPayload = {
-                    invocable: undefined,
-                    invocationSecretKey: undefined,
-                    executionTime: undefined
-                };
-                Object.assign(p, payload);
-                const invocable = p.invocable;
-                const secretKey = p.invocationSecretKey;
-                // if the payload carries an execution time, the execution time refers to its
-                // time been already taken in preceeding relevant invocations.
-                const executionTime = isNaN(p.executionTime) ? 0 : p.executionTime;
-                delete p.invocable;
-                delete p.invocationSecretKey;
-                delete p.executionTime;
-                return {
-                    invocable: invocable,
-                    secretKey: secretKey,
-                    executionTime: executionTime,
-                    payload: p
-                };
-            };
-
-            const { invocable, secretKey, executionTime, payload } = extractPayload(body);
-
-            const invocationSecretKey = this.platform.createAutoscaleFunctionInvocationKey(
-                functionEndpoint,
-                payload
-            );
-
-            // verify the invocation key
-            if (!invocationSecretKey || invocationSecretKey !== secretKey) {
-                throw new Error('Invalid invocation payload: invocationSecretKey not matched');
-            }
-            const currentExecutionStartTime = Date.now(); // ms
-            const extendExecution = settings.get(
-                AwsFortiGateAutoscaleSetting.AwsAutoscaleFunctionExtendExecution
-            );
-            const shouldExtendExecution: boolean = extendExecution && extendExecution.truthValue;
-            try {
-                await this.executeInvocable(payload, invocable);
-            } catch (e) {
-                if (
-                    e instanceof AwsLambdaInvocableExecutionTimeOutError &&
-                    e.extendExecution &&
-                    shouldExtendExecution
-                ) {
-                    const maxExecutionTimeItem = settings.get(
-                        AwsFortiGateAutoscaleSetting.AwsAutoscaleFunctionMaxExecutionTime
-                    );
-                    // the maximum execution time allowed for a cloud function
-                    // NOTE: the time is set in second.
-                    const maxExecutionTime =
-                        maxExecutionTimeItem && Number(maxExecutionTimeItem.value);
-
-                    // time taken in preceeding relevent invocations and time taken in
-                    // current invocation.
-                    // NOTE: this time is also in second.
-                    const totalExecutionTime =
-                        Math.floor((Date.now() - currentExecutionStartTime) / 1000) + executionTime;
-
-                    // if max execution time not reached, create a new invocation to continue
-                    if (totalExecutionTime < maxExecutionTime) {
-                        await this.platform.invokeAutoscaleFunction(
-                            payload,
-                            functionEndpoint,
-                            invocable,
-                            // carry the total execution time to the next call.
-                            totalExecutionTime
-                        );
-                        this.proxy.logAsInfo(
-                            'AutoscaleFunctionExtendExecution is enabled.' +
-                                ` Current total execution time is: ${totalExecutionTime} seconds.` +
-                                ` Max execution time allowed is: ${maxExecutionTime} seconds.` +
-                                ' Now invoke a new Lambda function to continue.'
-                        );
-                    } else {
-                        this.proxy.logAsError(
-                            'AutoscaleFunctionExtendExecution is enabled.' +
-                                ` Current total execution time is: ${totalExecutionTime} seconds.` +
-                                ` Max execution time allowed is: ${maxExecutionTime} seconds.` +
-                                ' No more time allowed to wait so it timed out and failed.'
-                        );
-                        // extended execution reached max execution time allowed.
-                        throw e;
-                    }
-                } else {
-                    // not a AwsLambdaInvocableExecutionTimeOutError or not allow to extend execution.
-                    throw e;
-                }
-            }
-            this.proxy.logAsInfo('called handleLambdaPeerInvocation.');
-            return;
-        } catch (error) {
-            // ASSERT: error is always an instance of Error
-            this.proxy.logForError('called handleLambdaPeerInvocation.', error);
-        }
-    }
-}
-
-export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler extends AwsFortiGateAutoscaleLambdaInvocationHandler {
+export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler extends FortiGateAutoscaleFunctionInvocationHandler {
     autoscale: AwsFortiGateAutoscaleTgw<JSONable, Context, void>;
     constructor(autoscale: AwsFortiGateAutoscaleTgw<JSONable, Context, void>) {
         super();
@@ -509,16 +374,14 @@ export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler extends AwsFortiGat
 
             // NOTE: The invocable must be designed to support for running in extended invocations.
             await this.autoscale.handleTgwAttachmentRouteTable(payload).catch(e => {
-                const error: AwsLambdaInvocableExecutionTimeOutError = e;
+                const error: CloudFunctionInvocationTimeOutError = e;
                 error.extendExecution = true;
                 throw error;
             });
             return;
         }
         // otherwise, no matching invocable, throw error
-        throw new AwsLambdaInvocableExecutionTimeOutError(
-            `No matching invocable for: ${invocable}`
-        );
+        throw new CloudFunctionInvocationTimeOutError(`No matching invocable for: ${invocable}`);
     }
 }
 
@@ -529,7 +392,7 @@ export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler extends AwsFortiGat
  * FORTIANALYZER_IP: contain the public ip of the (only one) FortiAnalyzer registered to the Autoscale
  * FORTIANALYZER_PORT: contains the api port of the (only one) FortiAnalyzer registered to the Autoscale
  */
-export class AwsFortiGateAutoscaleFazIntegrationHandler extends AwsFortiGateAutoscaleLambdaInvocationHandler {
+export class AwsFortiGateAutoscaleFazIntegrationHandler extends FortiGateAutoscaleFunctionInvocationHandler {
     autoscale: AwsFortiGateAutoscale<JSONable, Context, void>;
     constructor(autoscale: AwsFortiGateAutoscale<JSONable, Context, void>) {
         super();
@@ -580,15 +443,13 @@ export class AwsFortiGateAutoscaleFazIntegrationHandler extends AwsFortiGateAuto
                     password
                 )
                 .catch(e => {
-                    const error: AwsLambdaInvocableExecutionTimeOutError = e;
+                    const error: CloudFunctionInvocationTimeOutError = e;
                     error.extendExecution = false;
                     throw error;
                 });
             return;
         }
         // otherwise, no matching invocable, throw error
-        throw new AwsLambdaInvocableExecutionTimeOutError(
-            `No matching invocable for: ${invocable}`
-        );
+        throw new CloudFunctionInvocationTimeOutError(`No matching invocable for: ${invocable}`);
     }
 }
