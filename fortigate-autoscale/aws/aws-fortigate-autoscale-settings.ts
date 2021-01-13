@@ -7,8 +7,6 @@ import {
 // NOTE: every key must start with 'Aws' prefix but the value do not need the prefix
 export const AwsFortiGateAutoscaleSetting = {
     ...FortiGateAutoscaleSetting,
-    AwsAutoscaleFunctionMaxExecutionTime: 'autoscale-function-max-execution-time',
-    AwsAutoscaleFunctionExtendExecution: 'autoscale-function-extend-execution',
     AwsEnableTransitGatewayVpn: 'enable-transit-gateway-vpn',
     AwsLifecycleHookTimeout: 'lifecycle-hook-timeout',
     AwsLoadBalancerTargetGroupArn: 'fortigate-autoscale-target-group-arn',
@@ -20,25 +18,6 @@ export const AwsFortiGateAutoscaleSetting = {
 
 export const AwsFortiGateAutoscaleSettingItemDictionary: SettingItemDictionary = {
     ...FortiGateAutoscaleSettingItemDictionary,
-    [AwsFortiGateAutoscaleSetting.AwsAutoscaleFunctionMaxExecutionTime]: {
-        keyName: AwsFortiGateAutoscaleSetting.AwsAutoscaleFunctionMaxExecutionTime,
-        description:
-            'Maximum execution time (in second) allowed for an Autoscale Cloud Function that can' +
-            ' run in one cloud function invocation or multiple extended invocations.',
-        editable: true,
-        jsonEncoded: false,
-        booleanType: false
-    },
-    [AwsFortiGateAutoscaleSetting.AwsAutoscaleFunctionExtendExecution]: {
-        keyName: AwsFortiGateAutoscaleSetting.AwsAutoscaleFunctionExtendExecution,
-        description:
-            'Allow one single Autoscale function to be executed in multiple extended invocations' +
-            ' of a cloud platform function if it cannot finish within one invocation and its' +
-            ' functionality supports splitting into extended invocations.',
-        editable: true,
-        jsonEncoded: false,
-        booleanType: true
-    },
     [AwsFortiGateAutoscaleSetting.AwsEnableTransitGatewayVpn]: {
         keyName: AwsFortiGateAutoscaleSetting.AwsEnableTransitGatewayVpn,
         description: 'Toggle ON / OFF the Transit Gateway VPN creation on each FortiGate instance',

@@ -53,9 +53,7 @@ export class AwsFazReactiveAuthorizationStrategy implements FazIntegrationStrate
         // invoke asynchronously to process this authorization request.
         // the target Lambda function will run the same strategy.
         await this.platform.invokeAutoscaleFunction(
-            {
-                ...payload
-            },
+            payload,
             handlerName,
             AwsLambdaInvocable.TriggerFazDeviceAuth
         );
