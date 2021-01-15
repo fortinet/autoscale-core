@@ -78,9 +78,12 @@ export abstract class FortiGateAutoscaleFunctionInvocationHandler
                     // time taken in preceeding relevent invocations and time taken in
                     // current invocation.
                     // NOTE: this time is also in second.
+                    const executionTime: number =
+                        (!isNaN(invocationPayload.executionTime) &&
+                            invocationPayload.executionTime) ||
+                        0;
                     const totalExecutionTime =
-                        Math.floor((Date.now() - currentExecutionStartTime) / 1000) +
-                        invocationPayload.executionTime;
+                        Math.floor((Date.now() - currentExecutionStartTime) / 1000) + executionTime;
 
                     // if max execution time not reached, create a new invocation to continue
                     if (totalExecutionTime < maxExecutionTime) {
