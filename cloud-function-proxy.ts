@@ -39,7 +39,12 @@ export interface ReqHeaders {
     [key: string]: unknown;
 }
 
-export type CloudFunctionResponseBody = string | {};
+export type CloudFunctionResponseBody =
+    | string
+    | {}
+    | {
+          [key: string]: unknown;
+      };
 
 export interface CloudFunctionProxyAdapter {
     formatResponse(httpStatusCode: number, body: CloudFunctionResponseBody, headers: {}): {};
@@ -65,6 +70,7 @@ export interface CloudFunctionProxyAdapter {
      * @memberof CloudFunctionProxyAdapter
      */
     getRemainingExecutionTime(): number;
+    getReqBody(): unknown;
 }
 
 export abstract class CloudFunctionProxy<TReq, TContext, TRes>
@@ -101,4 +107,5 @@ export abstract class CloudFunctionProxy<TReq, TContext, TRes>
     ): TRes;
     abstract getRequestAsString(): string;
     abstract getRemainingExecutionTime(): number;
+    abstract getReqBody(): unknown;
 }

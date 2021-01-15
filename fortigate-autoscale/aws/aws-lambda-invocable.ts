@@ -1,13 +1,6 @@
-import { JSONable } from '../../jsonable';
+import { FortiGateAutoscaleFunctionInvocable } from '../fortigate-autoscale-function-invocation';
 
-export interface AwsLambdaInvocationPayload extends JSONable {
-    invocable: string;
-    invocationSecretKey: string;
-    executionTime?: number;
-}
-
-export class AwsLambdaInvocableExecutionTimeOutError extends Error {}
-
-export const AwsTgwLambdaInvocable: { [key: string]: string } = {
+export const AwsLambdaInvocable = {
+    ...FortiGateAutoscaleFunctionInvocable,
     UpdateTgwAttachmentRouteTable: 'UpdateTgwAttachmentRouteTable'
 };

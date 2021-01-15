@@ -1,12 +1,14 @@
-import { FortiGateBootstrapConfigStrategy } from '../fortigate-bootstrap-config-strategy';
-import { AwsPlatformAdapter } from './aws-platform-adapter';
+import { parseStringPromise as xml2jsParserPromise } from 'xml2js';
+
 import { AutoscaleEnvironment } from '../../autoscale-environment';
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
-import { VirtualMachine } from '../../virtual-machine';
-import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { parseStringPromise as xml2jsParserPromise } from 'xml2js';
 import { JSONable } from '../../jsonable';
-export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigStrategy {
+import { VirtualMachine } from '../../virtual-machine';
+import { FortiGateBootstrapConfigStrategy } from '../fortigate-bootstrap-config-strategy';
+import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
+import { AwsPlatformAdapter } from './aws-platform-adapter';
+
+export class AwsFortiGateBootstrapStrategy extends FortiGateBootstrapConfigStrategy {
     constructor(
         readonly platform: AwsPlatformAdapter,
         readonly proxy: CloudFunctionProxyAdapter,
@@ -14,7 +16,8 @@ export class AwsFortiGateBootstrapTgwStrategy extends FortiGateBootstrapConfigSt
     ) {
         super();
     }
-
+}
+export class AwsFortiGateBootstrapTgwStrategy extends AwsFortiGateBootstrapStrategy {
     /**
      * load the configset content for setting up the VPN attachment
      * @param  {VirtualMachine} targetVm the target vm which the VPN(s) are attached to

@@ -1,5 +1,7 @@
 import { configSetResourceFinder } from '../autoscale-core';
+import { AutoscaleEnvironment } from '../autoscale-environment';
 import { Settings } from '../autoscale-setting';
+import { Blob } from '../blob';
 import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
 import {
     BootstrapConfigStrategyResult,
@@ -8,8 +10,6 @@ import {
 import { PlatformAdapter } from '../platform-adapter';
 import { VirtualMachine } from '../virtual-machine';
 import { FortiGateAutoscaleSetting } from './fortigate-autoscale-settings';
-import { AutoscaleEnvironment } from '../autoscale-environment';
-import { Blob } from '../blob';
 
 export abstract class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationStrategy {
     static SUCCESS = 'SUCCESS';
@@ -208,6 +208,7 @@ export abstract class FortiGateBootstrapConfigStrategy implements BootstrapConfi
      * @returns {Promise} configset content
      */
     protected async loadConfig(): Promise<string> {
+        this.proxy.logAsInfo('calling FortiGateBootstrapConfigStrategy.loadConfig');
         let baseConfig = '';
         // check if second nic is enabled in the settings
         // configset for the second nic
@@ -250,7 +251,7 @@ export abstract class FortiGateBootstrapConfigStrategy implements BootstrapConfi
         // finally, try to include every configset stored in the user custom location
         // NOTE: user custom configsets should be processed last
         baseConfig += await this.loadUserCustom();
-
+        this.proxy.logAsInfo('called FortiGateBootstrapConfigStrategy.loadConfig');
         return baseConfig;
     }
     /**

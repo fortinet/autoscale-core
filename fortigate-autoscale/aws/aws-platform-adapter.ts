@@ -3,6 +3,10 @@ import path from 'path';
 
 import { Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
+import {
+    CloudFunctionInvocationPayload,
+    constructInvocationPayload
+} from '../../cloud-function-peer-invocation';
 import { CloudFunctionProxyAdapter, ReqMethod, ReqType } from '../../cloud-function-proxy';
 import { NicAttachmentRecord } from '../../context-strategy/nic-attachment-context';
 import {
@@ -11,8 +15,8 @@ import {
     KeyValue,
     LicenseStockDbItem,
     LicenseUsageDbItem,
-    PrimaryElectionDbItem,
     NicAttachmentDbItem,
+    PrimaryElectionDbItem,
     SettingsDbItem,
     VpnAttachmentDbItem
 } from '../../db-definitions';
@@ -24,12 +28,6 @@ import {
 } from '../../helper-function';
 import { JSONable } from '../../jsonable';
 import {
-    HealthCheckRecord,
-    HealthCheckSyncState,
-    PrimaryRecord,
-    PrimaryRecordVoteState
-} from '../../primary-election';
-import {
     LicenseFile,
     LicenseStockRecord,
     LicenseUsageRecord,
@@ -37,6 +35,12 @@ import {
     ResourceFilter,
     TgwVpnAttachmentRecord
 } from '../../platform-adapter';
+import {
+    HealthCheckRecord,
+    HealthCheckSyncState,
+    PrimaryRecord,
+    PrimaryRecordVoteState
+} from '../../primary-election';
 import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../../virtual-machine';
 import {
     AwsApiGatewayEventProxy,
@@ -47,7 +51,6 @@ import {
 import { LifecycleItemDbItem } from './aws-db-definitions';
 import * as AwsDBDef from './aws-db-definitions';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsLambdaInvocationPayload } from './aws-lambda-invocable';
 import { AwsPlatformAdaptee } from './aws-platform-adaptee';
 import { AwsVpnAttachmentState, AwsVpnConnection } from './transit-gateway-context';
 
@@ -1667,25 +1670,36 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called removePrimaryRoleTag.');
     }
 
-    createAutoscaleFunctionInvocationKey(functionName: string, payload: JSONable): string {
+    createAutoscaleFunctionInvocationKey(
+        payload: unknown,
+        functionName: string,
+        invocable: string
+    ): string {
         const psk = this.settings.get(AwsFortiGateAutoscaleSetting.FortiGatePskSecret).value;
-        return genChecksum(`${functionName}:${psk}:${JSON.stringify(payload)}`, 'sha256');
+        return genChecksum(
+            `${functionName}:${invocable}:${psk}:${JSON.stringify(payload)}`,
+            'sha256'
+        );
     }
 
     async invokeAutoscaleFunction(
-        payload: JSONable,
+        payload: unknown,
         functionEndpoint: string,
         invocable: string,
         executionTime?: number
     ): Promise<number> {
         this.proxy.logAsInfo('calling invokeAutoscaleFunction');
-        const secretKey = this.createAutoscaleFunctionInvocationKey(functionEndpoint, payload);
-        const p: AwsLambdaInvocationPayload = {
-            invocable: invocable,
-            invocationSecretKey: secretKey,
-            executionTime: executionTime
-        };
-        Object.assign(p, payload);
+        const secretKey = this.createAutoscaleFunctionInvocationKey(
+            payload,
+            functionEndpoint,
+            invocable
+        );
+        const p: CloudFunctionInvocationPayload = constructInvocationPayload(
+            payload,
+            invocable,
+            secretKey,
+            executionTime
+        );
         const response = await this.adaptee.invokeLambda(
             functionEndpoint,
             'Event',
