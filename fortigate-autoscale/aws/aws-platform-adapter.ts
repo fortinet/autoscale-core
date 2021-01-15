@@ -1,12 +1,12 @@
 import EC2 from 'aws-sdk/clients/ec2';
-import {
-    CloudFunctionInvocationPayload,
-    constructInvocationPayload
-} from '../../cloud-function-peer-invocation';
 import path from 'path';
 
 import { Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
+import {
+    CloudFunctionInvocationPayload,
+    constructInvocationPayload
+} from '../../cloud-function-peer-invocation';
 import { CloudFunctionProxyAdapter, ReqMethod, ReqType } from '../../cloud-function-proxy';
 import { NicAttachmentRecord } from '../../context-strategy/nic-attachment-context';
 import {

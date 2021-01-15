@@ -48,7 +48,10 @@ export abstract class FortiGateAutoscaleFunctionInvocationHandler
             );
 
             // verify the invocation key
-            if (!invocationSecretKey || invocationSecretKey !== invocationPayload.secretKey) {
+            if (
+                !invocationSecretKey ||
+                invocationSecretKey !== invocationPayload.invocationSecretKey
+            ) {
                 throw new Error('Invalid invocation payload: invocationSecretKey not matched');
             }
             const currentExecutionStartTime = Date.now(); // ms
