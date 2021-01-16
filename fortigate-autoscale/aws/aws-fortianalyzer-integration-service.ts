@@ -42,7 +42,6 @@ export class AwsFortiGateAutoscaleFazIntegrationServiceProvider
         this.proxy.logAsInfo('calling handleServiceRequest');
         try {
             const reqType: ReqType = await this.platform.getRequestType();
-            this.proxy.logAsInfo(`RequestBody ${this.proxy.getReqBody()}`);
             // NOTE: source now supports 'fortinet.autoscale' only
             const source: AwsFazAuthorizationEventSource = this.proxy.getReqBody().source;
             // NOTE: detail must be type: FazAuthorizationServiceDetail

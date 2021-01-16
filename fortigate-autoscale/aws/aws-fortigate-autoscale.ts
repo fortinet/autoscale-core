@@ -1,7 +1,10 @@
 import { Context } from 'aws-lambda';
 
 import { AutoscaleEnvironment } from '../../autoscale-environment';
-import { CloudFunctionInvocationTimeOutError } from '../../cloud-function-peer-invocation';
+import {
+    CloudFunctionInvocationPayload,
+    CloudFunctionInvocationTimeOutError
+} from '../../cloud-function-peer-invocation';
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import {
     ConstantIntervalHeartbeatSyncStrategy,
@@ -352,7 +355,11 @@ export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler extends FortiGateAu
         return this.autoscale.platform;
     }
 
-    async executeInvocable(payload: JSONable, invocable: string): Promise<void> {
+    async executeInvocable(
+        payload: CloudFunctionInvocationPayload,
+        invocable: string
+    ): Promise<void> {
+        const payloadData: JSONable = JSON.parse(payload.stringifiedData);
         if (invocable === AwsLambdaInvocable.UpdateTgwAttachmentRouteTable) {
             // KNOWN ISSUE: Sep. 01, 2020. AWS takes over 10 minutes to stablize a VPN
             // creation where the time was usually approx. 3 mins. The Lambda function that
@@ -373,7 +380,7 @@ export class AwsFortiGateAutoscaleTgwLambdaInvocationHandler extends FortiGateAu
             // There's a switch to toggle such feature on and off: AwsAutoscaleFunctionExtendExecution
 
             // NOTE: The invocable must be designed to support for running in extended invocations.
-            await this.autoscale.handleTgwAttachmentRouteTable(payload).catch(e => {
+            await this.autoscale.handleTgwAttachmentRouteTable(payloadData).catch(e => {
                 const error: CloudFunctionInvocationTimeOutError = e;
                 error.extendExecution = true;
                 throw error;
@@ -406,12 +413,16 @@ export class AwsFortiGateAutoscaleFazIntegrationHandler extends FortiGateAutosca
         return this.autoscale.platform;
     }
 
-    async executeInvocable(payload: JSONable, invocable: string): Promise<void> {
+    async executeInvocable(
+        payload: CloudFunctionInvocationPayload,
+        invocable: string
+    ): Promise<void> {
+        const payloadData: JSONable = JSON.parse(payload.stringifiedData);
         if (invocable === AwsLambdaInvocable.TriggerFazDeviceAuth) {
             const deviceAuthorization: FazDeviceAuthorization = {
-                vmId: payload.vmId as string,
-                privateIp: payload.privateIp && String(payload.privateIp),
-                publicIp: payload.publicIp && String(payload.publicIp)
+                vmId: payloadData.vmId as string,
+                privateIp: payloadData.privateIp && String(payloadData.privateIp),
+                publicIp: payloadData.publicIp && String(payloadData.publicIp)
             };
             // verify the required Lambda function environment variables.
             if (

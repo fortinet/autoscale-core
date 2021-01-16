@@ -1,11 +1,11 @@
 /* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import AutoScaling from 'aws-sdk/clients/autoscaling';
+import { DocumentClient } from 'aws-sdk/clients/dynamodb';
 import EC2 from 'aws-sdk/clients/ec2';
 import ELBv2 from 'aws-sdk/clients/elbv2';
 import Lambda from 'aws-sdk/clients/lambda';
 import S3 from 'aws-sdk/clients/s3';
-import { DocumentClient } from 'aws-sdk/clients/dynamodb';
 import fs from 'fs';
 import { describe, it } from 'mocha';
 import path from 'path';
@@ -38,6 +38,9 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     private executionStartTime: number;
     constructor() {
         this.executionStartTime = Date.now();
+    }
+    getReqBody(): unknown {
+        return 'fake-body-as-string';
     }
     getRequestAsString(): string {
         return 'fake-req-as-string';

@@ -48,7 +48,10 @@ export abstract class FortiGateAutoscaleFunctionInvocationHandler
             );
 
             // verify the invocation key
-            if (!invocationSecretKey || invocationSecretKey !== invocationPayload.secretKey) {
+            if (
+                !invocationSecretKey ||
+                invocationSecretKey !== invocationPayload.invocationSecretKey
+            ) {
                 throw new Error('Invalid invocation payload: invocationSecretKey not matched');
             }
             const currentExecutionStartTime = Date.now(); // ms
@@ -75,9 +78,12 @@ export abstract class FortiGateAutoscaleFunctionInvocationHandler
                     // time taken in preceeding relevent invocations and time taken in
                     // current invocation.
                     // NOTE: this time is also in second.
+                    const executionTime: number =
+                        (!isNaN(invocationPayload.executionTime) &&
+                            invocationPayload.executionTime) ||
+                        0;
                     const totalExecutionTime =
-                        Math.floor((Date.now() - currentExecutionStartTime) / 1000) +
-                        invocationPayload.executionTime;
+                        Math.floor((Date.now() - currentExecutionStartTime) / 1000) + executionTime;
 
                     // if max execution time not reached, create a new invocation to continue
                     if (totalExecutionTime < maxExecutionTime) {
@@ -105,7 +111,7 @@ export abstract class FortiGateAutoscaleFunctionInvocationHandler
                         throw e;
                     }
                 } else {
-                    // not a AwsLambdaInvocableExecutionTimeOutError or not allow to extend execution.
+                    // not a CloudFunctionInvocationTimeOutError or not allow to extend execution.
                     throw e;
                 }
             }
