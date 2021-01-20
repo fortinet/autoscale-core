@@ -61,8 +61,8 @@ config vpn ipsec phase1-interface
     edit "tgw-vpn-1"
         set interface "port1"
         set local-gw "{@device.networkInterfaces#0.privateIpAddress}"
-        set dhgrp 2
-        set proposal aes128-sha1
+        set dhgrp 14
+        set proposal aes128-sha256
         set keylife 28800
         set net-device enable
         set remote-gw "{@vpn_connection.ipsec_tunnel.vpn_gateway.tunnel_outside_address.ip_address}"
@@ -77,8 +77,8 @@ end
 config vpn ipsec phase2-interface
     edit "tgw-vpn-1"
         set phase1name "tgw-vpn-1"
-        set proposal aes128-sha1
-        set dhgrp 2
+        set proposal aes128-sha256
+        set dhgrp 14
         set keylifeseconds 3600
     next
 end
@@ -123,8 +123,8 @@ config vpn ipsec phase1-interface
     edit "tgw-vpn-2"
         set interface "port1"
         set local-gw "{@device.networkInterfaces#0.privateIpAddress}"
-        set dhgrp 2
-        set proposal aes128-sha1
+        set dhgrp 14
+        set proposal aes128-sha256
         set keylife 28800
         set net-device enable
         set remote-gw "{@vpn_connection.ipsec_tunnel#1.vpn_gateway.tunnel_outside_address.ip_address}"
@@ -139,8 +139,8 @@ end
 config vpn ipsec phase2-interface
     edit "tgw-vpn-2"
         set phase1name "tgw-vpn-2"
-        set proposal aes128-sha1
-        set dhgrp 2
+        set proposal aes128-sha256
+        set dhgrp 14
         set keylifeseconds 3600
     next
 end
