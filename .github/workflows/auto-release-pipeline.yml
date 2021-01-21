@@ -176,7 +176,7 @@ jobs:
         if: >-
           ${{ needs.preparation.outputs.bump_version == 'true'}}
         run: |
-          npm version ${{ env.prerel_prefix }}${{ env.version_type }}${{ needs.preparation.outputs.prerel_arg }}${{ needs.preparation.outputs.pre_id }} --allow-same-version=false
+          npm version ${{ env.prerel_prefix }}${{ env.version_type }}${{ env.prerel_arg }}${{ needs.preparation.outputs.pre_id }} --allow-same-version=false
           echo "custom_version=$(git describe)" >> $GITHUB_ENV
       - id: push_changes
         name: Push new changes to repository
