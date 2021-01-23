@@ -8,6 +8,8 @@ import {
     CloudFunctionProxyAdapter,
     CloudFunctionResponseBody,
     LogLevel,
+    ReqHeaders,
+    ReqMethod,
     ReqType
 } from '../cloud-function-proxy';
 import {
@@ -159,12 +161,12 @@ class TestPlatformAdapter implements PlatformAdapter {
     loadLicenseFileContent(storageContainerName: string, filePath: string): Promise<string> {
         throw new Error('Method not implemented.');
     }
-    getReqAsString(): string {
-        return 'fake-req-as-string';
+    getReqAsString(): Promise<string> {
+        return Promise.resolve('fake-req-as-string');
     }
     createTime: number = Date.now();
-    getReqVmId(): string {
-        return 'fake-req-vm-id';
+    getReqVmId(): Promise<string> {
+        return Promise.resolve('fake-req-vm-id');
     }
     checkRequestIntegrity(): void {
         throw new Error('Method not implemented.');
@@ -214,8 +216,8 @@ class TestPlatformAdapter implements PlatformAdapter {
     getRequestType(): Promise<ReqType> {
         throw new Error('Method not implemented.');
     }
-    getReqHeartbeatInterval(): number {
-        return 30;
+    getReqHeartbeatInterval(): Promise<number> {
+        return Promise.resolve(30);
     }
     getSettings(): Promise<Settings> {
         throw new Error('Method not implemented.');
@@ -265,15 +267,15 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     constructor() {
         this.executionStartTime = Date.now();
     }
-    getReqBody(): unknown {
-        return 'fake-body-as-string';
+    getReqBody(): Promise<unknown> {
+        return Promise.resolve('fake-body-as-string');
     }
-    getRemainingExecutionTime(): number {
+    getRemainingExecutionTime(): Promise<number> {
         // set it to 60 seconds
-        return this.executionStartTime + 60000 - Date.now();
+        return Promise.resolve(this.executionStartTime + 60000 - Date.now());
     }
-    getRequestAsString(): string {
-        return 'fake-req-as-string';
+    getRequestAsString(): Promise<string> {
+        return Promise.resolve('fake-req-as-string');
     }
     formatResponse(httpStatusCode: number, body: CloudFunctionResponseBody, headers: {}): {} {
         throw new Error('Method not implemented.');
@@ -295,6 +297,12 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     }
     logForError(messagePrefix: string, error: Error): void {
         console.log(error);
+    }
+    getReqHeaders(): Promise<ReqHeaders> {
+        return Promise.resolve({});
+    }
+    getReqMethod(): Promise<ReqMethod> {
+        return Promise.resolve(null);
     }
 }
 

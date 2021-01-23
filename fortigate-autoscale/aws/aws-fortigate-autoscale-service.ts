@@ -78,12 +78,12 @@ export class AwsFortiGateAutoscaleCfnServiceProvider implements AutoscaleService
         this.proxy.logAsInfo('calling handleServiceRequest');
         try {
             const reqType: ReqType = await this.platform.getRequestType();
-            const serviceEventType: string = this.proxy.getReqBody().RequestType;
+            const serviceEventType: string = (await this.proxy.getReqBody()).RequestType;
             const serviceEvent: AwsFortiGateAutoscaleServiceEvent = {
                 ServiceType: undefined,
                 ServiceToken: undefined
             };
-            Object.assign(serviceEvent, this.proxy.getReqBody().ResourceProperties || {});
+            Object.assign(serviceEvent, (await this.proxy.getReqBody()).ResourceProperties || {});
             this.proxy.logAsInfo(
                 `RequestType: ${this.proxy.request.RequestType}, serviceType: ${serviceEvent.ServiceType}`
             );

@@ -18,7 +18,7 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         const targetVm = await this.platform.getTargetVm();
         let reqDetail: JSONable;
         try {
-            const req = JSON.parse(this.platform.getReqAsString());
+            const req = JSON.parse(await this.platform.getReqAsString());
             if (!req.detail) {
                 this.proxy.logAsError(`Request content: ${JSON.stringify(req)}`);
                 throw new Error("'detail' property not found on the request.");
@@ -133,7 +133,7 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         const targetVm = await this.platform.getTargetVm();
         let req: JSONable;
         try {
-            req = JSON.parse(this.platform.getReqAsString()) as JSONable;
+            req = JSON.parse(await this.platform.getReqAsString()) as JSONable;
         } catch (error) {
             this.proxy.logForError('Unable to convert request detail to JSON object.', error);
             throw new Error('Malformed request.');
@@ -193,7 +193,7 @@ export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
         } catch (error) {
             this.proxy.logForError('error in terminating vm', error);
             // abandon the lifecycle of this vm and let it enter termination
-            this.proxy.logAsWarning(`Abandoning this vm (id: ${this.platform.getReqVmId()})`);
+            this.proxy.logAsWarning(`Abandoning this vm (id: ${await this.platform.getReqVmId()})`);
             await this.platform.completeLifecycleAction(lifecycleItem, false);
             this.proxy.logAsInfo('called AwsHybridScalingGroupStrategy.onTerminatingVm');
             return Promise.resolve('');

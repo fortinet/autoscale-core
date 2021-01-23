@@ -285,15 +285,13 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
             return this.platform.getAwsTgwVpnAttachmentState(attachmentId);
         };
 
-        const checker: WaitForConditionChecker<AwsVpnAttachmentState> = (
+        const checker: WaitForConditionChecker<AwsVpnAttachmentState> = async (
             state: AwsVpnAttachmentState,
             callCount: number
         ) => {
+            const remainingTime = await this.proxy.getRemainingExecutionTime();
             // wait for nearly the end of Lambda Function execution timeout
-            if (
-                callCount * waitForInterval >
-                this.proxy.getRemainingExecutionTime() - timeBeforeRemainingExecution
-            ) {
+            if (callCount * waitForInterval > remainingTime - timeBeforeRemainingExecution) {
                 throw new CloudFunctionInvocationTimeOutError(
                     'Execution timeout. Maximum amount of waiting time:' +
                         ` ${(callCount * waitForInterval) / 1000} seconds, have been reached.`

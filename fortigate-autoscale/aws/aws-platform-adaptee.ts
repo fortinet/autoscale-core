@@ -149,7 +149,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         return (result.Item && table.convertRecord(result.Item)) || null;
     }
     /**
-     * Delte a given item from the db
+     * Delete a given item from the db
      * @param  {Table<T>} table the instance of Table to delete the item.
      * @param  {T} item the item to be deleted from the db table.
      * @param  {AwsDdbOperations} condition (optional) the condition expression for deleting the item

@@ -15,7 +15,9 @@ import { Settings } from '../../../autoscale-setting';
 import {
     CloudFunctionProxyAdapter,
     CloudFunctionResponseBody,
-    LogLevel
+    LogLevel,
+    ReqHeaders,
+    ReqMethod
 } from '../../../cloud-function-proxy';
 import { AwsFortiGateAutoscaleSetting } from '../../../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
 import { AwsPlatformAdaptee } from '../../../fortigate-autoscale/aws/aws-platform-adaptee';
@@ -39,11 +41,11 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     constructor() {
         this.executionStartTime = Date.now();
     }
-    getReqBody(): unknown {
-        return 'fake-body-as-string';
+    getReqBody(): Promise<unknown> {
+        return Promise.resolve('fake-body-as-string');
     }
-    getRequestAsString(): string {
-        return 'fake-req-as-string';
+    getRequestAsString(): Promise<string> {
+        return Promise.resolve('fake-req-as-string');
     }
     formatResponse(httpStatusCode: number, body: CloudFunctionResponseBody, headers: {}): {} {
         throw new Error('Method not implemented.');
@@ -66,9 +68,15 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     logForError(messagePrefix: string, error: Error): void {
         console.log(error);
     }
-    getRemainingExecutionTime(): number {
+    getRemainingExecutionTime(): Promise<number> {
         // set it to 60 seconds
-        return this.executionStartTime + 60000 - Date.now();
+        return Promise.resolve(this.executionStartTime + 60000 - Date.now());
+    }
+    getReqHeaders(): Promise<ReqHeaders> {
+        throw new Error('Method not implemented.');
+    }
+    getReqMethod(): Promise<ReqMethod> {
+        throw new Error('Method not implemented.');
     }
 }
 
@@ -378,7 +386,7 @@ describe('AWS api test', () => {
         // NOTE: test
         callCount = mockAutoscaling.getStub('describeAutoScalingGroups').callCount;
         const stub0 = Sinon.stub(awsPlatformAdapter, 'getReqVmId').callsFake(() => {
-            return instanceId;
+            return Promise.resolve(instanceId);
         });
         await awsPlatformAdapter.getTargetVm();
         Sinon.assert.match(

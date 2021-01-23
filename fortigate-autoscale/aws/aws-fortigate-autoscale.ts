@@ -271,9 +271,10 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         const emitter: WaitForPromiseEmitter<Map<string, ScalingGroupState>> = () => {
             return this.platform.checkScalingGroupState(groupNames);
         };
-        const checker: WaitForConditionChecker<Map<string, ScalingGroupState>> = stateMap => {
-            this.proxy.logAsInfo(`Remaining time: ${this.proxy.getRemainingExecutionTime()}.`);
-            if (this.proxy.getRemainingExecutionTime() < 30000) {
+        const checker: WaitForConditionChecker<Map<string, ScalingGroupState>> = async stateMap => {
+            const remainingTime = await this.proxy.getRemainingExecutionTime();
+            this.proxy.logAsInfo(`Remaining time: ${remainingTime}.`);
+            if (remainingTime < 30000) {
                 throw new Error(
                     'Unable to complete because function execution is timing out in 30 seconds.'
                 );
@@ -281,7 +282,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
             const runningGroups = Array.from(stateMap.values()).filter(
                 state => state !== ScalingGroupState.Stopped
             );
-            return Promise.resolve(runningGroups.length === 0);
+            return runningGroups.length === 0;
         };
         // update each group and set cap and min size to 0 in order to fully stop the auto scaling group.
         await Promise.all(

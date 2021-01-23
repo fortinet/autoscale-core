@@ -43,13 +43,13 @@ export class AwsFortiGateAutoscaleFazIntegrationServiceProvider
         try {
             const reqType: ReqType = await this.platform.getRequestType();
             // NOTE: source now supports 'fortinet.autoscale' only
-            const source: AwsFazAuthorizationEventSource = this.proxy.getReqBody().source;
+            const source: AwsFazAuthorizationEventSource = (await this.proxy.getReqBody()).source;
             // NOTE: detail must be type: FazAuthorizationServiceDetail
             const serviceDetail: AwsFazAuthorizationServiceDetail = {
                 ServiceType: undefined,
                 ServiceToken: undefined
             };
-            Object.assign(serviceDetail, this.proxy.getReqBody().detail || {});
+            Object.assign(serviceDetail, (await this.proxy.getReqBody()).detail || {});
             if (serviceDetail.ServiceToken !== this.proxy.context.invokedFunctionArn) {
                 throw new Error(`Invalid ServiceToken: ${serviceDetail.ServiceToken}.`);
             }

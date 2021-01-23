@@ -6,11 +6,11 @@ import {
     ScheduledEvent
 } from 'aws-lambda';
 
-import { mapHttpMethod } from '../../autoscale-core';
 import {
     CloudFunctionProxy,
     CloudFunctionResponseBody,
     LogLevel,
+    mapHttpMethod,
     ReqBody,
     ReqHeaders,
     ReqMethod
@@ -61,14 +61,21 @@ export class AwsScheduledEventProxy extends CloudFunctionProxy<
     ): { [key: string]: unknown } {
         return {};
     }
-    getReqBody(): ScheduledEvent {
-        return this.request;
+    getReqBody(): Promise<ScheduledEvent> {
+        return Promise.resolve(this.request);
     }
-    getRequestAsString(): string {
-        return JSON.stringify(this.request);
+    getRequestAsString(): Promise<string> {
+        return Promise.resolve(JSON.stringify(this.request));
     }
-    getRemainingExecutionTime(): number {
-        return this.context.getRemainingTimeInMillis();
+    getRemainingExecutionTime(): Promise<number> {
+        return Promise.resolve(this.context.getRemainingTimeInMillis());
+    }
+
+    getReqHeaders(): Promise<ReqHeaders> {
+        return Promise.resolve({});
+    }
+    getReqMethod(): Promise<ReqMethod> {
+        return Promise.resolve(null);
     }
 }
 
@@ -124,25 +131,25 @@ export class AwsApiGatewayEventProxy extends CloudFunctionProxy<
             isBase64Encoded: false
         };
     }
-    getRequestAsString(): string {
-        return JSON.stringify(this.request);
+    getRequestAsString(): Promise<string> {
+        return Promise.resolve(JSON.stringify(this.request));
     }
-    getReqBody(): ReqBody {
+    getReqBody(): Promise<ReqBody> {
         let body: ReqBody;
         try {
             body = (this.request.body && JSON.parse(this.request.body)) || {};
         } catch (error) {}
-        return body;
+        return Promise.resolve(body || {});
     }
-    getReqHeaders(): ReqHeaders {
+    getReqHeaders(): Promise<ReqHeaders> {
         const headers: ReqHeaders = { ...this.request.headers };
-        return headers;
+        return Promise.resolve(headers);
     }
-    getReqMethod(): ReqMethod {
-        return mapHttpMethod(this.request.httpMethod);
+    getReqMethod(): Promise<ReqMethod> {
+        return Promise.resolve(mapHttpMethod(this.request.httpMethod));
     }
-    getRemainingExecutionTime(): number {
-        return this.context.getRemainingTimeInMillis();
+    getRemainingExecutionTime(): Promise<number> {
+        return Promise.resolve(this.context.getRemainingTimeInMillis());
     }
 }
 
@@ -203,11 +210,11 @@ export class AwsCloudFormationCustomResourceEventProxy extends CloudFunctionProx
     ): AwsCloudFormationCustomResourceEventResponse {
         throw new Error('Not supposed to call the formatResponse method in this implementation.');
     }
-    getReqBody(): CloudFormationCustomResourceEvent {
-        return this.request;
+    getReqBody(): Promise<CloudFormationCustomResourceEvent> {
+        return Promise.resolve(this.request);
     }
-    getRequestAsString(): string {
-        return JSON.stringify(this.request);
+    getRequestAsString(): Promise<string> {
+        return Promise.resolve(JSON.stringify(this.request));
     }
 
     async sendResponse(successful?: boolean, data?: JSONable): Promise<void> {
@@ -219,8 +226,15 @@ export class AwsCloudFormationCustomResourceEventProxy extends CloudFunctionProx
             data || {}
         );
     }
-    getRemainingExecutionTime(): number {
-        return this.context.getRemainingTimeInMillis();
+    getRemainingExecutionTime(): Promise<number> {
+        return Promise.resolve(this.context.getRemainingTimeInMillis());
+    }
+
+    getReqHeaders(): Promise<ReqHeaders> {
+        return Promise.resolve({});
+    }
+    getReqMethod(): Promise<ReqMethod> {
+        return Promise.resolve(null);
     }
 }
 
@@ -270,25 +284,32 @@ export class AwsLambdaInvocationProxy extends CloudFunctionProxy<JSONable, Conte
         throw new Error('Not supposed to call the formatResponse method in this implementation.');
     }
 
-    getReqBody(): JSONable {
+    getReqBody(): Promise<JSONable> {
         try {
             if (typeof this.request === 'string') {
                 return JSON.parse(this.request as string);
             } else if (typeof this.request === 'object') {
-                return this.request;
+                return Promise.resolve(this.request);
             } else {
-                return null;
+                return Promise.resolve({});
             }
         } catch (error) {
-            return null;
+            return Promise.resolve({});
         }
     }
 
-    getRequestAsString(): string {
-        return JSON.stringify(this.request);
+    getRequestAsString(): Promise<string> {
+        return Promise.resolve(JSON.stringify(this.request));
     }
 
-    getRemainingExecutionTime(): number {
-        return this.context.getRemainingTimeInMillis();
+    getRemainingExecutionTime(): Promise<number> {
+        return Promise.resolve(this.context.getRemainingTimeInMillis());
+    }
+
+    getReqHeaders(): Promise<ReqHeaders> {
+        return Promise.resolve({});
+    }
+    getReqMethod(): Promise<ReqMethod> {
+        return Promise.resolve(null);
     }
 }

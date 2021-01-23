@@ -34,7 +34,7 @@ export abstract class FortiGateAutoscaleFunctionInvocationHandler
                 return;
             }
             // get the invocation payload
-            const invocationPayload: CloudFunctionInvocationPayload = this.proxy.getReqBody() as CloudFunctionInvocationPayload;
+            const invocationPayload: CloudFunctionInvocationPayload = (await this.proxy.getReqBody()) as CloudFunctionInvocationPayload;
             if (!invocationPayload) {
                 throw new Error('Invalid request body.');
             }

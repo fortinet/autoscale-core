@@ -2,7 +2,7 @@ import path from 'path';
 
 import { AutoscaleEnvironment } from './autoscale-environment';
 import { AutoscaleSetting, SettingItemDictionary, Settings } from './autoscale-setting';
-import { CloudFunctionProxy, CloudFunctionProxyAdapter, ReqMethod } from './cloud-function-proxy';
+import { CloudFunctionProxy, CloudFunctionProxyAdapter } from './cloud-function-proxy';
 import {
     AutoscaleContext,
     HeartbeatSyncStrategy,
@@ -36,22 +36,6 @@ export class HttpError extends Error {
         super(message);
         this.name = 'HttpError';
     }
-}
-
-const reqMethod: Map<string, ReqMethod> = new Map([
-    ['GET', ReqMethod.GET],
-    ['POST', ReqMethod.POST],
-    ['PUT', ReqMethod.PUT],
-    ['DELETE', ReqMethod.DELETE],
-    ['PATCH', ReqMethod.PATCH],
-    ['HEAD', ReqMethod.HEAD],
-    ['TRACE', ReqMethod.TRACE],
-    ['OPTIONS', ReqMethod.OPTIONS],
-    ['CONNECT', ReqMethod.CONNECT]
-]);
-
-export function mapHttpMethod(s: string): ReqMethod {
-    return s && reqMethod.get(s.toUpperCase());
 }
 
 export interface PlatformAdaptee {

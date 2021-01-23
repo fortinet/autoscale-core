@@ -1,8 +1,4 @@
 import EC2 from 'aws-sdk/clients/ec2';
-import {
-    CloudFunctionInvocationPayload,
-    constructInvocationPayload
-} from 'cloud-function-peer-invocation';
 import path from 'path';
 
 import { Settings } from '../../autoscale-setting';
@@ -133,11 +129,11 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called deleteVmFromScalingGroup');
     }
 
-    getRequestType(): Promise<ReqType> {
+    async getRequestType(): Promise<ReqType> {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {
-            const reqMethod = this.proxy.getReqMethod();
+            const reqMethod = await this.proxy.getReqMethod();
             if (reqMethod === ReqMethod.GET) {
-                const headers = this.proxy.getReqHeaders();
+                const headers = await this.proxy.getReqHeaders();
                 if (headers['Fos-instance-id'] === null) {
                     throw new Error(
                         'Invalid request. Fos-instance-id is missing in [GET] request header.'
@@ -146,7 +142,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     return Promise.resolve(ReqType.BootstrapConfig);
                 }
             } else if (reqMethod === ReqMethod.POST) {
-                const body = this.proxy.getReqBody();
+                const body = await this.proxy.getReqBody();
                 if (body.status) {
                     return Promise.resolve(ReqType.StatusMessage);
                 } else if (body.instance) {
@@ -161,7 +157,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 throw new Error(`Unsupported request method: ${reqMethod}`);
             }
         } else if (this.proxy instanceof AwsScheduledEventProxy) {
-            const body = this.proxy.getReqBody();
+            const body = await this.proxy.getReqBody();
             if (body.source === 'aws.autoscaling') {
                 if (String(body['detail-type']) === 'EC2 Instance-launch Lifecycle Action') {
                     return Promise.resolve(ReqType.LaunchingVm);
@@ -188,7 +184,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             }
             throw new Error(`Unknown supported source: [${body.source}]`);
         } else if (this.proxy instanceof AwsCloudFormationCustomResourceEventProxy) {
-            const body = this.proxy.getReqBody();
+            const body = await this.proxy.getReqBody();
             const arn = this.proxy.context.invokedFunctionArn;
             // NOTE: only accept requests to the specific service handler Lambda function.
             // validate requests by comparing the service token against the lambda function arn.
@@ -236,42 +232,42 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         return item.settingKey;
     }
 
-    getReqVmId(): string {
+    async getReqVmId(): Promise<string> {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {
-            const reqMethod = this.proxy.getReqMethod();
+            const reqMethod = await this.proxy.getReqMethod();
             if (reqMethod === ReqMethod.GET) {
-                const headers = this.proxy.getReqHeaders();
-                return headers['Fos-instance-id'] as string;
+                const headers = await this.proxy.getReqHeaders();
+                return Promise.resolve(headers['Fos-instance-id'] as string);
             } else if (reqMethod === ReqMethod.POST) {
-                const body = this.proxy.getReqBody();
-                return body.instance as string;
+                const body = await this.proxy.getReqBody();
+                return Promise.resolve(body.instance as string);
             } else {
-                throw new Error(`Cannot get vm id in unknown request method: ${reqMethod}`);
+                throw new Error(`Cannot get vm id in unsupported request method: ${reqMethod}`);
             }
         } else if (this.proxy instanceof AwsScheduledEventProxy) {
-            const body = this.proxy.getReqBody();
+            const body = await this.proxy.getReqBody();
             if (body.source === 'aws.autoscaling') {
-                return body.detail.EC2InstanceId;
+                return Promise.resolve(body.detail.EC2InstanceId);
             } else {
-                throw new Error(`Cannot get vm id in unknown request: ${JSON.stringify(body)}`);
+                throw new Error(`Cannot get vm id in unsupported request: ${JSON.stringify(body)}`);
             }
         } else {
-            throw new Error('Cannot get vm id in unknown request.');
+            throw new Error('Cannot get vm id in unsupported request.');
         }
     }
-    getReqHeartbeatInterval(): number {
+    async getReqHeartbeatInterval(): Promise<number> {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {
-            const body = this.proxy.getReqBody();
+            const body = await this.proxy.getReqBody();
             return (body.interval && Number(body.interval)) || NaN;
         } else {
             return NaN;
         }
     }
-    getReqAsString(): string {
+    getReqAsString(): Promise<string> {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {
-            return JSON.stringify(this.proxy.request);
+            return Promise.resolve(JSON.stringify(this.proxy.request));
         } else if (this.proxy instanceof AwsScheduledEventProxy) {
-            return JSON.stringify(this.proxy.request);
+            return Promise.resolve(JSON.stringify(this.proxy.request));
         } else {
             throw new Error('Unknown request.');
         }
@@ -348,7 +344,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
 
     async getTargetVm(): Promise<VirtualMachine> {
         this.proxy.logAsInfo('calling getTargetVm');
-        const instance = await this.adaptee.describeInstance(this.getReqVmId());
+        const instance = await this.adaptee.describeInstance(await this.getReqVmId());
         let vm: VirtualMachine;
         if (instance) {
             const byolGroupName = this.settings.get(

@@ -8,7 +8,9 @@ export enum LogLevel {
 
 export enum ReqType {
     BootstrapConfig = 'BootstrapConfig',
+    ByolLicense = 'ByolLicense',
     CloudFunctionPeerInvocation = 'PeerFunctionInvocation',
+    CustomLog = 'CustomLog',
     HeartbeatSync = 'HeartbeatSync',
     LaunchedVm = 'LaunchedVm',
     LaunchingVm = 'LaunchingVm',
@@ -29,6 +31,22 @@ export enum ReqMethod {
     TRACE,
     OPTIONS,
     CONNECT
+}
+
+const reqMethod: Map<string, ReqMethod> = new Map([
+    ['GET', ReqMethod.GET],
+    ['POST', ReqMethod.POST],
+    ['PUT', ReqMethod.PUT],
+    ['DELETE', ReqMethod.DELETE],
+    ['PATCH', ReqMethod.PATCH],
+    ['HEAD', ReqMethod.HEAD],
+    ['TRACE', ReqMethod.TRACE],
+    ['OPTIONS', ReqMethod.OPTIONS],
+    ['CONNECT', ReqMethod.CONNECT]
+]);
+
+export function mapHttpMethod(s: string): ReqMethod {
+    return s && reqMethod.get(s.toUpperCase());
 }
 
 export interface ReqBody {
@@ -62,15 +80,17 @@ export interface CloudFunctionProxyAdapter {
      * @memberof CloudFunctionProxyAdapter
      */
     logForError(messagePrefix: string, error: Error): void;
-    getRequestAsString(): string;
+    getRequestAsString(): Promise<string>;
     /**
      * return the remaining execution time (in millisecond) of the current cloud function process.
      *
      * @returns {number}
      * @memberof CloudFunctionProxyAdapter
      */
-    getRemainingExecutionTime(): number;
-    getReqBody(): unknown;
+    getRemainingExecutionTime(): Promise<number>;
+    getReqBody(): Promise<unknown>;
+    getReqHeaders(): Promise<ReqHeaders>;
+    getReqMethod(): Promise<ReqMethod>;
 }
 
 export abstract class CloudFunctionProxy<TReq, TContext, TRes>
@@ -105,7 +125,9 @@ export abstract class CloudFunctionProxy<TReq, TContext, TRes>
         body: CloudFunctionResponseBody,
         headers: {}
     ): TRes;
-    abstract getRequestAsString(): string;
-    abstract getRemainingExecutionTime(): number;
-    abstract getReqBody(): unknown;
+    abstract getRequestAsString(): Promise<string>;
+    abstract getRemainingExecutionTime(): Promise<number>;
+    abstract getReqBody(): Promise<unknown>;
+    abstract getReqHeaders(): Promise<ReqHeaders>;
+    abstract getReqMethod(): Promise<ReqMethod>;
 }

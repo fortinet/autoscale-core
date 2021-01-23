@@ -65,9 +65,9 @@ export interface PlatformAdapter {
      * heartbeat interval in the request in ms.
      * @returns number interval in ms
      */
-    getReqHeartbeatInterval(): number;
-    getReqVmId(): string;
-    getReqAsString(): string;
+    getReqHeartbeatInterval(): Promise<number>;
+    getReqVmId(): Promise<string>;
+    getReqAsString(): Promise<string>;
     getSettings(): Promise<Settings>;
     /**
      * validate settings by checking the integrity of each required setting item. Ensure that they
