@@ -8,6 +8,7 @@ export * from './autoscale-environment';
 export * from './autoscale-setting';
 export * from './cloud-function-proxy';
 export * from './primary-election';
+export * from './platform-adaptee';
 export * from './platform-adapter';
 export * from './virtual-machine';
 export * from './fortigate-autoscale';

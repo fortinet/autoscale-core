@@ -17,7 +17,7 @@ import fs from 'fs';
 import { isIPv4 } from 'net';
 import path from 'path';
 
-import { PlatformAdaptee } from '../../autoscale-core';
+import { PlatformAdaptee } from '../../platform-adaptee';
 import { SettingItem, Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
 import { CreateOrUpdate, KeyValue, SettingsDbItem, Table } from '../../db-definitions';
