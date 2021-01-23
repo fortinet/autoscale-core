@@ -190,7 +190,7 @@
         },
         {
             "settingValue": {
-                "S": "https://j3si9drpz5.execute-api.ap-south-1.amazonaws.com/prod/fgt-asg-handler"
+                "S": "https://j3si9drpz5.execute-api.ap-south-1.amazonaws.com/prod/fgt-as-handler"
             },
             "settingKey": {
                 "S": "autoscale-handler-url"
