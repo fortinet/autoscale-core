@@ -144,7 +144,7 @@ export abstract class FortiGateBootstrapConfigStrategy implements BootstrapConfi
                     .loadConfigSet(name, customLocation)
                     .then(content => {
                         this.alreadyLoaded.push(name);
-                        return content;
+                        return `${content}\n`;
                     })
                     .catch(() => {
                         errorCount++;
@@ -213,19 +213,19 @@ export abstract class FortiGateBootstrapConfigStrategy implements BootstrapConfi
         // configset for the second nic
         // must be loaded prior to the base config
         if (this.settings.get(FortiGateAutoscaleSetting.EnableNic2).truthValue) {
-            baseConfig += await this.loadPort2();
+            baseConfig += `${await this.loadPort2()}\n`;
         }
-        baseConfig += await this.loadBase(); // always load base config
+        baseConfig += `${await this.loadBase()}\n`; // always load base config
 
         // check if internal elb integration is enabled in the settings
         // then load the corresponding config set
         if (this.settings.get(FortiGateAutoscaleSetting.EnableInternalElb).truthValue) {
-            baseConfig += await this.loadInternalElbWeb();
+            baseConfig += `${await this.loadInternalElbWeb()}\n`;
         }
         // check if faz integration is enabled in the settings
         // then load the corresponding config set
         if (this.settings.get(FortiGateAutoscaleSetting.EnableFazIntegration).truthValue) {
-            baseConfig += await this.loadFazIntegration();
+            baseConfig += `${await this.loadFazIntegration()}\n`;
         }
         // check if any other additional configsets is required
         // the name list is string of a comma-separated name list, and can be splitted into
@@ -249,7 +249,7 @@ export abstract class FortiGateBootstrapConfigStrategy implements BootstrapConfi
 
         // finally, try to include every configset stored in the user custom location
         // NOTE: user custom configsets should be processed last
-        baseConfig += await this.loadUserCustom();
+        baseConfig += `${await this.loadUserCustom()}\n`;
 
         return baseConfig;
     }
