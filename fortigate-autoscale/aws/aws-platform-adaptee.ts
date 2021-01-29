@@ -20,7 +20,7 @@ import path from 'path';
 import { PlatformAdaptee } from '../../platform-adaptee';
 import { SettingItem, Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
-import { CreateOrUpdate, KeyValue, SettingsDbItem, Table } from '../../db-definitions';
+import { SaveCondition, KeyValue, SettingsDbItem, Table } from '../../db-definitions';
 import { ResourceFilter } from '../../platform-adapter';
 import * as AwsDBDef from './aws-db-definitions';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
@@ -81,11 +81,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
     ): Promise<void> {
         // CAUTION: validate the db input
         table.validateInput<T>(item);
-        if (
-            conditionExp &&
-            conditionExp.type &&
-            conditionExp.type === CreateOrUpdate.UpdateExisting
-        ) {
+        if (conditionExp && conditionExp.type && conditionExp.type === SaveCondition.UpdateOnly) {
             const keys: DocumentClient.Key = {};
             // get the key names from table,
             // then assign the value of each key name of item to the key

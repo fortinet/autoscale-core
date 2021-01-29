@@ -1,8 +1,28 @@
 export enum VirtualMachineState {
+    // NOTE: transitioning state. in provisioning, not attached to the host, not receiving traffic.
+    Creating = 'Creating',
+    // NOTE: standby but stopped instead of running.
+    Deallocated = 'Deallocated',
+    // NOTE: a general state for all transitioning states.
     Pending = 'Pending',
+    // NOTE: running, attached to the host, receiving traffic, not deleted.
     Running = 'Running',
+    // NOTE: running, detached from the host, not receiving traffic, not deleted.
+    Standby = 'Standby',
+    // NOTE: transitioning state. starting or restarting, may or may not attach to the host, not receiving traffic, not deleted.
+    Starting = 'Starting',
+    // NOTE: powered off, may or may not attach to the host, not receiving traffic, not deleted.
     Stopped = 'Stopped',
-    Terminated = 'Terminated'
+    // NOTE: transitioning state. stopping, may or may not attach to the host, not receiving traffic, not deleted.
+    Stopping = 'Stopping',
+    // NOTE: powered off, detached from the host, not receiving traffic, deleted.
+    Terminated = 'Terminated',
+    // NOTE: transitioning state. in deleting, not attached to the host, not receiving traffic.
+    Terminating = 'Terminating',
+    // NOTE: transitioning state. standby but in the process of updating the model.
+    Updating = 'Updating',
+    // NOTE: a general state for any reason not set the state yet so it remains unkown.
+    Unknown = 'Unknown'
 }
 export interface VirtualMachine {
     id: string;

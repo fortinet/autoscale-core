@@ -385,7 +385,11 @@ export const AutoscaleSettingItemDictionary: SettingItemDictionary = {
     },
     [AutoscaleSetting.ResourceTagPrefix]: {
         keyName: AutoscaleSetting.ResourceTagPrefix,
-        description: 'Resource tag prefix.',
+        description:
+            'Resource tag prefix. Used on any resource that supports tagging or labeling.' +
+            ' Such resource will be given a tag or label starting with this prefix.' +
+            ' Also used as the name of the logical group for Autoscale resources' +
+            ' in those cloud platforms which support such logical grouping.',
         editable: true,
         jsonEncoded: false,
         booleanType: false

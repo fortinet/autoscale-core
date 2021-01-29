@@ -28,6 +28,10 @@
     "author": "Fortinet <github@fortinet.com>",
     "license": "MIT",
     "devDependencies": {
+        "@azure/arm-resources": "^4.0.0",
+        "@azure/functions": "^1.2.2",
+        "@azure/ms-rest-js": "^2.1.0",
+        "@azure/ms-rest-nodeauth": "^3.0.6",
         "@types/mocha": "^7.0.2",
         "@typescript-eslint/eslint-plugin": "^2.24.0",
         "@typescript-eslint/parser": "^2.24.0",
@@ -54,6 +58,12 @@
         "webpack-cli": "^3.3.11"
     },
     "dependencies": {
+        "@azure/arm-compute": "^15.0.0",
+        "@azure/arm-network": "^23.2.0",
+        "@azure/cosmos": "^3.9.5",
+        "@azure/identity": "^1.2.2",
+        "@azure/keyvault-secrets": "^4.1.0",
+        "@azure/storage-blob": "^12.4.0",
         "@types/archiver": "^3.1.0",
         "@types/aws-lambda": "^8.10.46",
         "@types/comment-json": "^1.1.1",

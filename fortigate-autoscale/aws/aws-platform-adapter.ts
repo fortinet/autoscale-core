@@ -11,7 +11,7 @@ import { CloudFunctionProxyAdapter, ReqMethod, ReqType } from '../../cloud-funct
 import { NicAttachmentRecord } from '../../context-strategy/nic-attachment-context';
 import {
     AutoscaleDbItem,
-    CreateOrUpdate,
+    SaveCondition,
     FortiAnalyzerDbItem,
     KeyValue,
     LicenseStockDbItem,
@@ -61,7 +61,7 @@ export const TAG_KEY_AUTOSCALE_ROLE = 'AutoscaleRole';
 export interface AwsDdbOperations {
     Expression: string;
     ExpressionAttributeValues?: { [key: string]: string | number | boolean };
-    type?: CreateOrUpdate;
+    type?: SaveCondition;
 }
 
 export enum LifecycleActionResult {
@@ -226,7 +226,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: CreateOrUpdate.CreateOrReplace
+            type: SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<SettingsDbItem>(table, item, conditionExp);
         return item.settingKey;
@@ -589,7 +589,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: CreateOrUpdate.CreateOrReplace
+            type: SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<AutoscaleDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called createHealthCheckRecord');
@@ -618,7 +618,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: CreateOrUpdate.UpdateExisting
+            type: SaveCondition.UpdateOnly
         };
         await this.adaptee.saveItemToDb<AutoscaleDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called updateHealthCheckRecord');
@@ -644,7 +644,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             // if it exists but timeout
             const conditionExp: AwsDdbOperations = {
                 Expression: 'attribute_not_exists(scalingGroupName)',
-                type: CreateOrUpdate.CreateOrReplace
+                type: SaveCondition.InsertOnly
             };
             // if specified an old rec to purge, use a strict conditional expression to replace.
             if (oldRec) {
@@ -857,12 +857,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 // recrod exisit, update it
                 if (items.has(record.checksum)) {
                     stockRecordChecksums.splice(stockRecordChecksums.indexOf(record.checksum), 1);
-                    conditionExp.type = CreateOrUpdate.UpdateExisting;
+                    conditionExp.type = SaveCondition.UpdateOnly;
                     typeText =
                         `update existing item (filename: ${record.fileName},` +
                         ` checksum: ${record.checksum})`;
                 } else {
-                    conditionExp.type = CreateOrUpdate.CreateOrReplace;
+                    conditionExp.type = SaveCondition.Upsert;
                     typeText =
                         `create new item (filename: ${record.fileName},` +
                         ` checksum: ${record.checksum})`;
@@ -941,7 +941,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                         errorCount++;
                         return Promise.resolve();
                     }
-                    conditionExp.type = CreateOrUpdate.UpdateExisting;
+                    conditionExp.type = SaveCondition.UpdateOnly;
                     // the conditional expression ensures the consistency of the DB system (ACID)
                     conditionExp.Expression =
                         'attribute_exists(checksum) AND vmId = :vmId' +
@@ -979,7 +979,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 }
                 // create if record not exists
                 else {
-                    conditionExp.type = CreateOrUpdate.CreateOrReplace;
+                    conditionExp.type = SaveCondition.Upsert;
                     // the conditional expression ensures the consistency of the DB system (ACID)
                     conditionExp.Expression = 'attribute_not_exists(checksum)';
                     typeText =
@@ -1047,7 +1047,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             };
             const conditionExp: AwsDdbOperations = {
                 Expression: '',
-                type: CreateOrUpdate.CreateOrReplace
+                type: SaveCondition.Upsert
             };
             await this.adaptee.saveItemToDb<NicAttachmentDbItem>(table, item, conditionExp);
         } catch (error) {
@@ -1345,7 +1345,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: CreateOrUpdate.CreateOrReplace
+            type: SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<LifecycleItemDbItem>(table, dbItem, conditionExp);
         this.proxy.logAsInfo('called createLifecycleItem');
@@ -1368,7 +1368,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: CreateOrUpdate.UpdateExisting
+            type: SaveCondition.UpdateOnly
         };
         await this.adaptee.saveItemToDb<LifecycleItemDbItem>(table, dbItem, conditionExp);
         this.proxy.logAsInfo('called updateLifecycleItem');
@@ -1576,7 +1576,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: CreateOrUpdate.CreateOrReplace
+            type: SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<VpnAttachmentDbItem>(table, dbItem, conditionExp);
         this.proxy.logAsInfo('called saveTgwVpnAttachmentRecord');
@@ -1893,7 +1893,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: CreateOrUpdate.CreateOrReplace
+            type: SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<FortiAnalyzerDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called registerFortiAnalyzer');

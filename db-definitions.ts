@@ -25,13 +25,26 @@ export enum TypeRef {
 }
 
 export interface Record {
-    [key: string]: unknown;
+    [key: string]: string | number | boolean;
 }
 
-export enum CreateOrUpdate {
-    unknown,
-    CreateOrReplace,
-    UpdateExisting
+/**
+ * DB save data condition
+ * @enum {string}
+ */
+export enum SaveCondition {
+    /**
+     * @member {string} InsertOnly strictly insert only if not exists
+     */
+    InsertOnly = 'InsertOnly',
+    /**
+     * @member {string} UpdateOnly strictly update only if exists
+     */
+    UpdateOnly = 'UpdateOnly',
+    /**
+     * @member {string} Upsert insert if not exists or update if exists
+     */
+    Upsert = 'UpdateOnly'
 }
 
 /**
@@ -67,6 +80,40 @@ export abstract class TypeConverter {
      */
     abstract valueToBoolean(value: unknown): boolean;
 }
+
+export interface BidirectionalCastable<PARENT, CHILD> {
+    /**
+     * a downcast converts a db record from a parent structure to a child structure by altering
+     * its properties.
+     * @param  {PARENT} record the record using PARENT interface
+     * @returns {CHILD} a record using CHILD interface
+     */
+    downcast(record: PARENT): CHILD;
+    /**
+     * an upcast converts a db record from a child structure to a parent structure by altering
+     * its properties.
+     * @param  {CHILD} record the record using CHILD interface
+     * @returns {PARENT} a record using PARENT interface
+     */
+    upcast(record: CHILD): PARENT;
+}
+
+export class DbError extends Error {
+    constructor(readonly code: string, message: string) {
+        super(message);
+    }
+}
+
+export enum DbErrorCode {
+    NotFound = 'NotFound',
+    KeyConflict = 'KeyConflict',
+    InconsistentData = 'InconsistentData',
+    UnexpectedResponse = 'UnexpectedResponse'
+}
+
+export class DbReadError extends DbError {}
+export class DbSaveError extends DbError {}
+export class DbDeleteError extends DbError {}
 
 export abstract class Table<T> {
     static TypeRefMap: Map<TypeRef, string> = new Map<TypeRef, string>([
@@ -239,7 +286,7 @@ export abstract class Table<T> {
         }
     }
 }
-export interface AutoscaleDbItem {
+export interface AutoscaleDbItem extends Record {
     vmId: string;
     scalingGroupName: string;
     ip: string;
@@ -251,7 +298,7 @@ export interface AutoscaleDbItem {
     seq: number;
 }
 
-export abstract class Autoscale extends Table<AutoscaleDbItem> {
+export class Autoscale extends Table<AutoscaleDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'vmId',
@@ -323,7 +370,7 @@ export abstract class Autoscale extends Table<AutoscaleDbItem> {
         return item;
     }
 }
-export interface PrimaryElectionDbItem {
+export interface PrimaryElectionDbItem extends Record {
     scalingGroupName: string;
     vmId: string;
     id: string;
@@ -333,7 +380,7 @@ export interface PrimaryElectionDbItem {
     voteEndTime: number;
     voteState: string;
 }
-export abstract class PrimaryElection extends Table<PrimaryElectionDbItem> {
+export class PrimaryElection extends Table<PrimaryElectionDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'scalingGroupName',
@@ -399,14 +446,14 @@ export abstract class PrimaryElection extends Table<PrimaryElectionDbItem> {
         return item;
     }
 }
-export interface FortiAnalyzerDbItem {
+export interface FortiAnalyzerDbItem extends Record {
     vmId: string;
     ip: string;
     primary: boolean;
     vip: string;
 }
 
-export abstract class FortiAnalyzer extends Table<FortiAnalyzerDbItem> {
+export class FortiAnalyzer extends Table<FortiAnalyzerDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'vmId',
@@ -448,14 +495,14 @@ export abstract class FortiAnalyzer extends Table<FortiAnalyzerDbItem> {
         return item;
     }
 }
-export interface SettingsDbItem {
+export interface SettingsDbItem extends Record {
     settingKey: string;
     settingValue: string;
     description: string;
     jsonEncoded: boolean;
     editable: boolean;
 }
-export abstract class Settings extends Table<SettingsDbItem> {
+export class Settings extends Table<SettingsDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'settingKey',
@@ -503,12 +550,12 @@ export abstract class Settings extends Table<SettingsDbItem> {
         return item;
     }
 }
-export interface NicAttachmentDbItem {
+export interface NicAttachmentDbItem extends Record {
     vmId: string;
     nicId: string;
     attachmentState: string;
 }
-export abstract class NicAttachment extends Table<NicAttachmentDbItem> {
+export class NicAttachment extends Table<NicAttachmentDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'vmId',
@@ -545,7 +592,7 @@ export abstract class NicAttachment extends Table<NicAttachmentDbItem> {
     }
 }
 
-export interface VmInfoCacheDbItem {
+export interface VmInfoCacheDbItem extends Record {
     id: string;
     vmId: string;
     index: number;
@@ -554,7 +601,7 @@ export interface VmInfoCacheDbItem {
     timestamp: number;
     expireTime: number;
 }
-export abstract class VmInfoCache extends Table<VmInfoCacheDbItem> {
+export class VmInfoCache extends Table<VmInfoCacheDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'id',
@@ -615,13 +662,13 @@ export abstract class VmInfoCache extends Table<VmInfoCacheDbItem> {
     }
 }
 
-export interface LicenseStockDbItem {
+export interface LicenseStockDbItem extends Record {
     checksum: string;
     algorithm: string;
     fileName: string;
     productName: string;
 }
-export abstract class LicenseStock extends Table<LicenseStockDbItem> {
+export class LicenseStock extends Table<LicenseStockDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'checksum',
@@ -664,7 +711,7 @@ export abstract class LicenseStock extends Table<LicenseStockDbItem> {
     }
 }
 
-export interface LicenseUsageDbItem {
+export interface LicenseUsageDbItem extends Record {
     checksum: string;
     algorithm: string;
     fileName: string;
@@ -674,7 +721,7 @@ export interface LicenseUsageDbItem {
     assignedTime: number;
     vmInSync: boolean;
 }
-export abstract class LicenseUsage extends Table<LicenseUsageDbItem> {
+export class LicenseUsage extends Table<LicenseUsageDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'checksum',
@@ -741,12 +788,12 @@ export abstract class LicenseUsage extends Table<LicenseUsageDbItem> {
     }
 }
 
-export interface CustomLogDbItem {
+export interface CustomLogDbItem extends Record {
     id: string;
     timestamp: number;
     logContent: string;
 }
-export abstract class CustomLog extends Table<CustomLogDbItem> {
+export class CustomLog extends Table<CustomLogDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'id',
@@ -784,12 +831,12 @@ export abstract class CustomLog extends Table<CustomLogDbItem> {
     }
 }
 
-export interface VpnAttachmentDbItem {
+export interface VpnAttachmentDbItem extends Record {
     vmId: string;
     ip: string;
     vpnConnectionId: string;
 }
-export abstract class VpnAttachment extends Table<VpnAttachmentDbItem> {
+export class VpnAttachment extends Table<VpnAttachmentDbItem> {
     static __attributes: Attribute[] = [
         {
             name: 'vmId',
@@ -822,6 +869,55 @@ export abstract class VpnAttachment extends Table<VpnAttachmentDbItem> {
             vmId: this.typeConvert.valueToString(record.vmId),
             ip: this.typeConvert.valueToString(record.ip),
             vpnConnectionId: this.typeConvert.valueToString(record.vpnConnectionId)
+        };
+        return item;
+    }
+}
+
+export interface ApiRequestCacheDbItem extends Record {
+    id: string;
+    res: string;
+    cacheTime: number;
+    ttl: number;
+}
+export class ApiRequestCache extends Table<ApiRequestCacheDbItem> {
+    static __attributes: Attribute[] = [
+        {
+            name: 'id',
+            attrType: TypeRef.StringType,
+            isKey: true,
+            keyType: TypeRef.PrimaryKey
+        },
+        {
+            name: 'res',
+            attrType: TypeRef.StringType,
+            isKey: false
+        },
+        {
+            name: 'cacheTime',
+            attrType: TypeRef.NumberType,
+            isKey: false
+        },
+        {
+            name: 'ttl',
+            attrType: TypeRef.NumberType,
+            isKey: false
+        }
+    ];
+    constructor(typeConvert, namePrefix = '', nameSuffix = '') {
+        super(typeConvert, namePrefix, nameSuffix);
+        // CAUTION: don't forget to set a correct name.
+        this.setName('ApiRequestCache');
+        ApiRequestCache.__attributes.forEach(def => {
+            this.addAttribute(def);
+        });
+    }
+    convertRecord(record: Record): ApiRequestCacheDbItem {
+        const item: ApiRequestCacheDbItem = {
+            id: this.typeConvert.valueToString(record.id),
+            res: this.typeConvert.valueToString(record.res),
+            cacheTime: this.typeConvert.valueToNumber(record.cacheTime),
+            ttl: this.typeConvert.valueToNumber(record.ttl)
         };
         return item;
     }
