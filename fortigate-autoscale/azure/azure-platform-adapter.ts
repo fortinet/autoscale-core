@@ -52,6 +52,9 @@ import {
 } from './azure-fortigate-autoscale-settings';
 import { ApiCache, ApiCacheOption, AzurePlatformAdaptee } from './azure-platform-adaptee';
 
+export const TAG_KEY_RESOURCE_GROUP = 'ResourceGroup';
+export const TAG_KEY_AUTOSCALE_ROLE = 'AutoscaleRole';
+
 export type ConsistenyCheckType<T> = { [key in keyof T]?: string | number | boolean | null };
 export class AzurePlatformAdapter implements PlatformAdapter {
     adaptee: AzurePlatformAdaptee;
