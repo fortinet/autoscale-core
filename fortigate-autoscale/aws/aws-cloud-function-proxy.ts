@@ -5,7 +5,6 @@ import {
     Context,
     ScheduledEvent
 } from 'aws-lambda';
-
 import {
     CloudFunctionProxy,
     CloudFunctionResponseBody,
@@ -75,6 +74,9 @@ export class AwsScheduledEventProxy extends CloudFunctionProxy<
         return Promise.resolve({});
     }
     getReqMethod(): Promise<ReqMethod> {
+        return Promise.resolve(null);
+    }
+    getReqQueryParameters(): Promise<{ [name: string]: string }> {
         return Promise.resolve(null);
     }
 }
@@ -150,6 +152,9 @@ export class AwsApiGatewayEventProxy extends CloudFunctionProxy<
     }
     getRemainingExecutionTime(): Promise<number> {
         return Promise.resolve(this.context.getRemainingTimeInMillis());
+    }
+    getReqQueryParameters(): Promise<{ [name: string]: string }> {
+        return Promise.resolve(this.request.queryStringParameters);
     }
 }
 
@@ -236,6 +241,9 @@ export class AwsCloudFormationCustomResourceEventProxy extends CloudFunctionProx
     getReqMethod(): Promise<ReqMethod> {
         return Promise.resolve(null);
     }
+    getReqQueryParameters(): Promise<{ [name: string]: string }> {
+        return Promise.resolve(null);
+    }
 }
 
 export class AwsLambdaInvocationProxy extends CloudFunctionProxy<JSONable, Context, void> {
@@ -310,6 +318,9 @@ export class AwsLambdaInvocationProxy extends CloudFunctionProxy<JSONable, Conte
         return Promise.resolve({});
     }
     getReqMethod(): Promise<ReqMethod> {
+        return Promise.resolve(null);
+    }
+    getReqQueryParameters(): Promise<{ [name: string]: string }> {
         return Promise.resolve(null);
     }
 }

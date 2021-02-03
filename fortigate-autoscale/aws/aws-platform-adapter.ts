@@ -1,6 +1,5 @@
 import EC2 from 'aws-sdk/clients/ec2';
 import path from 'path';
-
 import { Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
 import {
@@ -11,13 +10,13 @@ import { CloudFunctionProxyAdapter, ReqMethod, ReqType } from '../../cloud-funct
 import { NicAttachmentRecord } from '../../context-strategy/nic-attachment-context';
 import {
     AutoscaleDbItem,
-    SaveCondition,
     FortiAnalyzerDbItem,
     KeyValue,
     LicenseStockDbItem,
     LicenseUsageDbItem,
     NicAttachmentDbItem,
     PrimaryElectionDbItem,
+    SaveCondition,
     SettingsDbItem,
     VpnAttachmentDbItem
 } from '../../db-definitions';
@@ -49,8 +48,8 @@ import {
     AwsLambdaInvocationProxy,
     AwsScheduledEventProxy
 } from './aws-cloud-function-proxy';
-import { LifecycleItemDbItem } from './aws-db-definitions';
 import * as AwsDBDef from './aws-db-definitions';
+import { LifecycleItemDbItem } from './aws-db-definitions';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import { AwsPlatformAdaptee } from './aws-platform-adaptee';
 import { AwsVpnAttachmentState, AwsVpnConnection } from './transit-gateway-context';
@@ -854,7 +853,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     Expression: ''
                 };
                 let typeText: string;
-                // recrod exisit, update it
+                // recrod exists, update it
                 if (items.has(record.checksum)) {
                     stockRecordChecksums.splice(stockRecordChecksums.indexOf(record.checksum), 1);
                     conditionExp.type = SaveCondition.UpdateOnly;
@@ -1677,12 +1676,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
 
     createAutoscaleFunctionInvocationKey(
         payload: unknown,
-        functionName: string,
+        functionEndpoint: string,
         invocable: string
     ): string {
         const psk = this.settings.get(AwsFortiGateAutoscaleSetting.FortiGatePskSecret).value;
         return genChecksum(
-            `${functionName}:${invocable}:${psk}:${JSON.stringify(payload)}`,
+            `${functionEndpoint}:${invocable}:${psk}:${JSON.stringify(payload)}`,
             'sha256'
         );
     }

@@ -4,6 +4,10 @@ import path from 'path';
 import { URL } from 'url';
 import { SettingItemDefinition, Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
+import {
+    CloudFunctionInvocationPayload,
+    constructInvocationPayload
+} from '../../cloud-function-peer-invocation';
 import { ReqMethod, ReqType } from '../../cloud-function-proxy';
 import { NicAttachmentRecord } from '../../context-strategy/nic-attachment-context';
 import {
@@ -13,6 +17,7 @@ import {
     KeyValue,
     SaveCondition
 } from '../../db-definitions';
+import { genChecksum } from '../../helper-function';
 import {
     LicenseFile,
     LicenseStockRecord,
@@ -28,14 +33,26 @@ import {
 } from '../../primary-election';
 import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../../virtual-machine';
 import { AzureFunctionInvocationProxy } from './azure-cloud-function-proxy';
-import * as AzureDBDef from './azure-db-definitions';
-import { AzureAutoscaleDbItem, AzurePrimaryElectionDbItem } from './azure-db-definitions';
+import {
+    AzureAutoscale,
+    AzureAutoscaleDbItem,
+    AzureFortiAnalyzer,
+    AzureLicenseStock,
+    AzureLicenseStockDbItem,
+    AzureLicenseUsage,
+    AzureLicenseUsageDbItem,
+    AzurePrimaryElection,
+    AzurePrimaryElectionDbItem,
+    AzureSettings,
+    CosmosDBQueryWhereClause
+} from './azure-db-definitions';
 import {
     AzureFortiGateAutoscaleSetting,
     AzureFortiGateAutoscaleSettingItemDictionary
 } from './azure-fortigate-autoscale-settings';
 import { ApiCache, ApiCacheOption, AzurePlatformAdaptee } from './azure-platform-adaptee';
 
+export type ConsistenyCheckType<T> = { [key in keyof T]?: string | number | boolean | null };
 export class AzurePlatformAdapter implements PlatformAdapter {
     adaptee: AzurePlatformAdaptee;
     proxy: AzureFunctionInvocationProxy;
@@ -125,7 +142,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         jsonEncoded?: boolean,
         editable?: boolean
     ): Promise<string> {
-        const table = new AzureDBDef.AzureSettings();
+        const table = new AzureSettings();
         const item = table.downcast({
             settingKey: key,
             settingValue: value,
@@ -136,8 +153,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         const savedItem = await this.adaptee.saveItemToDb<typeof item>(
             table,
             item,
-            SaveCondition.Upsert,
-            true
+            SaveCondition.Upsert
         );
         return savedItem.settingKey;
     }
@@ -510,7 +526,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
      */
     async getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord> {
         this.proxy.logAsInfo('calling getHealthCheckRecord');
-        const table = new AzureDBDef.AzureAutoscale();
+        const table = new AzureAutoscale();
         const dbItem = await this.adaptee.getItemFromDb<AzureAutoscaleDbItem>(table, [
             {
                 key: table.primaryKey.name,
@@ -575,8 +591,8 @@ export class AzurePlatformAdapter implements PlatformAdapter {
      */
     async getPrimaryRecord(filters?: KeyValue[]): Promise<PrimaryRecord> {
         this.proxy.logAsInfo('calling getPrimaryRecord');
-        const table = new AzureDBDef.AzurePrimaryElection();
-        const listClause: AzureDBDef.CosmosDBQueryWhereClause[] =
+        const table = new AzurePrimaryElection();
+        const listClause: CosmosDBQueryWhereClause[] =
             filters &&
             filters.map(f => {
                 return { name: f.key, value: f.value };
@@ -633,7 +649,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
      */
     async createHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
         this.proxy.logAsInfo('calling createHealthCheckRecord');
-        const table = new AzureDBDef.AzureAutoscale();
+        const table = new AzureAutoscale();
         const [syncStateString] = Object.entries(HealthCheckSyncState)
             .filter(([, value]) => {
                 return rec.syncState === value;
@@ -650,8 +666,8 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             syncState: syncStateString,
             seq: rec.seq
         });
-        // NOTE: when create a db record, do not need to ensure data consistency.
-        await this.adaptee.saveItemToDb<typeof item>(table, item, SaveCondition.Upsert, false);
+        // NOTE: when create a db record, do not need to check data consistency.
+        await this.adaptee.saveItemToDb<typeof item>(table, item, SaveCondition.InsertOnly, false);
         this.proxy.logAsInfo('called createHealthCheckRecord');
     }
     /**
@@ -661,13 +677,13 @@ export class AzurePlatformAdapter implements PlatformAdapter {
      */
     async updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
         this.proxy.logAsInfo('calling updateHealthCheckRecord');
-        const table = new AzureDBDef.AzureAutoscale();
+        const table = new AzureAutoscale();
         const [syncStateString] = Object.entries(HealthCheckSyncState)
             .filter(([, value]) => {
                 return rec.syncState === value;
             })
             .map(([, v]) => v);
-        const item: AzureAutoscaleDbItem = {
+        const item = table.downcast({
             vmId: rec.vmId,
             scalingGroupName: rec.scalingGroupName,
             ip: rec.ip,
@@ -676,15 +692,14 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             heartBeatLossCount: rec.heartbeatLossCount,
             nextHeartBeatTime: rec.nextHeartbeatTime,
             syncState: syncStateString,
-            seq: rec.seq,
-            id: undefined, // NOTE: id will be automatically use the primary key value
-            _attachments: undefined,
-            _etag: undefined,
-            _rid: undefined,
-            _self: undefined,
-            _ts: undefined
+            seq: rec.seq
+        });
+        const check: ConsistenyCheckType<typeof item> = {
+            vmId: rec.vmId,
+            scalingGroupName: rec.scalingGroupName,
+            ip: rec.ip
         };
-        await this.adaptee.saveItemToDb<typeof item>(table, item, SaveCondition.UpdateOnly, true);
+        await this.adaptee.saveItemToDb<typeof item>(table, item, SaveCondition.UpdateOnly, check);
         this.proxy.logAsInfo('called updateHealthCheckRecord');
     }
     /**
@@ -696,7 +711,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
      */
     async createPrimaryRecord(rec: PrimaryRecord, oldRec: PrimaryRecord): Promise<void> {
         this.proxy.logAsInfo('calling createPrimaryRecord.');
-        const table = new AzureDBDef.AzurePrimaryElection();
+        const table = new AzurePrimaryElection();
         const item = table.downcast({
             id: rec.id,
             scalingGroupName: rec.scalingGroupName,
@@ -734,8 +749,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             await this.adaptee.saveItemToDb<typeof item>(
                 table,
                 item,
-                SaveCondition.InsertOnly, // strict condition: insert only
-                true // strict condition: ensure data consistency
+                SaveCondition.InsertOnly // ASSERT: if record exists, will throw error
             );
             this.proxy.logAsInfo('called createPrimaryRecord.');
         } catch (error) {
@@ -755,7 +769,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
      */
     async updatePrimaryRecord(rec: PrimaryRecord): Promise<void> {
         this.proxy.logAsInfo('calling updatePrimaryRecord.');
-        const table = new AzureDBDef.AzurePrimaryElection();
+        const table = new AzurePrimaryElection();
         const item = table.downcast({
             id: rec.id,
             scalingGroupName: rec.scalingGroupName,
@@ -802,8 +816,14 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             }
         }
 
+        const check: ConsistenyCheckType<typeof item> = {
+            id: item.id,
+            scalingGroupName: item.scalingGroupName,
+            voteState: item.voteState
+        };
+
         // upsert
-        await this.adaptee.saveItemToDb<typeof item>(table, item, SaveCondition.Upsert, true);
+        await this.adaptee.saveItemToDb<typeof item>(table, item, SaveCondition.Upsert, check);
         this.proxy.logAsInfo('called updatePrimaryRecord.');
     }
     /**
@@ -867,85 +887,422 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called listConfigSet');
         return blobs;
     }
-    deleteVmFromScalingGroup(vmId: string): Promise<void> {
-        throw new Error('Method not implemented.');
+    async deleteVmFromScalingGroup(vmId: string): Promise<void> {
+        this.proxy.logAsInfo('calling deleteVmFromScalingGroup');
+        try {
+            const vms = await this.listAutoscaleVm();
+            const [vm] = vms.filter(v => v.id === vmId) || [];
+            if (!vm) {
+                this.proxy.logAsWarning(`vm (id: ${vmId}) not found. skip deleting it.`);
+            } else {
+                const scalingGroupName = vm.scalingGroupName;
+                const success = await this.adaptee.deleteInstanceFromVmss(
+                    scalingGroupName,
+                    Number(vm.sourceData.instanceId)
+                );
+                if (success) {
+                    this.proxy.logAsInfo(`delete completed. vm (id: ${vmId}) is deleted.`);
+                } else {
+                    this.proxy.logAsWarning(`delete completed. vm (id: ${vmId}) not found.)`);
+                }
+            }
+        } catch (error) {
+            this.proxy.logForError('Failed to delele vm from scaling group.', error);
+        }
+        this.proxy.logAsInfo('called deleteVmFromScalingGroup');
     }
-    listLicenseFiles(
+    async listLicenseFiles(
         storageContainerName: string,
         licenseDirectoryName: string
     ): Promise<LicenseFile[]> {
-        throw new Error('Method not implemented.');
+        const blobs: Blob[] = await this.adaptee.listBlob(
+            storageContainerName,
+            licenseDirectoryName
+        );
+        return await Promise.all(
+            blobs.map(async blob => {
+                const filePath = path.join(licenseDirectoryName, blob.fileName);
+                const content = await this.adaptee.getBlobContent(storageContainerName, filePath);
+                const algorithm = 'sha256';
+                const licenseFile: LicenseFile = {
+                    fileName: blob.fileName,
+                    checksum: genChecksum(content, algorithm),
+                    algorithm: algorithm,
+                    content: content
+                };
+                return licenseFile;
+            })
+        );
     }
-    listLicenseStock(productName: string): Promise<LicenseStockRecord[]> {
-        throw new Error('Method not implemented.');
+    async listLicenseStock(productName: string): Promise<LicenseStockRecord[]> {
+        this.proxy.logAsInfo('calling listLicenseStock');
+        const table = new AzureLicenseStock();
+        const queryResult = await this.adaptee.listItemFromDb<AzureLicenseStockDbItem>(table);
+        const dbItems = queryResult.result || [];
+        const mapItems = dbItems
+            .filter(item => item.productName === productName)
+            .map(item => {
+                return {
+                    fileName: item.fileName,
+                    checksum: item.checksum,
+                    algorithm: item.algorithm,
+                    productName: item.productName
+                } as LicenseStockRecord;
+            });
+        this.proxy.logAsInfo('called listLicenseStock');
+        return mapItems;
     }
-    listLicenseUsage(productName: string): Promise<LicenseUsageRecord[]> {
-        throw new Error('Method not implemented.');
+    async listLicenseUsage(productName: string): Promise<LicenseUsageRecord[]> {
+        this.proxy.logAsInfo('calling listLicenseUsage');
+        const table = new AzureLicenseUsage();
+        const queryResult = await this.adaptee.listItemFromDb<AzureLicenseUsageDbItem>(table);
+        const dbItems = queryResult.result || [];
+        const mapItems = dbItems
+            .filter(item => item.productName === productName)
+            .map(item => {
+                return {
+                    fileName: item.fileName,
+                    checksum: item.checksum,
+                    algorithm: item.algorithm,
+                    productName: item.productName,
+                    vmId: item.vmId,
+                    scalingGroupName: item.scalingGroupName,
+                    assignedTime: item.assignedTime,
+                    vmInSync: item.vmInSync
+                } as LicenseUsageRecord;
+            });
+        this.proxy.logAsInfo('called listLicenseUsage');
+        return mapItems;
     }
-    updateLicenseStock(records: LicenseStockRecord[]): Promise<void> {
-        throw new Error('Method not implemented.');
+    async updateLicenseStock(records: LicenseStockRecord[]): Promise<void> {
+        this.proxy.logAsInfo('calling updateLicenseStock');
+        const table = new AzureLicenseStock();
+        const queryResult = await this.adaptee.listItemFromDb<AzureLicenseStockDbItem>(table);
+        const dbItems = queryResult.result || [];
+        // load all license stock records in the db
+        const items = new Map(
+            dbItems.map(item => {
+                return [item.checksum, item];
+            })
+        );
+        let errorCount = 0;
+        const stockRecordChecksums = Array.from(items.keys());
+        await Promise.all(
+            // read the content of each license file
+            records.map(record => {
+                const item = table.downcast({
+                    checksum: record.checksum,
+                    algorithm: record.algorithm,
+                    fileName: record.fileName,
+                    productName: record.productName
+                });
+                let typeText: string;
+                let saveCondition: SaveCondition;
+                // recrod exists, update it
+                if (items.has(record.checksum)) {
+                    stockRecordChecksums.splice(stockRecordChecksums.indexOf(record.checksum), 1);
+                    saveCondition = SaveCondition.UpdateOnly;
+                    typeText =
+                        `update existing item (filename: ${record.fileName},` +
+                        ` checksum: ${record.checksum})`;
+                } else {
+                    saveCondition = SaveCondition.Upsert;
+                    typeText =
+                        `create new item (filename: ${record.fileName},` +
+                        ` checksum: ${record.checksum})`;
+                }
+                return this.adaptee
+                    .saveItemToDb<typeof item>(table, item, saveCondition, false)
+                    .catch(err => {
+                        this.proxy.logForError(`Failed to ${typeText}.`, err);
+                        errorCount++;
+                    });
+            })
+        );
+        // remove those records which don't have a corresponding license file.
+        await Promise.all(
+            stockRecordChecksums.map(checksum => {
+                const item = items.get(checksum);
+                return this.adaptee
+                    .deleteItemFromDb<AzureLicenseStockDbItem>(table, item)
+                    .catch(err => {
+                        this.proxy.logForError(
+                            `Failed to delete item (filename: ${item.fileName}) from db.`,
+                            err
+                        );
+                        errorCount++;
+                    });
+            })
+        );
+        if (errorCount > 0) {
+            this.proxy.logAsInfo('called updateLicenseStock');
+
+            throw new Error('updateLicenseStock unsuccessfully.');
+        }
+        this.proxy.logAsInfo('called updateLicenseStock');
     }
-    updateLicenseUsage(
+    async updateLicenseUsage(
         records: { item: LicenseUsageRecord; reference: LicenseUsageRecord }[]
     ): Promise<void> {
-        throw new Error('Method not implemented.');
+        this.proxy.logAsInfo('calling updateLicenseUsage');
+        const table = new AzureLicenseUsage();
+        // get all records from the db as a snapshot
+        const queryResult = await this.adaptee.listItemFromDb<AzureLicenseUsageDbItem>(table);
+        const dbItems = queryResult.result || [];
+        const items = new Map<string, AzureLicenseUsageDbItem>(
+            dbItems.map(item => {
+                return [item.checksum, item];
+            })
+        );
+        let errorCount = 0;
+        await Promise.all(
+            records.map(rec => {
+                const item = table.downcast({
+                    checksum: rec.item.checksum,
+                    algorithm: rec.item.algorithm,
+                    fileName: rec.item.fileName,
+                    productName: rec.item.productName,
+                    vmId: rec.item.vmId,
+                    scalingGroupName: rec.item.scalingGroupName,
+                    assignedTime: rec.item.assignedTime,
+                    vmInSync: rec.item.vmInSync
+                });
+                let typeText: string;
+                let saveCondition: SaveCondition;
+                // update if record exists
+                // NOTE: for updating an existing record, it requires a reference of the existing
+                // record as a snapshot of db data. Only when the record data at the time of updating
+                // matches exactly the same as the snapshot, the update succeeds. Otherwise, the
+                // record is considerred changed, and inconsistent anymore, thus not allowing updating.
+                if (items.has(rec.item.checksum)) {
+                    // ASSERT: it must have a referenced record to replace. otherwise, if should fail
+                    if (!rec.reference) {
+                        typeText = `update existing item (checksum: ${rec.item.checksum}). `;
+                        this.proxy.logAsError(
+                            `Failed to ${typeText}. No referenced record specified.`
+                        );
+                        errorCount++;
+                        return Promise.resolve();
+                    }
+                    saveCondition = SaveCondition.UpdateOnly;
+
+                    const check: ConsistenyCheckType<typeof item> = {
+                        vmId: rec.reference.vmId,
+                        scalingGroupName: rec.reference.scalingGroupName,
+                        productName: rec.reference.productName,
+                        algorithm: rec.reference.algorithm
+                    };
+                    typeText =
+                        `update existing item (checksum: ${rec.reference.checksum}). ` +
+                        `Old values (filename: ${rec.reference.fileName}, ` +
+                        `vmId: ${rec.reference.vmId}, ` +
+                        `scalingGroupName: ${rec.reference.scalingGroupName}, ` +
+                        `productName: ${rec.reference.productName}, ` +
+                        `algorithm: ${rec.reference.algorithm}, ` +
+                        `assignedTime: ${rec.reference.assignedTime}).` +
+                        `New values (filename: ${item.fileName}, vmId: ${item.vmId}, ` +
+                        `scalingGroupName: ${item.scalingGroupName}, ` +
+                        `productName: ${item.productName}, algorithm: ${item.algorithm})`;
+                    // NOTE: must ensure the consistency because the updating of the usage record
+                    // is expected to happen with a race condition.
+                    return this.adaptee
+                        .saveItemToDb<AzureLicenseUsageDbItem>(table, item, saveCondition, check)
+                        .then(() => {
+                            this.proxy.logAsInfo(typeText);
+                        })
+                        .catch(err => {
+                            this.proxy.logForError(`Failed to ${typeText}.`, err);
+                            errorCount++;
+                        });
+                }
+                // create if record not exists
+                else {
+                    saveCondition = SaveCondition.InsertOnly;
+                    typeText =
+                        `create new item (checksum: ${item.checksum})` +
+                        `New values (filename: ${item.fileName}, vmId: ${item.vmId}, ` +
+                        `scalingGroupName: ${item.scalingGroupName}, ` +
+                        `productName: ${item.productName}, algorithm: ${item.algorithm})`;
+                    return this.adaptee
+                        .saveItemToDb<AzureLicenseUsageDbItem>(table, item, saveCondition, false)
+                        .then(() => {
+                            this.proxy.logAsInfo(typeText);
+                        })
+                        .catch(err => {
+                            this.proxy.logForError(`Failed to ${typeText}.`, err);
+                            errorCount++;
+                        });
+                }
+            })
+        );
+        if (errorCount > 0) {
+            this.proxy.logAsInfo('called updateLicenseUsage');
+            throw new Error(
+                `${errorCount} license usage record error occured. Please find the detailed logs above.`
+            );
+        }
+        this.proxy.logAsInfo('called updateLicenseUsage');
     }
-    loadLicenseFileContent(storageContainerName: string, filePath: string): Promise<string> {
-        throw new Error('Method not implemented.');
+    async loadLicenseFileContent(storageContainerName: string, filePath: string): Promise<string> {
+        this.proxy.logAsInfo('calling loadLicenseFileContent');
+        const content = await this.adaptee.getBlobContent(storageContainerName, filePath);
+        this.proxy.logAsInfo('called loadLicenseFileContent');
+        return content;
     }
+    // TODO: unused function as of this time
     listNicAttachmentRecord(): Promise<NicAttachmentRecord[]> {
-        throw new Error('Method not implemented.');
+        this.proxy.logAsInfo('calling listNicAttachmentRecord');
+        this.proxy.logAsInfo('this method is unused thus always returning an empty array.');
+        this.proxy.logAsInfo('called listNicAttachmentRecord');
+        return Promise.resolve([]);
     }
+    // TODO: unused function as of this time
     updateNicAttachmentRecord(vmId: string, nicId: string, status: string): Promise<void> {
-        throw new Error('Method not implemented.');
+        this.proxy.logAsInfo('calling updateNicAttachmentRecord');
+        this.proxy.logAsInfo(
+            'this method is unused. parameter values passed here are:' +
+                ` vmId:${vmId}, nicId: ${nicId}, status: ${status}`
+        );
+        this.proxy.logAsInfo('called updateNicAttachmentRecord');
+        return Promise.resolve();
     }
+    // TODO: unused function as of this time
     deleteNicAttachmentRecord(vmId: string, nicId: string): Promise<void> {
-        throw new Error('Method not implemented.');
+        this.proxy.logAsInfo('calling deleteNicAttachmentRecord');
+        this.proxy.logAsInfo(
+            'this method is unused. parameter values passed here are:' +
+                ` vmId:${vmId}, nicId: ${nicId}`
+        );
+        this.proxy.logAsInfo('called deleteNicAttachmentRecord');
+        return Promise.resolve();
     }
+    // TODO: unused function as of this time
     createNetworkInterface(
         subnetId?: string,
         description?: string,
         securityGroups?: string[],
         privateIpAddress?: string
     ): Promise<NetworkInterface> {
-        throw new Error('Method not implemented.');
+        this.proxy.logAsInfo('calling createNetworkInterface');
+        this.proxy.logAsInfo(
+            'this method is unused thus always returning null. parameter values passed here are:' +
+                ` subnetId?:${subnetId}, description?: ${description}` +
+                `, securityGroups?: ${securityGroups}, privateIpAddress?: ${privateIpAddress}`
+        );
+        this.proxy.logAsInfo('called createNetworkInterface');
+        return Promise.resolve(null);
     }
+    // TODO: unused function as of this time
     deleteNetworkInterface(nicId: string): Promise<void> {
-        throw new Error('Method not implemented.');
+        this.proxy.logAsInfo('calling deleteNetworkInterface');
+        this.proxy.logAsInfo(
+            'this method is unused. parameter values passed here are:' + ` nicId: ${nicId}`
+        );
+        this.proxy.logAsInfo('called deleteNetworkInterface');
+        return Promise.resolve();
     }
+    // TODO: unused function as of this time
     attachNetworkInterface(vmId: string, nicId: string, index?: number): Promise<void> {
-        throw new Error('Method not implemented.');
+        this.proxy.logAsInfo('calling attachNetworkInterface');
+        this.proxy.logAsInfo(
+            'this method is unused. parameter values passed here are:' +
+                ` vmId:${vmId}, nicId: ${nicId}, index: ${index}`
+        );
+        this.proxy.logAsInfo('called attachNetworkInterface');
+        return Promise.resolve();
     }
+    // TODO: unused function as of this time
     detachNetworkInterface(vmId: string, nicId: string): Promise<void> {
-        throw new Error('Method not implemented.');
+        this.proxy.logAsInfo('calling detachNetworkInterface');
+        this.proxy.logAsInfo(
+            'this method is unused. parameter values passed here are:' +
+                ` vmId:${vmId}, nicId: ${nicId}`
+        );
+        this.proxy.logAsInfo('called detachNetworkInterface');
+        return Promise.resolve();
     }
+    // TODO: unused function as of this time
     listNetworkInterfaces(tags: ResourceFilter[], status?: string): Promise<NetworkInterface[]> {
-        throw new Error('Method not implemented.');
+        this.proxy.logAsInfo('calling listNetworkInterfaces');
+        this.proxy.logAsInfo(
+            'this method is unused thus always returning an empty array. ' +
+                'parameter values passed here are:' +
+                ` tags:${JSON.stringify(tags)}, status?: ${status}`
+        );
+        this.proxy.logAsInfo('called listNetworkInterfaces');
+        return Promise.resolve([]);
     }
+    // TODO: unused function as of this time
     tagNetworkInterface(nicId: string, tags: ResourceFilter[]): Promise<void> {
-        throw new Error('Method not implemented.');
+        this.proxy.logAsInfo('calling tagNetworkInterface');
+        this.proxy.logAsInfo(
+            'this method is unused. parameter values passed here are:' +
+                ` nicId: ${nicId}, tags:${JSON.stringify(tags)}`
+        );
+        this.proxy.logAsInfo('called tagNetworkInterface');
+        return Promise.resolve();
     }
-    registerFortiAnalyzer(
+    async registerFortiAnalyzer(
         vmId: string,
         privateIp: string,
         primary: boolean,
         vip: string
     ): Promise<void> {
-        throw new Error('Method not implemented.');
+        this.proxy.logAsInfo('calling registerFortiAnalyzer');
+        const table = new AzureFortiAnalyzer();
+        const item = table.downcast({
+            vmId: vmId,
+            ip: privateIp,
+            primary: primary,
+            vip: vip
+        });
+        await this.adaptee.saveItemToDb<typeof item>(table, item, SaveCondition.Upsert, false);
+        this.proxy.logAsInfo('called registerFortiAnalyzer');
     }
-    invokeAutoscaleFunction(
+
+    async invokeAutoscaleFunction(
         payload: unknown,
         functionEndpoint: string,
         invocable: string,
         executionTime?: number
     ): Promise<number> {
-        throw new Error('Method not implemented.');
+        this.proxy.logAsInfo('calling invokeAutoscaleFunction');
+        const secretKey = this.createAutoscaleFunctionInvocationKey(
+            payload,
+            functionEndpoint,
+            invocable
+        );
+        const p: CloudFunctionInvocationPayload = constructInvocationPayload(
+            payload,
+            invocable,
+            secretKey,
+            executionTime
+        );
+
+        // NOTE: Autoscale leverages Azure Function access keys to ensure security
+        // see: https://docs.microsoft.com/en-us/azure/azure-functions/functions-bindings-http-webhook-trigger?tabs=csharp#authorization-keys
+        const reqHeaders = await this.proxy.getReqHeaders();
+        const reqQueryParams = await this.proxy.getReqQueryParameters();
+        const functionAccessKey =
+            String(reqHeaders['x-functions-key']) || reqQueryParams.code || null;
+        const response = await this.adaptee.invokeAzureFunction(
+            functionEndpoint,
+            JSON.stringify(p),
+            functionAccessKey
+        );
+        this.proxy.logAsInfo(`invocation response status code: ${response.status}`);
+        this.proxy.logAsInfo('called invokeAutoscaleFunction');
+        return response.status;
     }
     createAutoscaleFunctionInvocationKey(
         payload: unknown,
         functionEndpoint: string,
         invocable: string
     ): string {
-        throw new Error('Method not implemented.');
+        const psk = this.settings.get(AzureFortiGateAutoscaleSetting.FortiGatePskSecret).value;
+        return genChecksum(
+            `${functionEndpoint}:${invocable}:${psk}:${JSON.stringify(payload)}`,
+            'sha256'
+        );
     }
 }

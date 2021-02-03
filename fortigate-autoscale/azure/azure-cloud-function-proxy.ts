@@ -1,5 +1,4 @@
 import { Context } from '@azure/functions';
-
 import {
     CloudFunctionProxy,
     CloudFunctionResponseBody,
@@ -102,5 +101,9 @@ export class AzureFunctionInvocationProxy extends CloudFunctionProxy<
 
     getReqMethod(): Promise<ReqMethod> {
         return Promise.resolve(mapHttpMethod(this.context.req.method));
+    }
+
+    getReqQueryParameters(): Promise<{ [name: string]: string }> {
+        return Promise.resolve(this.context.req.params);
     }
 }

@@ -13,10 +13,10 @@ import {
 } from '@azure/cosmos';
 import * as msRestNodeAuth from '@azure/ms-rest-nodeauth';
 import { BlobServiceClient, StorageSharedKeyCredential } from '@azure/storage-blob';
+import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import fs from 'fs';
 import * as HttpStatusCodes from 'http-status-codes';
 import path from 'path';
-
 import { SettingItem, Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
 import {
@@ -38,6 +38,7 @@ import {
     CosmosDbTableMetaData
 } from './azure-db-definitions';
 import { AzureFortiGateAutoscaleSetting } from './azure-fortigate-autoscale-settings';
+import { ConsistenyCheckType as ConditionCheckType } from './azure-platform-adapter';
 
 export enum requiredEnvVars {
     AUTOSCALE_DB_ACCOUNT = 'AUTOSCALE_DB_ACCOUNT',
@@ -101,6 +102,13 @@ export enum ApiCacheOption {
     ReadCacheOnly = 'ReadCacheOnly'
 }
 
+const TTLS = {
+    listInstances: 600,
+    describeInstance: 600,
+    listNetworkInterfaces: 600,
+    loadSettings: 60
+};
+
 export class AzurePlatformAdaptee implements PlatformAdaptee {
     protected autoscaleDBRef: Database;
     protected azureCompute: ComputeManagementClient;
@@ -158,27 +166,42 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         if (this.settings) {
             return this.settings;
         }
-        const table = new AzureSettings();
-        const records: Map<string, AzureSettingsDbItem> = new Map();
-        const queryResult: CosmosDBQueryResult<AzureSettingsDbItem> = await this.listItemFromDb<
-            AzureSettingsDbItem
-        >(table);
-        queryResult.result.map(rec => [rec.settingKey, rec]);
-        const settings: Settings = new Map<string, SettingItem>();
-        Object.values(AzureFortiGateAutoscaleSetting).forEach(value => {
-            if (records.has(value)) {
-                const record = records.get(value);
-                const settingItem = new SettingItem(
-                    record.settingKey,
-                    record.settingValue,
-                    record.description,
-                    record.editable,
-                    record.jsonEncoded
-                );
-                settings.set(value, settingItem);
-            }
-        });
-        this.settings = settings;
+
+        const req: ApiCacheRequest = {
+            api: 'loadSettings',
+            parameters: [],
+            ttl: TTLS.loadSettings // expected time to live
+        };
+
+        const requestProcessor = async (): Promise<Settings> => {
+            const table = new AzureSettings();
+            const records: Map<string, AzureSettingsDbItem> = new Map();
+            const queryResult: CosmosDBQueryResult<AzureSettingsDbItem> = await this.listItemFromDb<
+                AzureSettingsDbItem
+            >(table);
+            queryResult.result.map(rec => [rec.settingKey, rec]);
+            const settings: Settings = new Map<string, SettingItem>();
+            Object.values(AzureFortiGateAutoscaleSetting).forEach(value => {
+                if (records.has(value)) {
+                    const record = records.get(value);
+                    const settingItem = new SettingItem(
+                        record.settingKey,
+                        record.settingValue,
+                        record.description,
+                        record.editable,
+                        record.jsonEncoded
+                    );
+                    settings.set(value, settingItem);
+                }
+            });
+            return settings;
+        };
+        const data = await this.requestWithCaching<Settings>(
+            req,
+            ApiCacheOption.ReadCacheFirst,
+            requestProcessor
+        );
+        this.settings = data.result;
         return this.settings;
     }
 
@@ -248,18 +271,27 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         return queryResult;
     }
     /**
-     * save an item to db
+     * save an item to db. When the optional parameter 'consistencyCheck' is provided, it will
+     * perform a data consistency checking before saving.
+     * The function compares each property of the item against the existing record
+     * with the same primary key in the db table.
+     * It saves the item only when one of the following conditions is met:
+     * condition 1: if parameter consistencyCheck is passed boolean true, it will
+     * only compare the _etag
+     * condition 2: if parameter consistencyCheck is passed an object of type T, it will
+     * strictly compare each defined (including null, false and empty value) property
      * @param  {Table<T>} table the instance of Table to save the item.
      * @param  {T} item the item to save
      * @param  {SaveCondition} condition save condition
-     * @param  {boolean} ensureDataConsistency? ensure data consistency to prevent saving outdated data
+     * @param  {boolean| object} consistencyCheck (optional) ensure data consistency to prevent
+     * saving outdated data.
      * @returns {Promise<T>} a promise of item of type T
      */
     async saveItemToDb<T extends CosmosDbTableMetaData>(
         table: Table<T>,
         item: T,
         condition: SaveCondition,
-        ensureDataConsistency = true
+        consistencyCheck: boolean | ConditionCheckType<T> = true
     ): Promise<T> {
         // CAUTION: validate the db input (non meta data)
         table.validateInput<T>(item);
@@ -270,13 +302,38 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                 value: item.id
             }
         ]);
-        // NOTE: if ensureDataConsistency, enforces this access condition
-        const options: RequestOptions = ensureDataConsistency && {
-            accessCondition: {
-                type: 'IfMatch',
-                condition: itemSnapshot && itemSnapshot._etag
+
+        let options: RequestOptions;
+
+        // if date with the same primary key already exists in the db table
+        if (itemSnapshot) {
+            // NOTE: given an object for property comparison
+            if (typeof consistencyCheck !== 'boolean') {
+                const inconsistentData = Object.entries(consistencyCheck).filter(([k, v]) => {
+                    return itemSnapshot[k] !== v;
+                });
+                // throw error if inconsistent data found
+                if (inconsistentData.length > 0) {
+                    const inconsistentDataDetailString: string = inconsistentData
+                        .map(([k, v]) => {
+                            return `key: ${k}, expected: ${v}, existing: ${itemSnapshot[k]}`;
+                        })
+                        .join('; ');
+                    throw new DbSaveError(
+                        DbErrorCode.InconsistentData,
+                        'Inconsistent data. The following value not match:' +
+                            `${inconsistentDataDetailString}`
+                    );
+                }
             }
-        };
+            // NOTE: if consistencyCheck, enforces this access condition
+            options = consistencyCheck && {
+                accessCondition: {
+                    type: 'IfMatch',
+                    condition: itemSnapshot._etag
+                }
+            };
+        }
         // update only but no record found
         if (condition === SaveCondition.UpdateOnly && !itemSnapshot) {
             throw new DbSaveError(
@@ -293,8 +350,10 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                     ` The item already exists in the table (name: ${table.name}).`
             );
         }
+        // TODO: from the logic above, the condition probably be always false
+        // can remove this block?
         if (
-            ensureDataConsistency &&
+            consistencyCheck &&
             itemSnapshot &&
             item[table.primaryKey.name] !== itemSnapshot[table.primaryKey.name]
         ) {
@@ -303,7 +362,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                 'Inconsistent data.' +
                     ' Primary key values not match.' +
                     'Cannot save item back into db due to' +
-                    ' the restriction parameter ensureDataConsistency is set to: true.'
+                    ' the restriction parameter consistencyCheck is on.'
             );
         }
         // ASSERT: input validation and data consistency checking have passed.
@@ -593,7 +652,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         const req: ApiCacheRequest = {
             api: 'listInstances',
             parameters: [scalingGroupName],
-            ttl: 600 // expected time to live
+            ttl: TTLS.listInstances // expected time to live
         };
 
         const requestProcessor = async (): Promise<VirtualMachineScaleSetVM[]> => {
@@ -628,7 +687,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             const req: ApiCacheRequest = {
                 api: 'describeInstance',
                 parameters: [scalingGroupName, id],
-                ttl: 600 // expected time to live
+                ttl: TTLS.describeInstance // expected time to live
             };
             const requestProcessor = async (): Promise<typeof data> => {
                 const response = await this.azureCompute.virtualMachineScaleSetVMs.get(
@@ -659,11 +718,45 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
      * Delete an instance from a scaling group (vmss)
      * @param  {string} scalingGroupName the scaling group containing the vm
      * @param  {number} instanceId the integer instanceId of the vm
-     * @returns {Promise} void
+     * @returns {Promise} boolean whether the instance existed and deleted or not exist to delete
      */
-    deleteInstanceFromVmss(scalingGroupName: string, instanceId: number): Promise<void> {
-        throw new Error('Method not implemented.');
-        return null;
+    async deleteInstanceFromVmss(scalingGroupName: string, instanceId: number): Promise<boolean> {
+        // CAUTION: when delete instance, must handle cache, otherwise, it can result in
+        // cached data inconsistent.
+        // possibly every method that involves caching should be handled to to delete cache
+        // aka: where requestWithCaching() is applied.
+
+        // providing ApiCacheOption.ReadCacheAndDelete will ensure cache is deleted after read
+        await Promise.all([
+            this.listInstances(scalingGroupName, ApiCacheOption.ReadCacheAndDelete),
+            this.describeInstance(
+                scalingGroupName,
+                String(instanceId),
+                ApiCacheOption.ReadCacheAndDelete
+            ),
+            this.listNetworkInterfaces(
+                scalingGroupName,
+                instanceId,
+                ApiCacheOption.ReadCacheAndDelete
+            )
+        ]);
+
+        // ASSERT: all related caches are deleted. can delete the vm now
+        const response = await this.azureCompute.virtualMachineScaleSetVMs.deleteMethod(
+            process.env[requiredEnvVars.RESOURCE_TAG_PREFIX],
+            scalingGroupName,
+            String(instanceId)
+        );
+        if (
+            response._response.status === HttpStatusCodes.OK ||
+            response._response.status === HttpStatusCodes.ACCEPTED
+        ) {
+            return true;
+        } else if (response._response.status === HttpStatusCodes.NO_CONTENT) {
+            return false;
+        } else {
+            throw new Error(`Unkown response with status code: ${response._response.status}.`);
+        }
     }
     /**
      * list network interfaces of a vm in the scaling group (vmss)
@@ -678,7 +771,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         scalingGroupName: string,
         id: number,
         cacheOption: ApiCacheOption = ApiCacheOption.ReadCacheFirst,
-        ttl = 600
+        ttl = TTLS.listNetworkInterfaces
     ): Promise<ApiCache<NetworkInterface[]>> {
         const req: ApiCacheRequest = {
             api: 'listNetworkInterfaces',
@@ -778,5 +871,36 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             }
             return blobs.filter(blob => blob.filePath === subdirectory);
         }
+    }
+
+    /**
+     * invoke another Azure function
+     * @param  {string} functionEndpoint the full function URL, format:
+     * https://<APP_NAME>.azurewebsites.net/api/<FUNCTION_NAME>
+     * @param  {string} payload a JSON stringified JSON object that can be parsed back to a JSON
+     * object without error.
+     * @param  {string} accessKey? (optional) function authentication keys
+     * @returns {Promise} a JSON stringified response of the invoked function
+     * @see https://docs.microsoft.com/en-us/azure/azure-functions/functions-bindings-http-webhook-trigger?tabs=csharp#authorization-keys
+     * @see https://docs.microsoft.com/en-us/azure/azure-functions/durable/durable-functions-overview
+     */
+    async invokeAzureFunction(
+        functionEndpoint: string,
+        payload: string,
+        accessKey?: string
+    ): Promise<AxiosResponse<string>> {
+        // NOTE: make requests to another Azure function using http requests and  library axios
+        const reqOptions: AxiosRequestConfig = {
+            method: 'POST',
+            headers: {
+                'x-functions-key': accessKey
+            },
+            url: functionEndpoint,
+            data: JSON.parse(payload),
+            // NOTE: see the hard timeout
+            // https://docs.microsoft.com/en-us/azure/azure-functions/functions-scale#timeout
+            timeout: 230
+        };
+        return await axios(reqOptions);
     }
 }

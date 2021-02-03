@@ -83,15 +83,15 @@ export abstract class TypeConverter {
 
 export interface BidirectionalCastable<PARENT, CHILD> {
     /**
-     * a downcast converts a db record from a parent structure to a child structure by altering
-     * its properties.
+     * a downcast converts a db record from a parent structure to a child structure by updating the
+     * properties with the same name, setting the child's own properties, then returns the child.
      * @param  {PARENT} record the record using PARENT interface
      * @returns {CHILD} a record using CHILD interface
      */
     downcast(record: PARENT): CHILD;
     /**
-     * an upcast converts a db record from a child structure to a parent structure by altering
-     * its properties.
+     * an upcast converts a db record from a child structure to a parent structure by updating the
+     * properties with the same name, then returns the parent.
      * @param  {CHILD} record the record using CHILD interface
      * @returns {PARENT} a record using PARENT interface
      */

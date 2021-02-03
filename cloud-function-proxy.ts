@@ -130,4 +130,5 @@ export abstract class CloudFunctionProxy<TReq, TContext, TRes>
     abstract getReqBody(): Promise<unknown>;
     abstract getReqHeaders(): Promise<ReqHeaders>;
     abstract getReqMethod(): Promise<ReqMethod>;
+    abstract getReqQueryParameters(): Promise<{ [name: string]: string }>;
 }
