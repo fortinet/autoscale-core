@@ -11,6 +11,8 @@ import {
     SqlParameter,
     SqlQuerySpec
 } from '@azure/cosmos';
+import { ClientSecretCredential } from '@azure/identity';
+import { SecretClient } from '@azure/keyvault-secrets';
 import * as msRestNodeAuth from '@azure/ms-rest-nodeauth';
 import { BlobServiceClient, StorageSharedKeyCredential } from '@azure/storage-blob';
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
@@ -43,6 +45,7 @@ import { ConsistenyCheckType as ConditionCheckType } from './azure-platform-adap
 export enum requiredEnvVars {
     AUTOSCALE_DB_ACCOUNT = 'AUTOSCALE_DB_ACCOUNT',
     AUTOSCALE_DB_NAME = 'AUTOSCALE_DB_NAME',
+    AUTOSCALE_KEY_VAULT_NAME = 'AUTOSCALE_KEY_VAULT_NAME',
     AZURE_STORAGE_ACCOUNT = 'AZURE_STORAGE_ACCOUNT',
     AZURE_STORAGE_ACCESS_KEY = 'AZURE_STORAGE_ACCESS_KEY',
     RESOURCE_TAG_PREFIX = 'RESOURCE_TAG_PREFIX',
@@ -113,6 +116,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
     protected autoscaleDBRef: Database;
     protected azureCompute: ComputeManagementClient;
     protected azureCosmosDB: CosmosClient;
+    protected azureKeyVault: SecretClient;
     protected azureNetwork: NetworkManagementClient;
     protected azureStorage: BlobServiceClient;
     protected settings: Settings;
@@ -159,6 +163,14 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             new StorageSharedKeyCredential(
                 process.env.AZURE_STORAGE_ACCOUNT,
                 process.env.AZURE_STORAGE_ACCESS_KEY
+            )
+        );
+        this.azureKeyVault = new SecretClient(
+            `https://${process.env.AUTOSCALE_KEY_VAULT_NAME}.vault.azure.net/`,
+            new ClientSecretCredential(
+                process.env.AZURE_TENANT_ID,
+                process.env.REST_APP_ID,
+                process.env.REST_APP_SECRET
             )
         );
     }
@@ -902,5 +914,10 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             timeout: 230
         };
         return await axios(reqOptions);
+    }
+
+    async keyVaultGetSecret(key: string): Promise<string> {
+        const secret = await this.azureKeyVault.getSecret(key);
+        return secret.value;
     }
 }

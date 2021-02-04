@@ -1849,7 +1849,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         }
     }
 
-    async getDecryptedEnvironmentVariable(name): Promise<string> {
+    async getDecryptedEnvironmentVariable(name: string): Promise<string> {
         const encrypted = process.env[name];
         try {
             const decrypted = await this.adaptee.kmsDecrypt(encrypted);

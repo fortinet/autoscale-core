@@ -1,12 +1,25 @@
+import { Context } from '@azure/functions';
 import { AutoscaleEnvironment } from '../../autoscale-environment';
+import {
+    CloudFunctionInvocationPayload,
+    CloudFunctionInvocationTimeOutError
+} from '../../cloud-function-peer-invocation';
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import {
     ConstantIntervalHeartbeatSyncStrategy,
     PreferredGroupPrimaryElection
 } from '../../context-strategy/autoscale-context';
 import { ReusableLicensingStrategy } from '../../context-strategy/licensing-context';
+import { JSONable } from '../../jsonable';
 import { FortiGateAutoscale } from '../fortigate-autoscale';
+import { FortiGateAutoscaleFunctionInvocationHandler } from '../fortigate-autoscale-function-invocation';
+import {
+    FazDeviceAuthorization,
+    FazReactiveAuthorizationStrategy
+} from '../fortigate-faz-integration-strategy';
+import { AzureFunctionInvocationProxy } from './azure-cloud-function-proxy';
 import { AzureFortiGateBootstrapStrategy } from './azure-fortigate-bootstrap-config-strategy';
+import { AzureFunctionInvocable } from './azure-function-invocable';
 import { AzureHybridScalingGroupStrategy } from './azure-hybrid-scaling-group-strategy';
 import { AzurePlatformAdapter } from './azure-platform-adapter';
 import { AzureRoutingEgressTrafficViaPrimaryVmStrategy } from './azure-routing-egress-traffic-via-primary-vm-strategy';
@@ -45,18 +58,62 @@ export class AzureFortiGateAutoscale<TReq, TContext, TRes> extends FortiGateAuto
             new AzureRoutingEgressTrafficViaPrimaryVmStrategy(platform, proxy, env)
         );
         // use the reactive authorization strategy for FAZ integration
-        // this.setFazIntegrationStrategy(new AwsFazReactiveAuthorizationStrategy(platform, proxy));
+        this.setFazIntegrationStrategy(new FazReactiveAuthorizationStrategy(platform, proxy));
     }
 }
 
-// export abstract class AzureFunctionInvocationHandler
-//     implements CloudFunctionPeerInvocation<AzureFunctionInvocationProxy, AzurePlatformAdapter> {
-//     proxy: AzureFunctionInvocationProxy;
-//     platform: AzurePlatformAdapter;
-//     executeInvocable(payload: JSONable, invocable: string): Promise<void> {
-//         if (invocable === AzureFunctionInvocable.TriggerFazDeviceAuth)
-//     }
-//     handleLambdaPeerInvocation(): Promise<void> {
-//         throw new Error('Method not implemented.');
-//     }
-// }
+export abstract class AzureFunctionInvocationHandler extends FortiGateAutoscaleFunctionInvocationHandler {
+    autoscale: AzureFortiGateAutoscale<JSONable, Context, void>;
+    constructor(autoscale: AzureFortiGateAutoscale<JSONable, Context, void>) {
+        super();
+        this.autoscale = autoscale;
+    }
+    get proxy(): AzureFunctionInvocationProxy {
+        return this.autoscale.proxy as AzureFunctionInvocationProxy;
+    }
+
+    get platform(): AzurePlatformAdapter {
+        return this.autoscale.platform;
+    }
+
+    async executeInvocable(
+        payload: CloudFunctionInvocationPayload,
+        invocable: string
+    ): Promise<void> {
+        const payloadData: JSONable = JSON.parse(payload.stringifiedData);
+        if (invocable === AzureFunctionInvocable.TriggerFazDeviceAuth) {
+            const deviceAuthorization: FazDeviceAuthorization = {
+                vmId: payloadData.vmId as string,
+                privateIp: payloadData.privateIp && String(payloadData.privateIp),
+                publicIp: payloadData.publicIp && String(payloadData.publicIp)
+            };
+
+            // extract the autoscale admin user and faz info
+            const username: string = await this.platform.getSecretFromKeyVault(
+                'AUTOSCALE_ADMIN_USERNAME'
+            );
+            const password: string = await this.platform.getSecretFromKeyVault(
+                'AUTOSCALE_ADMIN_PASSWORD'
+            );
+            const fazIp: string = process.env.FORTIANALYZER_IP;
+            const fazPort: string = process.env.FORTIANALYZER_PORT;
+
+            await this.autoscale.fazIntegrationStrategy
+                .processAuthorizationRequest(
+                    deviceAuthorization,
+                    fazIp,
+                    fazPort,
+                    username,
+                    password
+                )
+                .catch(e => {
+                    const error: CloudFunctionInvocationTimeOutError = e;
+                    error.extendExecution = false;
+                    throw error;
+                });
+            return;
+        }
+        // otherwise, no matching invocable, throw error
+        throw new CloudFunctionInvocationTimeOutError(`No matching invocable for: ${invocable}`);
+    }
+}

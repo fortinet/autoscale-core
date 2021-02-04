@@ -1,5 +1,4 @@
 import { Context } from 'aws-lambda';
-
 import { AutoscaleEnvironment } from '../../autoscale-environment';
 import {
     CloudFunctionInvocationPayload,
@@ -28,14 +27,16 @@ import { JSONable } from '../../jsonable';
 import { VirtualMachineState } from '../../virtual-machine';
 import { FortiGateAutoscale } from '../fortigate-autoscale';
 import { FortiGateAutoscaleFunctionInvocationHandler } from '../fortigate-autoscale-function-invocation';
-import { FazDeviceAuthorization } from '../fortigate-faz-integration-strategy';
+import {
+    FazDeviceAuthorization,
+    FazReactiveAuthorizationStrategy
+} from '../fortigate-faz-integration-strategy';
 import { AwsLambdaInvocationProxy } from './aws-cloud-function-proxy';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import {
     AwsFortiGateBootstrapStrategy,
     AwsFortiGateBootstrapTgwStrategy
 } from './aws-fortigate-bootstrap-config-strategy';
-import { AwsFazReactiveAuthorizationStrategy } from './aws-fortigate-faz-integration-strategy';
 import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strategy';
 import { AwsLambdaInvocable } from './aws-lambda-invocable';
 import { AwsNicAttachmentStrategy } from './aws-nic-attachment-strategy';
@@ -90,7 +91,7 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
             new AwsRoutingEgressTrafficViaPrimaryVmStrategy(platform, proxy, env)
         );
         // use the reactive authorization strategy for FAZ integration
-        this.setFazIntegrationStrategy(new AwsFazReactiveAuthorizationStrategy(platform, proxy));
+        this.setFazIntegrationStrategy(new FazReactiveAuthorizationStrategy(platform, proxy));
     }
     setNicAttachmentStrategy(strategy: NicAttachmentStrategy): void {
         this.nicAttachmentStrategy = strategy;

@@ -1308,4 +1308,18 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             'sha256'
         );
     }
+
+    async getSecretFromKeyVault(name: string): Promise<string> {
+        try {
+            const decrypted = await this.adaptee.keyVaultGetSecret(name);
+            this.proxy.logAsInfo('Environment variable is decrypted. Use the decrpted value.');
+            return decrypted;
+        } catch (error) {
+            this.proxy.logAsWarning(
+                'Unseccessfully decrypt the given varable, probably because ' +
+                    'the input is a non-encrypted value. Use its original value instead.'
+            );
+            throw error;
+        }
+    }
 }
