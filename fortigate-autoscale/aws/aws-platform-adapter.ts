@@ -133,9 +133,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             const reqMethod = await this.proxy.getReqMethod();
             if (reqMethod === ReqMethod.GET) {
                 const headers = await this.proxy.getReqHeaders();
-                if (headers['Fos-instance-id'] === null) {
+                if (headers['fos-instance-id'] === null) {
                     throw new Error(
-                        'Invalid request. Fos-instance-id is missing in [GET] request header.'
+                        'Invalid request. fos-instance-id is missing in [GET] request header.'
                     );
                 } else {
                     return Promise.resolve(ReqType.BootstrapConfig);
@@ -236,7 +236,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             const reqMethod = await this.proxy.getReqMethod();
             if (reqMethod === ReqMethod.GET) {
                 const headers = await this.proxy.getReqHeaders();
-                return Promise.resolve(headers['Fos-instance-id'] as string);
+                return Promise.resolve(headers['fos-instance-id'] as string);
             } else if (reqMethod === ReqMethod.POST) {
                 const body = await this.proxy.getReqBody();
                 return Promise.resolve(body.instance as string);
@@ -714,7 +714,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         keyPrefix.push(name);
         const content = await this.adaptee.getS3ObjectContent(
             bucket,
-            path.normalize(path.resolve('/', ...keyPrefix).substr(1))
+            path.normalize(path.resolve('/', ...keyPrefix.filter(k => !!k)).substr(1))
         );
         this.proxy.logAsInfo('configset loaded.');
         return content;

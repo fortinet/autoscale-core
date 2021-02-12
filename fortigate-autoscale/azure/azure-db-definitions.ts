@@ -574,8 +574,10 @@ export interface AzureApiRequestCacheDbItem extends ApiRequestCacheDbItem, Cosmo
 export class AzureApiRequestCache extends Table<AzureApiRequestCacheDbItem>
     implements BidirectionalCastable<ApiRequestCacheDbItem, AzureApiRequestCacheDbItem> {
     static __attributes: Attribute[] = [
-        ...ApiRequestCache.__attributes, // NOTE: use the same attributes of a sibling class
-        ...CosmosDbTableMetaDataAttributes // NOTE: add addtional Azure CosmosDB table meta data attributes
+        ...CosmosDbTableMetaDataAttributes, // NOTE: add addtional Azure CosmosDB table meta data attributes
+        // NOTE: use the same attributes of a sibling class, attributes with the same key will
+        // those in ...CosmosDbTableMetaDataAttributes
+        ...ApiRequestCache.__attributes
     ];
     private siblingClass: ApiRequestCache;
     constructor(namePrefix = '', nameSuffix = '') {

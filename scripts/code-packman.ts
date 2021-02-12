@@ -35,7 +35,7 @@ export interface TsConfig extends JSONable {
 export interface PackmanCopyList extends JSONable {
     name: string;
     location: string;
-    fromSourceDir?: boolean;
+    relativeDir?: 'source' | 'project' | 'bundle';
     renameAs?: string;
 }
 
@@ -1156,7 +1156,7 @@ export class CodePackman {
         const pkgDir = path.resolve(tempDir, pkg.name);
         const functionPackageDir = path.resolve(pkgDir, pkg.functionPackageDir);
         const functionSourceDir =
-            (pkg.saveFunctionSource && path.resolve(pkgDir, pkg.functionPackageDir)) || null;
+            (pkg.saveFunctionSource && path.resolve(pkgDir, pkg.functionSourceDir)) || null;
         const functionOutDir = path.resolve(this.projectRoot, config.output.packageDir);
         await this.makeDir(pkgDir);
         await this.makeDir(functionPackageDir);
@@ -1231,7 +1231,7 @@ export class CodePackman {
         }
         const bundleOutDir = path.resolve(this.projectRoot, config.output.outDir);
         const funcSrcDir = path.resolve(this.projectRoot, funcConfig.source.location);
-        const funcOutDir = path.resolve(this.tempDir, ref.name);
+        const funcOutDir = path.resolve(this.tempDir, funcConfig.output.location);
         const bundleFileName =
             `${config.bundle.filenamePrefix || ''}` +
             `${funcConfig.name}${config.bundle.filenameSuffix || ''}.js`;
@@ -1240,7 +1240,8 @@ export class CodePackman {
 
         copyList.push({
             name: 'bundled-index',
-            location: path.resolve(bundleOutDir, bundleFileName),
+            location: bundleFileName,
+            relativeDir: 'bundle',
             renameAs: 'index.js'
         });
 
@@ -1250,10 +1251,20 @@ export class CodePackman {
         // copy each item in the copyList
         await Promise.all(
             copyList.map(c => {
-                const src = path.resolve(
-                    (c.fromSourceDir && funcSrcDir) || this.projectRoot,
-                    c.location
-                );
+                let relativeDir: string;
+                switch (c.relativeDir) {
+                    case 'project':
+                        relativeDir = this.projectRoot;
+                        break;
+                    case 'bundle':
+                        relativeDir = bundleOutDir;
+                        break;
+                    case 'source':
+                    default:
+                        relativeDir = funcSrcDir;
+                        break;
+                }
+                const src = path.resolve(relativeDir, c.location);
                 // need rename?
                 if (c.renameAs) {
                     return this.cpfile(src, path.resolve(funcOutDir, c.renameAs));

@@ -18,6 +18,7 @@ import { BlobServiceClient, StorageSharedKeyCredential } from '@azure/storage-bl
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import fs from 'fs';
 import * as HttpStatusCodes from 'http-status-codes';
+import { JSONable } from 'jsonable';
 import path from 'path';
 import { SettingItem, Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
@@ -45,12 +46,13 @@ import { ConsistenyCheckType as ConditionCheckType } from './azure-platform-adap
 export enum requiredEnvVars {
     AUTOSCALE_DB_ACCOUNT = 'AUTOSCALE_DB_ACCOUNT',
     AUTOSCALE_DB_NAME = 'AUTOSCALE_DB_NAME',
+    AUTOSCALE_DB_PRIMARY_KEY = 'AUTOSCALE_DB_PRIMARY_KEY',
     AUTOSCALE_KEY_VAULT_NAME = 'AUTOSCALE_KEY_VAULT_NAME',
     AZURE_STORAGE_ACCOUNT = 'AZURE_STORAGE_ACCOUNT',
     AZURE_STORAGE_ACCESS_KEY = 'AZURE_STORAGE_ACCESS_KEY',
-    RESOURCE_TAG_PREFIX = 'RESOURCE_TAG_PREFIX',
-    REST_APP_ID = 'REST_APP_ID',
-    REST_APP_SECRET = 'REST_APP_SECRET',
+    CLIENT_ID = 'CLIENT_ID',
+    CLIENT_SECRET = 'CLIENT_SECRET',
+    RESOURCE_GROUP = 'RESOURCE_GROUP',
     SUBSCRIPTION_ID = 'SUBSCRIPTION_ID',
     TENANT_ID = 'TENANT_ID'
 }
@@ -105,6 +107,11 @@ export enum ApiCacheOption {
     ReadCacheOnly = 'ReadCacheOnly'
 }
 
+interface CacheDataTransformer {
+    type: 'JSONable' | 'Map';
+    value: JSONable | Array<[string, unknown]>;
+}
+
 const TTLS = {
     listInstances: 600,
     describeInstance: 600,
@@ -124,36 +131,38 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
      * The following process.env are required.
      * process.env.AUTOSCALE_DB_ACCOUNT: the CosmosDB account name
      * process.env.AUTOSCALE_DB_NAME: the Autoscale db name.
-     * process.env.REST_APP_ID: the App registration (service principal) app client_id.
-     * process.env.REST_APP_SECRET: the App registration (service principal) app client_secret.
+     * process.env.CLIENT_ID: the App registration (service principal) app client_id.
+     * process.env.CLIENT_SECRET: the App registration (service principal) app client_secret.
      * process.env.TENANT_ID: the tenant containing the App registration (service principal) app.
      */
     constructor() {
         // validation
         const missingEnvVars = Object.keys({ ...requiredEnvVars }).filter(key => !process.env[key]);
         if (missingEnvVars.length > 0) {
-            throw new Error(`Missing the following environment variables: ${missingEnvVars.join}.`);
+            throw new Error(
+                `Missing the following environment variables: ${missingEnvVars.join()}.`
+            );
         }
     }
     /**
      * Class instance initiation. The following process.env are required.
      * process.env.AUTOSCALE_DB_ACCOUNT: the CosmosDB account name
      * process.env.AUTOSCALE_DB_NAME: the Autoscale db name.
-     * process.env.REST_APP_ID: the App registration (service principal) app client_id.
-     * process.env.REST_APP_SECRET: the App registration (service principal) app client_secret.
+     * process.env.CLIENT_ID: the App registration (service principal) app client_id.
+     * process.env.CLIENT_SECRET: the App registration (service principal) app client_secret.
      * process.env.TENANT_ID: the tenant containing the App registration (service principal) app.
      * @returns {Promise} void
      */
     async init(): Promise<void> {
         const cosmosClientOptions: CosmosClientOptions = {
             endpoint: `https://${process.env.AUTOSCALE_DB_ACCOUNT}.documents.azure.com/`,
-            key: process.env.REST_API_MASTER_KEY
+            key: process.env.AUTOSCALE_DB_PRIMARY_KEY
         };
         this.azureCosmosDB = new CosmosClient(cosmosClientOptions);
         this.autoscaleDBRef = this.azureCosmosDB.database(process.env.AUTOSCALE_DB_NAME);
         const creds = await msRestNodeAuth.loginWithServicePrincipalSecret(
-            process.env.REST_APP_ID,
-            process.env.REST_APP_SECRET,
+            process.env.CLIENT_ID,
+            process.env.CLIENT_SECRET,
             process.env.TENANT_ID
         );
         this.azureCompute = new ComputeManagementClient(creds, process.env.SUBSCRIPTION_ID);
@@ -168,17 +177,14 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         this.azureKeyVault = new SecretClient(
             `https://${process.env.AUTOSCALE_KEY_VAULT_NAME}.vault.azure.net/`,
             new ClientSecretCredential(
-                process.env.AZURE_TENANT_ID,
-                process.env.REST_APP_ID,
-                process.env.REST_APP_SECRET
+                process.env.TENANT_ID,
+                process.env.CLIENT_ID,
+                process.env.CLIENT_SECRET
             )
         );
     }
-    async loadSettings(): Promise<Settings> {
-        if (this.settings) {
-            return this.settings;
-        }
 
+    reloadSettings(invalidateCache: boolean): Promise<ApiCache<Settings>> {
         const req: ApiCacheRequest = {
             api: 'loadSettings',
             parameters: [],
@@ -191,7 +197,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             const queryResult: CosmosDBQueryResult<AzureSettingsDbItem> = await this.listItemFromDb<
                 AzureSettingsDbItem
             >(table);
-            queryResult.result.map(rec => [rec.settingKey, rec]);
+            queryResult.result.forEach(rec => records.set(rec.settingKey, rec));
             const settings: Settings = new Map<string, SettingItem>();
             Object.values(AzureFortiGateAutoscaleSetting).forEach(value => {
                 if (records.has(value)) {
@@ -208,11 +214,18 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             });
             return settings;
         };
-        const data = await this.requestWithCaching<Settings>(
+        return this.requestWithCaching<Settings>(
             req,
-            ApiCacheOption.ReadCacheFirst,
+            invalidateCache ? ApiCacheOption.ReadCacheAndDelete : ApiCacheOption.ReadCacheFirst,
             requestProcessor
         );
+    }
+
+    async loadSettings(): Promise<Settings> {
+        if (this.settings) {
+            return this.settings;
+        }
+        const data = await this.reloadSettings(false);
         this.settings = data.result;
         return this.settings;
     }
@@ -227,16 +240,22 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
      */
     async getItemFromDb<T>(table: Table<T>, partitionKeys: KeyValue[]): Promise<T> {
         const primaryKey: KeyValue = partitionKeys[0];
-        const itemResponse = await this.autoscaleDBRef
-            .container(table.name)
-            .item(primaryKey.value)
-            .read();
-        if (itemResponse.statusCode === HttpStatusCodes.OK) {
-            return table.convertRecord({ ...itemResponse.resource });
-        } else if (itemResponse.statusCode === HttpStatusCodes.NOT_FOUND) {
-            throw new DbReadError(DbErrorCode.NotFound, 'item not found');
-        } else {
-            throw new DbReadError(DbErrorCode.UnexpectedResponse, JSON.stringify(itemResponse));
+        try {
+            const itemResponse = await this.autoscaleDBRef
+                .container(table.name)
+                .item(primaryKey.value)
+                .read();
+            if (itemResponse.statusCode === HttpStatusCodes.OK) {
+                return table.convertRecord({ ...itemResponse.resource });
+            } else {
+                return null;
+            }
+        } catch (error) {
+            if (error.code === HttpStatusCodes.NOT_FOUND) {
+                return null;
+            } else {
+                throw new DbReadError(DbErrorCode.UnexpectedResponse, JSON.stringify(error));
+            }
         }
     }
 
@@ -253,8 +272,12 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         listClause?: CosmosDBQueryWhereClause[],
         limit?: number
     ): Promise<CosmosDBQueryResult<T>> {
+        let topClause = '';
+        if (limit && limit > 0) {
+            topClause = ` TOP ${limit}`;
+        }
         const querySpec: SqlQuerySpec = {
-            query: `SELECT * FROM ${table.name} t`
+            query: `SELECT${topClause} * FROM ${table.name} t`
         };
         if (listClause && listClause.length > 0) {
             querySpec.query = `${querySpec.query} WHERE`;
@@ -267,9 +290,6 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             });
             // to remove the last ' AND'
             querySpec.query = querySpec.query.substr(0, querySpec.query.length - 4);
-        }
-        if (limit && limit > 0) {
-            querySpec.query = `${querySpec.query} LIMIT ${limit}`;
         }
         const queryResult: CosmosDBQueryResult<T> = {
             query: querySpec.query,
@@ -455,6 +475,11 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                     throw error;
                 }
             }
+            // NOTE: the itemsnapshot may not exist if already deleted by other
+            // db operation.
+            if (!itemSnapshot) {
+                return;
+            }
             // full match
             const keyDiff = Object.keys(itemSnapshot).filter(
                 key => itemSnapshot[key] !== item[key]
@@ -516,21 +541,29 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
      */
     async apiRequestReadCache(req: ApiCacheRequest): Promise<ApiCacheResult> {
         const table = new AzureApiRequestCache();
-        const item = await this.getItemFromDb(table, [
-            {
-                key: table.primaryKey.name,
-                value: this.generateCacheId(req.api, req.parameters)
+        try {
+            const item = await this.getItemFromDb(table, [
+                {
+                    key: table.primaryKey.name,
+                    value: this.generateCacheId(req.api, req.parameters)
+                }
+            ]);
+            if (item) {
+                const timeToLive: number = req.ttl || item.ttl;
+                if (item.cacheTime + timeToLive * 1000 > Date.now()) {
+                    return {
+                        id: item.id,
+                        stringifiedData: item.res,
+                        ttl: item.ttl,
+                        cacheTime: item.cacheTime
+                    };
+                }
             }
-        ]);
-        if (item) {
-            const timeToLive: number = req.ttl || item.ttl;
-            if (item.cacheTime + timeToLive * 1000 > Date.now()) {
-                return {
-                    id: item.id,
-                    stringifiedData: item.res,
-                    ttl: item.ttl,
-                    cacheTime: item.cacheTime
-                };
+        } catch (error) {
+            if (error instanceof DbReadError) {
+                if (error.code !== DbErrorCode.NotFound) {
+                    throw error;
+                }
             }
         }
         return null;
@@ -577,6 +610,31 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         }
         return res;
     }
+    private cacheDataTransform(data: unknown): string {
+        const replacer = (k, v): CacheDataTransformer => {
+            if (v instanceof Map) {
+                return {
+                    type: 'Map',
+                    value: [...v]
+                };
+            } else {
+                return v;
+            }
+        };
+        return JSON.stringify(data, replacer);
+    }
+
+    private cacheDataDetransform(data: string): unknown {
+        const reviver = (k, v) => {
+            if (typeof v === 'object' && v !== null) {
+                if (v.type === 'Map' && v.value instanceof Array) {
+                    return new Map(v.value);
+                }
+            }
+            return v;
+        };
+        return JSON.parse(data, reviver);
+    }
     /**
      * send an api request with appling a caching strategy.
      * This can prevent from firing too many arm resource requests to Microsoft Azure that
@@ -602,7 +660,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         if (cacheOption !== ApiCacheOption.ReadApiOnly) {
             res = await this.apiRequestReadCache(req);
             cacheTime = res && res.cacheTime;
-            data = (res && JSON.parse(res.stringifiedData)) || [];
+            data = (res && (this.cacheDataDetransform(res.stringifiedData) as D)) || null;
         }
 
         const hitCache = !!res;
@@ -632,9 +690,15 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                 if (data) {
                     // if it requires to save cache, save cache.
                     if (cacheOption === ApiCacheOption.ReadCacheFirst) {
+                        if (!res) {
+                            res = {
+                                stringifiedData: '',
+                                ttl: 0
+                            };
+                        }
                         res.api = req.api;
                         res.parameters = req.parameters;
-                        res.stringifiedData = JSON.stringify(data);
+                        res.stringifiedData = this.cacheDataTransform(data);
                         res.ttl = req.ttl;
                         res = await this.apiRequestSaveCache(res);
                         cacheTime = res.cacheTime;
@@ -669,7 +733,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
 
         const requestProcessor = async (): Promise<VirtualMachineScaleSetVM[]> => {
             const response = await this.azureCompute.virtualMachineScaleSetVMs.list(
-                process.env[requiredEnvVars.RESOURCE_TAG_PREFIX],
+                process.env[requiredEnvVars.RESOURCE_GROUP],
                 scalingGroupName
             );
             return (response && response._response.parsedBody) || null;
@@ -694,37 +758,34 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         cacheOption: ApiCacheOption = ApiCacheOption.ReadCacheFirst
     ): Promise<ApiCache<VirtualMachineScaleSetVM>> {
         let data: VirtualMachineScaleSetVM;
-        // if id is an integer number, will infer an instanceId to be looked up
-        if (isFinite(Number(id))) {
-            const req: ApiCacheRequest = {
-                api: 'describeInstance',
-                parameters: [scalingGroupName, id],
-                ttl: TTLS.describeInstance // expected time to live
-            };
-            const requestProcessor = async (): Promise<typeof data> => {
-                const response = await this.azureCompute.virtualMachineScaleSetVMs.get(
-                    process.env[requiredEnvVars.RESOURCE_TAG_PREFIX],
-                    scalingGroupName,
-                    id,
-                    {
-                        expand: 'instanceView'
-                    }
-                );
-                return response;
-            };
-            return await this.requestWithCaching<typeof data>(req, cacheOption, requestProcessor);
-        }
+        let instanceId: string = id;
         // ASSERT: id is the vmId to be looked up
-        else {
+        // NOTE: need to find the corresponding vm.instanceId using vm.vmId by listing all
+        // instances in the vmss and find the vm.
+        if (!isFinite(Number(id))) {
             const listResult = await this.listInstances(scalingGroupName, cacheOption);
             data = listResult.result.find(v => v.vmId && v.vmId === id);
-            return {
-                result: data,
-                cacheTime: listResult.cacheTime,
-                ttl: listResult.ttl,
-                hitCache: listResult.hitCache
-            };
+            if (data) {
+                instanceId = data.instanceId;
+            }
         }
+        const req: ApiCacheRequest = {
+            api: 'describeInstance',
+            parameters: [scalingGroupName, id],
+            ttl: TTLS.describeInstance // expected time to live
+        };
+        const requestProcessor = async (): Promise<typeof data> => {
+            const response = await this.azureCompute.virtualMachineScaleSetVMs.get(
+                process.env[requiredEnvVars.RESOURCE_GROUP],
+                scalingGroupName,
+                instanceId,
+                {
+                    expand: 'instanceView'
+                }
+            );
+            return response;
+        };
+        return await this.requestWithCaching<typeof data>(req, cacheOption, requestProcessor);
     }
     /**
      * Delete an instance from a scaling group (vmss)
@@ -755,7 +816,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
 
         // ASSERT: all related caches are deleted. can delete the vm now
         const response = await this.azureCompute.virtualMachineScaleSetVMs.deleteMethod(
-            process.env[requiredEnvVars.RESOURCE_TAG_PREFIX],
+            process.env[requiredEnvVars.RESOURCE_GROUP],
             scalingGroupName,
             String(instanceId)
         );
@@ -792,7 +853,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         };
         const requestProcessor = async (): Promise<NetworkInterface[]> => {
             const response = await this.azureNetwork.networkInterfaces.listVirtualMachineScaleSetVMNetworkInterfaces(
-                process.env[requiredEnvVars.RESOURCE_TAG_PREFIX],
+                process.env[requiredEnvVars.RESOURCE_GROUP],
                 scalingGroupName,
                 String(id)
             );

@@ -11,17 +11,25 @@ module.exports = {
         rules: [
             {
                 test: /\.tsx?$/,
-                use: 'ts-loader',
-                exclude: /node_modules/
+                loader: 'ts-loader',
+                exclude: '/node_modules/',
+                options: { allowTsInNodeModules: true }
+            },
+            {
+                test: /\.node$/,
+                type: 'asset/resource',
+                generator: {
+                    filename: 'static/[base]'
+                }
             }
         ]
     },
     resolve: {
-        extensions: ['.tsx', '.ts', '.js']
+        extensions: ['.js', '.tsx', '.ts']
     },
     output: {
         filename: '[name]-bundle.js',
-        path: path.resolve(__dirname, 'dist')
+        path: path.resolve(__dirname, 'bundled')
     },
     target: 'node'
 };

@@ -144,7 +144,14 @@ export class AwsApiGatewayEventProxy extends CloudFunctionProxy<
         return Promise.resolve(body || {});
     }
     getReqHeaders(): Promise<ReqHeaders> {
-        const headers: ReqHeaders = { ...this.request.headers };
+        // NOTE: header keys will be treated case-insensitive as per
+        // the RFC https://tools.ietf.org/html/rfc7540#section-8.1.2
+        const headers: ReqHeaders = (this.request.headers && {}) || null;
+        if (this.request.headers) {
+            Object.entries(this.request.headers).forEach(([k, v]) => {
+                headers[String(k).toLowerCase()] = v;
+            });
+        }
         return Promise.resolve(headers);
     }
     getReqMethod(): Promise<ReqMethod> {

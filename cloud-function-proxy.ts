@@ -89,6 +89,13 @@ export interface CloudFunctionProxyAdapter {
      */
     getRemainingExecutionTime(): Promise<number>;
     getReqBody(): Promise<unknown>;
+    /**
+     * get the HTTP headers object
+     *
+     * NOTE: header keys will be treated case-insensitive as per
+       the RFC https://tools.ietf.org/html/rfc7540#section-8.1.2
+     * @returns {Promise} headers objectt
+     */
     getReqHeaders(): Promise<ReqHeaders>;
     getReqMethod(): Promise<ReqMethod>;
 }

@@ -52,9 +52,6 @@ import {
 } from './azure-fortigate-autoscale-settings';
 import { ApiCache, ApiCacheOption, AzurePlatformAdaptee } from './azure-platform-adaptee';
 
-export const TAG_KEY_RESOURCE_GROUP = 'ResourceGroup';
-export const TAG_KEY_AUTOSCALE_ROLE = 'AutoscaleRole';
-
 export type ConsistenyCheckType<T> = { [key in keyof T]?: string | number | boolean | null };
 export class AzurePlatformAdapter implements PlatformAdapter {
     adaptee: AzurePlatformAdaptee;
@@ -96,19 +93,25 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         // node environment variable.
         // key: settingKey, which is a defined setting key.
         // value: envKey, which is the env var name used in the Function App node environment.
+
+        // invalidate the cache first
+        await this.adaptee.reloadSettings(true);
         const settingItemMapping: Map<string, string> = new Map();
+        Object.entries(AzureFortiGateAutoscaleSetting).forEach(([k, v]) => {
+            settingItemMapping.set(k, v);
+        });
         await Promise.all(
-            Array.from(settingItemMapping.entries()).map(([settingKey, envKey]) => {
+            Array.from(settingItemMapping.entries()).map(([, envKey]) => {
                 const settingItem: SettingItemDefinition =
-                    AzureFortiGateAutoscaleSettingItemDictionary[settingKey];
+                    AzureFortiGateAutoscaleSettingItemDictionary[envKey];
                 // if the setting key not exists in either the setting dictionary or the process.env
                 // return null to be able to filter it out
-                if (!settingItem || process.env[envKey]) {
+                if (!settingItem) {
                     return null;
                 }
                 return this.saveSettingItem(
                     settingItem.keyName,
-                    process.env[envKey],
+                    (process.env[envKey] === undefined && 'n/a') || process.env[envKey],
                     settingItem.description,
                     settingItem.jsonEncoded,
                     settingItem.editable
@@ -170,9 +173,9 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         const url = new URL(String(headers['x-original-url']), String(headers.host));
         if (url.pathname === '/api/byol-license') {
             if (reqMethod === ReqMethod.GET) {
-                if (headers['Fos-instance-id'] === null) {
+                if (headers['fos-instance-id'] === null) {
                     throw new Error(
-                        'Invalid request. Fos-instance-id is missing in [GET] request header.'
+                        'Invalid request. fos-instance-id is missing in [GET] request header.'
                     );
                 } else {
                     return Promise.resolve(ReqType.ByolLicense);
@@ -182,9 +185,9 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             }
         } else if (url.pathname === '/api/fgt-as-handler') {
             if (reqMethod === ReqMethod.GET) {
-                if (headers['Fos-instance-id'] === null) {
+                if (headers['fos-instance-id'] === null) {
                     throw new Error(
-                        'Invalid request. Fos-instance-id is missing in [GET] request header.'
+                        'Invalid request. fos-instance-id is missing in [GET] request header.'
                     );
                 } else {
                     return Promise.resolve(ReqType.BootstrapConfig);
@@ -234,7 +237,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         const reqMethod = await this.proxy.getReqMethod();
         if (reqMethod === ReqMethod.GET) {
             const headers = await this.proxy.getReqHeaders();
-            return Promise.resolve(headers['Fos-instance-id'] as string);
+            return Promise.resolve(headers['fos-instance-id'] as string);
         } else if (reqMethod === ReqMethod.POST) {
             const body = await this.proxy.getReqBody();
             return Promise.resolve(body.instance as string);
@@ -329,7 +332,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         });
         const primaryNic = networkInterfaces.length > 0 && networkInterfaces[0];
         const vm: VirtualMachine = {
-            id: instance.instanceId,
+            id: instance.vmId,
             scalingGroupName: scalingGroupName,
             primaryPrivateIpAddress: primaryNic && primaryNic.privateIpAddress,
             // TODO: vm in virtual machine scale set is associated with a load balancer and use
@@ -417,7 +420,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         // get network interfaces
         const listNetworkInterfacesResult = await this.adaptee.listNetworkInterfaces(
             scalingGroupName,
-            Number(instance.id),
+            Number(instance.instanceId),
             ApiCacheOption.ReadCacheFirst,
             describeInstanceResult.ttl
         );
@@ -446,7 +449,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             // get network interfaces
             const listNetworkInterfacesResult = await this.adaptee.listNetworkInterfaces(
                 primaryRecord.scalingGroupName,
-                Number(describeInstanceResult.result.id),
+                Number(describeInstanceResult.result.instanceId),
                 ApiCacheOption.ReadCacheFirst,
                 describeInstanceResult.ttl
             );
@@ -487,7 +490,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                 if (withNics) {
                     const listNetworkInterfacesResult = await this.adaptee.listNetworkInterfaces(
                         scalingGroupName,
-                        Number(instance.id)
+                        Number(instance.instanceId)
                     );
                     res.nics = listNetworkInterfacesResult.result || [];
                 }
@@ -837,53 +840,44 @@ export class AzurePlatformAdapter implements PlatformAdapter {
      */
     async loadConfigSet(name: string, custom?: boolean): Promise<string> {
         this.proxy.logAsInfo(`loading${custom ? ' (custom)' : ''} configset: ${name}`);
-        const bucketSetting = custom
-            ? this.settings.get(AzureFortiGateAutoscaleSetting.CustomAssetContainer)
-            : this.settings.get(AzureFortiGateAutoscaleSetting.AssetStorageContainer);
         const keyPrefixSetting = custom
             ? this.settings.get(AzureFortiGateAutoscaleSetting.CustomAssetDirectory)
             : this.settings.get(AzureFortiGateAutoscaleSetting.AssetStorageDirectory);
-        if (!(bucketSetting && keyPrefixSetting)) {
+        if (!keyPrefixSetting) {
             throw new Error('Missing storage container or directory setting.');
         }
 
-        const bucket = bucketSetting.value;
-        const keyPrefix = [keyPrefixSetting.value, 'configset'];
+        const keyPrefix = [keyPrefixSetting.value];
         keyPrefix.push(name);
         const content = await this.adaptee.getBlobContent(
-            bucket,
-            path.normalize(path.resolve('/', ...keyPrefix).substr(1))
+            'configset',
+            path.normalize(path.resolve('/', ...keyPrefix.filter(k => !!k)).substr(1))
         );
         this.proxy.logAsInfo('configset loaded.');
         return content;
     }
     async listConfigSet(subDirectory?: string, custom?: boolean): Promise<Blob[]> {
         this.proxy.logAsInfo('calling listConfigSet');
-        const bucketSetting = custom
-            ? this.settings.get(AzureFortiGateAutoscaleSetting.CustomAssetContainer)
-            : this.settings.get(AzureFortiGateAutoscaleSetting.AssetStorageContainer);
         const keyPrefixSetting = custom
             ? this.settings.get(AzureFortiGateAutoscaleSetting.CustomAssetDirectory)
             : this.settings.get(AzureFortiGateAutoscaleSetting.AssetStorageDirectory);
         let blobs: Blob[] = [];
-        if (custom && !(bucketSetting.value && keyPrefixSetting.value)) {
+        if (custom && !keyPrefixSetting.value) {
             this.proxy.logAsInfo('Custom config set location not specified. No configset loaded.');
             return [];
         }
-        if (!bucketSetting.value) {
-            this.proxy.logAsInfo('Config set location not specified. No configset loaded.');
-            return [];
-        }
+
+        const container = 'configset';
 
         const location = path.join(
-            ...[keyPrefixSetting.value, 'configset', subDirectory || null].filter(r => !!r)
+            ...[keyPrefixSetting.value, subDirectory || null].filter(r => !!r)
         );
 
         try {
             this.proxy.logAsInfo(
-                `container: ${bucketSetting.value}, list configset in directory: ${location}`
+                `container: ${container}, list configset in directory: ${location}`
             );
-            blobs = await this.adaptee.listBlob(bucketSetting.value, location);
+            blobs = await this.adaptee.listBlob(container, location);
         } catch (error) {
             this.proxy.logAsWarning(error);
         }

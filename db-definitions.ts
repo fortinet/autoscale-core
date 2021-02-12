@@ -44,7 +44,7 @@ export enum SaveCondition {
     /**
      * @member {string} Upsert insert if not exists or update if exists
      */
-    Upsert = 'UpdateOnly'
+    Upsert = 'Upsert'
 }
 
 /**

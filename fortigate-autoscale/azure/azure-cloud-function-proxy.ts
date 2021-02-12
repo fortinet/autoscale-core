@@ -1,4 +1,4 @@
-import { Context } from '@azure/functions';
+import { Context, HttpRequest } from '@azure/functions';
 import {
     CloudFunctionProxy,
     CloudFunctionResponseBody,
@@ -16,11 +16,11 @@ export interface AzureFunctionResponse {
 }
 
 export class AzureFunctionInvocationProxy extends CloudFunctionProxy<
-    JSONable,
+    HttpRequest,
     Context,
     AzureFunctionResponse
 > {
-    request: JSONable;
+    request: HttpRequest;
     context: Context;
     log(message: string, level: LogLevel): void {
         switch (level) {
@@ -74,7 +74,7 @@ export class AzureFunctionInvocationProxy extends CloudFunctionProxy<
             if (this.context.req && typeof this.context.req === 'string') {
                 return JSON.parse(this.context.req as string);
             } else if (this.context.req && typeof this.context.req === 'object') {
-                return Promise.resolve(this.request);
+                return Promise.resolve({ ...this.request });
             } else {
                 return null;
             }
@@ -96,7 +96,15 @@ export class AzureFunctionInvocationProxy extends CloudFunctionProxy<
     }
 
     getReqHeaders(): Promise<ReqHeaders> {
-        return Promise.resolve(this.context.req.headers);
+        // NOTE: header keys will be treated case-insensitive as per
+        // the RFC https://tools.ietf.org/html/rfc7540#section-8.1.2
+        const headers: ReqHeaders = (this.context.req.headers && {}) || null;
+        if (this.context.req.headers) {
+            Object.entries(this.context.req.headers).forEach(([k, v]) => {
+                headers[String(k).toLowerCase()] = v;
+            });
+        }
+        return Promise.resolve(headers);
     }
 
     getReqMethod(): Promise<ReqMethod> {
