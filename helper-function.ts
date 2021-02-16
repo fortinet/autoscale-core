@@ -1,5 +1,4 @@
 import crypto from 'crypto';
-
 import { CloudFunctionProxyAdapter } from './cloud-function-proxy';
 
 export function genChecksum(str: string, algorithm: string): string {
@@ -152,4 +151,43 @@ export function isIpV4(input: string, includeHostAddress = true): boolean {
     const exp = `^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]).){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5]){1}(/([0-9]|[1-2][0-9]|3[0-2]))${host}$`;
     const matches = input.match(new RegExp(exp, 'i'));
     return matches && matches[0] === input;
+}
+/**
+ * This function extends the JSON.stringify() to accept Map type value by a possible transformation
+ * @param  {string} k key
+ * @param  {unknown} v value
+ * @returns {unknown} a value that is possibly transformed or itself, otherwise.
+ */
+export function jsonStringifyReplacer(
+    k: string,
+    v: unknown
+): { type: string; value: unknown[] } | unknown {
+    if (v instanceof Map) {
+        return {
+            type: 'Map',
+            value: [...v]
+        };
+    } else {
+        return v;
+    }
+}
+/**
+ * This function extends the JSON.parse() to deserialzie a string into a value of Map type, where
+ * the string is transformed with helper function jsonStringifyReplacer()
+ * @param  {string} k key
+ * @param  {unkown} v value
+ * @returns {unknown} a value that is possibly detransformed or itself, otherwise.
+ */
+export function jsonParseReviver(
+    k: string,
+    v: { type: string; value: unknown[] } | unknown
+): unknown {
+    if (typeof v === 'object' && v !== null) {
+        const val: { type: string; value: unknown[] } = { type: undefined, value: undefined };
+        Object.assign(val, v);
+        if (val.type === 'Map' && val.value instanceof Array) {
+            return new Map(val.value);
+        }
+    }
+    return v;
 }

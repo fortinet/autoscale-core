@@ -7,12 +7,19 @@ import {
     ReqHeaders,
     ReqMethod
 } from '../../cloud-function-proxy';
+import { jsonStringifyReplacer } from '../../helper-function';
 import { JSONable } from '../../jsonable';
 
 export interface AzureFunctionResponse {
     status: number;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     body: any;
+}
+
+export interface LogItem {
+    level: LogLevel;
+    timestamp: number;
+    arguments?: unknown[];
 }
 
 export class AzureFunctionInvocationProxy extends CloudFunctionProxy<
@@ -22,30 +29,33 @@ export class AzureFunctionInvocationProxy extends CloudFunctionProxy<
 > {
     request: HttpRequest;
     context: Context;
-    log(message: string, level: LogLevel): void {
+    private messageQueue: LogItem[] = [];
+    log(message: string, level: LogLevel, ...optionalParams: unknown[]): void {
         switch (level) {
             case LogLevel.Debug:
                 if (process.env.DEBUG_MODE === 'true') {
-                    console.debug(message);
+                    console.debug(message, ...optionalParams);
                 } else {
                     console.debug(
                         'Debug level log is disabled. To view debug level logs, please' +
-                            " add the process environment variable 'DEBUG_MODE' with value 'true'."
+                            " add the process environment variable 'DEBUG_MODE' with value 'true'.",
+                        ...optionalParams
                     );
                 }
                 break;
             case LogLevel.Error:
-                console.error(message);
+                console.error(message, ...optionalParams);
                 break;
             case LogLevel.Info:
-                console.info(message);
+                console.info(message, ...optionalParams);
                 break;
             case LogLevel.Warn:
-                console.warn(message);
+                console.warn(message, ...optionalParams);
                 break;
             default:
-                console.log(message);
+                console.log(message, ...optionalParams);
         }
+        this.enqueue(message, level, ...optionalParams);
     }
 
     /**
@@ -113,5 +123,22 @@ export class AzureFunctionInvocationProxy extends CloudFunctionProxy<
 
     getReqQueryParameters(): Promise<{ [name: string]: string }> {
         return Promise.resolve(this.context.req.params);
+    }
+
+    protected enqueue(message: string, level: LogLevel, ...args: unknown[]): void {
+        const item: LogItem = {
+            level: level,
+            timestamp: Date.now() + new Date().getTimezoneOffset() * 60000, // GMT time in ms
+            arguments: []
+        };
+        item.arguments = Array.from(args).map(arg => {
+            return JSON.stringify(arg, jsonStringifyReplacer);
+        });
+        item.arguments.unshift(message);
+        this.messageQueue.push(item);
+    }
+
+    get allLogs(): LogItem[] {
+        return this.messageQueue;
     }
 }

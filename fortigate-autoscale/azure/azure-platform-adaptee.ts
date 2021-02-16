@@ -18,7 +18,6 @@ import { BlobServiceClient, StorageSharedKeyCredential } from '@azure/storage-bl
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import fs from 'fs';
 import * as HttpStatusCodes from 'http-status-codes';
-import { JSONable } from 'jsonable';
 import path from 'path';
 import { SettingItem, Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
@@ -31,6 +30,7 @@ import {
     SaveCondition,
     Table
 } from '../../db-definitions';
+import { jsonParseReviver, jsonStringifyReplacer } from '../../helper-function';
 import { PlatformAdaptee } from '../../platform-adaptee';
 import {
     AzureApiRequestCache,
@@ -105,11 +105,6 @@ export enum ApiCacheOption {
      * @member {string} ReadCacheOnly only read data from cache. not request data from api
      */
     ReadCacheOnly = 'ReadCacheOnly'
-}
-
-interface CacheDataTransformer {
-    type: 'JSONable' | 'Map';
-    value: JSONable | Array<[string, unknown]>;
 }
 
 const TTLS = {
@@ -610,31 +605,6 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         }
         return res;
     }
-    private cacheDataTransform(data: unknown): string {
-        const replacer = (k, v): CacheDataTransformer => {
-            if (v instanceof Map) {
-                return {
-                    type: 'Map',
-                    value: [...v]
-                };
-            } else {
-                return v;
-            }
-        };
-        return JSON.stringify(data, replacer);
-    }
-
-    private cacheDataDetransform(data: string): unknown {
-        const reviver = (k, v) => {
-            if (typeof v === 'object' && v !== null) {
-                if (v.type === 'Map' && v.value instanceof Array) {
-                    return new Map(v.value);
-                }
-            }
-            return v;
-        };
-        return JSON.parse(data, reviver);
-    }
     /**
      * send an api request with appling a caching strategy.
      * This can prevent from firing too many arm resource requests to Microsoft Azure that
@@ -660,7 +630,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         if (cacheOption !== ApiCacheOption.ReadApiOnly) {
             res = await this.apiRequestReadCache(req);
             cacheTime = res && res.cacheTime;
-            data = (res && (this.cacheDataDetransform(res.stringifiedData) as D)) || null;
+            data = (res && (JSON.parse(res.stringifiedData, jsonParseReviver) as D)) || null;
         }
 
         const hitCache = !!res;
@@ -698,7 +668,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                         }
                         res.api = req.api;
                         res.parameters = req.parameters;
-                        res.stringifiedData = this.cacheDataTransform(data);
+                        res.stringifiedData = JSON.stringify(data, jsonStringifyReplacer);
                         res.ttl = req.ttl;
                         res = await this.apiRequestSaveCache(res);
                         cacheTime = res.cacheTime;

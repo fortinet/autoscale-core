@@ -32,10 +32,11 @@ import {
     PrimaryRecordVoteState
 } from '../../primary-election';
 import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../../virtual-machine';
-import { AzureFunctionInvocationProxy } from './azure-cloud-function-proxy';
+import { AzureFunctionInvocationProxy, LogItem } from './azure-cloud-function-proxy';
 import {
     AzureAutoscale,
     AzureAutoscaleDbItem,
+    AzureCustomLog,
     AzureFortiAnalyzer,
     AzureLicenseStock,
     AzureLicenseStockDbItem,
@@ -1314,6 +1315,53 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                     'the input is a non-encrypted value. Use its original value instead.'
             );
             throw error;
+        }
+    }
+
+    async saveLogs(logs: LogItem[]): Promise<void> {
+        if (!logs) {
+            return;
+        }
+        let content = '';
+        logs.forEach(log => {
+            const args =
+                (log.arguments &&
+                    log.arguments.map((arg, index) => {
+                        const prefix = index > 0 ? `arg${index}: ` : '';
+                        return `${prefix}${arg}`;
+                    })) ||
+                [];
+            content =
+                `${content}<log timestamp:${log.timestamp} level:${log.level}>` +
+                `${args.join('\n')}</log>\n`;
+        });
+        const table = new AzureCustomLog();
+        const item = table.downcast({
+            id: undefined,
+            timestamp: undefined,
+            logContent: content
+        });
+        const save = (logItem: typeof item): Promise<typeof item> => {
+            const now = Date.now();
+            logItem.id = `${now}-${Math.round(Math.random() * 1000)}`;
+            logItem.timestamp = now;
+            return this.adaptee.saveItemToDb<typeof item>(table, item, SaveCondition.InsertOnly);
+        };
+
+        try {
+            let tryAgainWhenFailed = false;
+            await save(item).catch(error => {
+                if (error instanceof DbSaveError) {
+                    tryAgainWhenFailed = true;
+                } else {
+                    throw error;
+                }
+            });
+            if (tryAgainWhenFailed) {
+                await save(item);
+            }
+        } catch (error) {
+            this.proxy.logForError('Error in saving logs to CustomLog', error);
         }
     }
 }
