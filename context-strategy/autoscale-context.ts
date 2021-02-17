@@ -92,7 +92,7 @@ export class PreferredGroupPrimaryElection implements PrimaryElectionStrategy {
             settings.get(AutoscaleSetting.PrimaryElectionTimeout).value
         );
         const signature = this.env.candidate
-            ? `${this.env.candidate.scalingGroupName}:${this.env.candidate.id}:${Date.now()}`
+            ? `${this.env.candidate.scalingGroupName}:${this.env.candidate.id}`
             : '';
         const primaryRecord: PrimaryRecord = {
             id: `${signature}`,

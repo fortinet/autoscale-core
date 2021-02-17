@@ -238,7 +238,9 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         try {
             const itemResponse = await this.autoscaleDBRef
                 .container(table.name)
-                .item(primaryKey.value)
+                // CAUTION: the partition key must be provided in order to get the item.
+                // the partition key must match the same value of the item in the container.
+                .item(primaryKey.value, primaryKey.value)
                 .read();
             if (itemResponse.statusCode === HttpStatusCodes.OK) {
                 return table.convertRecord({ ...itemResponse.resource });
@@ -477,7 +479,11 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             }
             // full match
             const keyDiff = Object.keys(itemSnapshot).filter(
-                key => itemSnapshot[key] !== item[key]
+                // ensure that item and snapshot both contain the same keys to compare
+                key =>
+                    item[key] !== undefined &&
+                    itemSnapshot[key] !== undefined &&
+                    itemSnapshot[key] !== item[key]
             );
             if (keyDiff.length > 0) {
                 throw new DbDeleteError(
@@ -507,9 +513,12 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         // ASSERT: the given item matches the item in the db. It can be now deleted.
         const deleteResponse = await this.autoscaleDBRef
             .container(table.name)
-            .item(item.id)
+            .item(String(item[table.primaryKey.name]), String(item[table.primaryKey.name]))
             .delete();
-        if (deleteResponse.statusCode === HttpStatusCodes.OK) {
+        if (
+            deleteResponse.statusCode === HttpStatusCodes.OK ||
+            deleteResponse.statusCode === HttpStatusCodes.NO_CONTENT
+        ) {
             return;
         } else if (deleteResponse.statusCode === HttpStatusCodes.NOT_FOUND) {
             throw new DbDeleteError(
@@ -737,6 +746,14 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             data = listResult.result.find(v => v.vmId && v.vmId === id);
             if (data) {
                 instanceId = data.instanceId;
+            } else {
+                // vm not exists.
+                return {
+                    result: null,
+                    hitCache: listResult.hitCache,
+                    cacheTime: listResult.cacheTime,
+                    ttl: listResult.ttl
+                };
             }
         }
         const req: ApiCacheRequest = {

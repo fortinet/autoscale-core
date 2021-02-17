@@ -383,18 +383,18 @@ export interface PrimaryElectionDbItem extends Record {
 export class PrimaryElection extends Table<PrimaryElectionDbItem> {
     static __attributes: Attribute[] = [
         {
-            name: 'scalingGroupName',
+            name: 'id',
             attrType: TypeRef.StringType,
             isKey: true,
             keyType: TypeRef.PrimaryKey
         },
         {
-            name: 'vmId',
+            name: 'scalingGroupName',
             attrType: TypeRef.StringType,
             isKey: false
         },
         {
-            name: 'id',
+            name: 'vmId',
             attrType: TypeRef.StringType,
             isKey: false
         },

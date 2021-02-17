@@ -81,10 +81,10 @@ export class AzureFunctionInvocationProxy extends CloudFunctionProxy<
 
     getReqBody(): Promise<JSONable> {
         try {
-            if (this.context.req && typeof this.context.req === 'string') {
-                return JSON.parse(this.context.req as string);
-            } else if (this.context.req && typeof this.context.req === 'object') {
-                return Promise.resolve({ ...this.request });
+            if (this.context.req.body && typeof this.context.req.body === 'string') {
+                return JSON.parse(this.context.req.body as string);
+            } else if (this.context.req.body && typeof this.context.req.body === 'object') {
+                return Promise.resolve({ ...this.context.req.body });
             } else {
                 return null;
             }

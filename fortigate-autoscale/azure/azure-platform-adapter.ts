@@ -643,11 +643,18 @@ export class AzurePlatformAdapter implements PlatformAdapter {
      * @returns {boolean} true if only they are deemed 'the same'.
      */
     vmEquals(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean {
-        if (!(vmA && vmB) || JSON.stringify(vmA) !== JSON.stringify(vmB)) {
+        if (!(vmA && vmB)) {
             return false;
-        } else {
-            return true;
         }
+        const keyDiff = [
+            'id',
+            'scalingGroupName',
+            'primaryPrivateIpAddress',
+            'virtualNetworkId',
+            'subnetId'
+        ].filter(k => vmA[k] !== vmB[k]);
+
+        return keyDiff.length === 0;
     }
     /**
      * upsert an Autoscale health check record
@@ -738,10 +745,17 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                     `purging existing record (id: ${oldRec.id}, ` +
                         `scalingGroup: ${oldRec.scalingGroupName}, vmId: ${oldRec.vmId})`
                 );
+                const itemToDelete = table.downcast({ ...oldRec });
+                // NOTE: if the new and old records are for the same primary vm, and the
+                // old record indicates that it has timed out, do not need
+                // to check data consistency.
+                const consistencyCheckRequired = !(
+                    rec.id === oldRec.id && oldRec.voteState === PrimaryRecordVoteState.Timeout
+                );
                 await this.adaptee.deleteItemFromDb<typeof item>(
                     table,
-                    table.downcast({ ...oldRec }),
-                    true
+                    itemToDelete,
+                    consistencyCheckRequired
                 );
             }
         } catch (error) {
@@ -825,8 +839,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
 
         const check: ConsistenyCheckType<typeof item> = {
             id: item.id,
-            scalingGroupName: item.scalingGroupName,
-            voteState: item.voteState
+            scalingGroupName: item.scalingGroupName
         };
 
         // upsert
