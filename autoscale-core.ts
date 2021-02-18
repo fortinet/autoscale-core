@@ -1,5 +1,4 @@
 import path from 'path';
-
 import { AutoscaleEnvironment } from './autoscale-environment';
 import { AutoscaleSetting, SettingItemDictionary, Settings } from './autoscale-setting';
 import { CloudFunctionProxy, CloudFunctionProxyAdapter } from './cloud-function-proxy';
@@ -500,23 +499,23 @@ export abstract class Autoscale implements AutoscaleCore {
         const customAssetContainer =
             (settings.get(AutoscaleSetting.CustomAssetContainer) &&
                 settings.get(AutoscaleSetting.CustomAssetContainer).value) ||
-            null;
+            '';
         const customAssetDirectory =
             (settings.get(AutoscaleSetting.CustomAssetDirectory) &&
                 settings.get(AutoscaleSetting.CustomAssetDirectory).value) ||
-            null;
+            '';
         const defaultAssetContainer =
             (settings.get(AutoscaleSetting.AssetStorageContainer) &&
                 settings.get(AutoscaleSetting.AssetStorageContainer).value) ||
-            null;
+            '';
         const defaultAssetDirectory =
             (settings.get(AutoscaleSetting.AssetStorageDirectory) &&
                 settings.get(AutoscaleSetting.AssetStorageDirectory).value) ||
-            null;
+            '';
         const licenseFileDirectory =
             (settings.get(AutoscaleSetting.LicenseFileDirectory) &&
                 settings.get(AutoscaleSetting.LicenseFileDirectory).value) ||
-            null;
+            '';
         const assetContainer = customAssetContainer || defaultAssetContainer;
         const assetDirectory =
             (customAssetContainer && customAssetDirectory) || defaultAssetDirectory;

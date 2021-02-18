@@ -854,6 +854,9 @@ export class AzurePlatformAdapter implements PlatformAdapter {
      */
     async loadConfigSet(name: string, custom?: boolean): Promise<string> {
         this.proxy.logAsInfo(`loading${custom ? ' (custom)' : ''} configset: ${name}`);
+        const containerName = custom
+            ? this.settings.get(AzureFortiGateAutoscaleSetting.CustomAssetContainer)
+            : this.settings.get(AzureFortiGateAutoscaleSetting.AssetStorageContainer);
         const keyPrefixSetting = custom
             ? this.settings.get(AzureFortiGateAutoscaleSetting.CustomAssetDirectory)
             : this.settings.get(AzureFortiGateAutoscaleSetting.AssetStorageDirectory);
@@ -861,10 +864,10 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             throw new Error('Missing storage container or directory setting.');
         }
 
-        const keyPrefix = [keyPrefixSetting.value];
+        const keyPrefix = [keyPrefixSetting.value, 'configset'];
         keyPrefix.push(name);
         const content = await this.adaptee.getBlobContent(
-            'configset',
+            containerName.value,
             path.normalize(path.resolve('/', ...keyPrefix.filter(k => !!k)).substr(1))
         );
         this.proxy.logAsInfo('configset loaded.');
