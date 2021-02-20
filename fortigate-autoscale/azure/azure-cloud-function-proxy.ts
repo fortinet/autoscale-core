@@ -31,12 +31,16 @@ export class AzureFunctionInvocationProxy extends CloudFunctionProxy<
     context: Context;
     private messageQueue: LogItem[] = [];
     log(message: string, level: LogLevel, ...optionalParams: unknown[]): void {
+        if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED === 'true') {
+            this.enqueue(message, level, ...optionalParams);
+            return;
+        }
         switch (level) {
             case LogLevel.Debug:
                 if (process.env.DEBUG_MODE === 'true') {
-                    console.debug(message, ...optionalParams);
+                    this.context.log(message, ...optionalParams);
                 } else {
-                    console.debug(
+                    this.context.log(
                         'Debug level log is disabled. To view debug level logs, please' +
                             " add the process environment variable 'DEBUG_MODE' with value 'true'.",
                         ...optionalParams
@@ -44,18 +48,17 @@ export class AzureFunctionInvocationProxy extends CloudFunctionProxy<
                 }
                 break;
             case LogLevel.Error:
-                console.error(message, ...optionalParams);
+                this.context.log.error(message, ...optionalParams);
                 break;
             case LogLevel.Info:
-                console.info(message, ...optionalParams);
+                this.context.log.info(message, ...optionalParams);
                 break;
             case LogLevel.Warn:
-                console.warn(message, ...optionalParams);
+                this.context.log.warn(message, ...optionalParams);
                 break;
             default:
-                console.log(message, ...optionalParams);
+                this.context.log.error(message, ...optionalParams);
         }
-        this.enqueue(message, level, ...optionalParams);
     }
 
     /**
@@ -73,6 +76,16 @@ export class AzureFunctionInvocationProxy extends CloudFunctionProxy<
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         headers: {}
     ): AzureFunctionResponse {
+        // NOTE: if enable queued log output, output log here
+        if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED === 'true') {
+            const messages: unknown[] = [];
+            this.allLogs.forEach(log => {
+                messages.push(`[${log.level}]`);
+                messages.push(...log.arguments);
+                messages.push('\n');
+            });
+            this.context.log(...messages);
+        }
         return {
             status: httpStatusCode,
             body: body
