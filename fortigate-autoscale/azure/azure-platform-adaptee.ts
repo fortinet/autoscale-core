@@ -70,6 +70,7 @@ export interface ApiCacheResult {
     stringifiedData: string;
     ttl: number;
     cacheTime?: number;
+    expired?: boolean;
 }
 
 export interface ApiCache<T> {
@@ -209,6 +210,9 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             });
             return settings;
         };
+        if (invalidateCache) {
+            this.settings = null;
+        }
         return this.requestWithCaching<Settings>(
             req,
             invalidateCache ? ApiCacheOption.ReadCacheAndDelete : ApiCacheOption.ReadCacheFirst,
@@ -554,14 +558,13 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             ]);
             if (item) {
                 const timeToLive: number = req.ttl || item.ttl;
-                if (item.cacheTime + timeToLive * 1000 > Date.now()) {
-                    return {
-                        id: item.id,
-                        stringifiedData: item.res,
-                        ttl: item.ttl,
-                        cacheTime: item.cacheTime
-                    };
-                }
+                return {
+                    id: item.id,
+                    stringifiedData: item.res,
+                    ttl: item.ttl,
+                    cacheTime: item.cacheTime,
+                    expired: (item.cacheTime + timeToLive) * 1000 < Date.now()
+                };
             }
         } catch (error) {
             if (error instanceof DbReadError) {
@@ -642,7 +645,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             data = (res && (JSON.parse(res.stringifiedData, jsonParseReviver) as D)) || null;
         }
 
-        const hitCache = !!res;
+        const hitCache = res && res.expired === false;
 
         // for those options do not require reading data from api
         if (
