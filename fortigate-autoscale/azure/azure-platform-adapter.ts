@@ -171,7 +171,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
     async getRequestType(): Promise<ReqType> {
         const reqMethod = await this.proxy.getReqMethod();
         const headers = await this.proxy.getReqHeaders();
-        const url = new URL(String(headers['x-original-url']), String(headers.host));
+        const url = new URL(this.proxy.request.url);
         if (url.pathname === '/api/byol-license') {
             if (reqMethod === ReqMethod.GET) {
                 if (headers['fos-instance-id'] === null) {
@@ -866,10 +866,13 @@ export class AzurePlatformAdapter implements PlatformAdapter {
 
         const keyPrefix = [keyPrefixSetting.value, 'configset'];
         keyPrefix.push(name);
-        const content = await this.adaptee.getBlobContent(
-            containerName.value,
-            path.normalize(path.resolve('/', ...keyPrefix.filter(k => !!k)).substr(1))
+        // NOTE: path.normalize() ensure converting Windows path style to unix path style
+        const blobFilePath = path.normalize(path.join(...keyPrefix.filter(k => !!k)));
+        this.proxy.logAsDebug(
+            `load blob in blob container name: [${containerName.value}], path:` +
+                `[${blobFilePath}]`
         );
+        const content = await this.adaptee.getBlobContent(containerName.value, blobFilePath);
         this.proxy.logAsInfo('configset loaded.');
         return content;
     }
