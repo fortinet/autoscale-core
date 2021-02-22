@@ -721,10 +721,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             'configset'
         ];
         keyPrefix.push(name);
-        const content = await this.adaptee.getS3ObjectContent(
-            bucket,
-            path.normalize(path.resolve('/', ...keyPrefix.filter(k => !!k)).substr(1))
-        );
+        // NOTE: path.normalize() ensure converting Windows path style to unix path style
+        const filePath = path.normalize(path.join(...keyPrefix.filter(k => !!k)));
+        this.proxy.logAsDebug(`load blob in: container [${bucket}], path:` + `[${filePath}]`);
+        const content = await this.adaptee.getS3ObjectContent(bucket, filePath);
         this.proxy.logAsInfo('configset loaded.');
         return content;
     }

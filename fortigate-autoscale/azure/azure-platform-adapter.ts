@@ -869,8 +869,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         // NOTE: path.normalize() ensure converting Windows path style to unix path style
         const blobFilePath = path.normalize(path.join(...keyPrefix.filter(k => !!k)));
         this.proxy.logAsDebug(
-            `load blob in blob container name: [${containerName.value}], path:` +
-                `[${blobFilePath}]`
+            `load blob in: container [${containerName.value}], path:` + `[${blobFilePath}]`
         );
         const content = await this.adaptee.getBlobContent(containerName.value, blobFilePath);
         this.proxy.logAsInfo('configset loaded.');

@@ -1,5 +1,4 @@
 import path from 'path';
-
 import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
 import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../helper-function';
 import {
@@ -138,7 +137,14 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
             }
 
             // load license content
-            const filePath = path.join(this.licenseDirectoryName, this.licenseRecord.fileName);
+            // NOTE: path.normalize() ensure converting Windows path style to unix path style
+            const filePath = path.normalize(
+                path.join(this.licenseDirectoryName, this.licenseRecord.fileName)
+            );
+            this.proxy.logAsDebug(
+                `load blob in blob container name: [${this.storageContainerName}], path:` +
+                    `[${filePath}]`
+            );
             const content = await this.platform.loadLicenseFileContent(
                 this.storageContainerName,
                 filePath
