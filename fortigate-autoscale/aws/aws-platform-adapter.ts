@@ -138,7 +138,16 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                         'Invalid request. fos-instance-id is missing in [GET] request header.'
                     );
                 } else {
-                    return Promise.resolve(ReqType.BootstrapConfig);
+                    const reqPath =
+                        this.proxy.request.path && this.proxy.request.path.toLowerCase();
+                    switch (reqPath) {
+                        case '/fgt-as-handler':
+                            return Promise.resolve(ReqType.BootstrapConfig);
+                        case '/byol-license':
+                            return Promise.resolve(ReqType.ByolLicense);
+                        default:
+                            throw new Error(`Unsupported request method: ${reqMethod}`);
+                    }
                 }
             } else if (reqMethod === ReqMethod.POST) {
                 const body = await this.proxy.getReqBody();
