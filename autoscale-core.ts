@@ -520,9 +520,10 @@ export abstract class Autoscale implements AutoscaleCore {
         const assetDirectory =
             (customAssetContainer && customAssetDirectory) || defaultAssetDirectory;
 
-        // NOTE: path.normalize() ensure converting Windows path style to unix path style
-        const licenseDirectory: string = path.normalize(
-            path.join(assetDirectory, licenseFileDirectory, productName)
+        const licenseDirectory: string = path.posix.join(
+            assetDirectory,
+            licenseFileDirectory,
+            productName
         );
         this.licensingStrategy.prepare(
             this.env.targetVm,

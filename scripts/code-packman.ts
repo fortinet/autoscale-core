@@ -254,7 +254,7 @@ export class CodePackmanModule {
             await this.cpm.makeDir(path.resolve(this._tempSrcDir, rLibPath));
             this.rLibPath = rLibPath;
         }
-        rModPath = path.join(this.rLibPath, mod.moduleName);
+        rModPath = path.posix.join(this.rLibPath, mod.moduleName);
         // copy mod from its temp src dir into this lib dir
         await this.cpm.copyDir(mod._tempSrcDir, path.resolve(this._tempSrcDir, rModPath));
 

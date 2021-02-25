@@ -137,13 +137,13 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
             }
 
             // load license content
-            // NOTE: path.normalize() ensure converting Windows path style to unix path style
-            const filePath = path.normalize(
-                path.join(this.licenseDirectoryName, this.licenseRecord.fileName)
+            const filePath = path.posix.join(
+                this.licenseDirectoryName,
+                this.licenseRecord.fileName
             );
             this.proxy.logAsDebug(
-                `load blob in blob container name: [${this.storageContainerName}], path:` +
-                    `[${filePath}]`
+                'load blob in blob container',
+                `name: [${this.storageContainerName}], path:` + `[${filePath}]`
             );
             const content = await this.platform.loadLicenseFileContent(
                 this.storageContainerName,

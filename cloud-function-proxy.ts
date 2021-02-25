@@ -135,7 +135,7 @@ export abstract class CloudFunctionProxy<TReq, TContext, TRes>
      */
     logAsDebug(message: string | DebugMode, ...others: unknown[]): void {
         const otherCount = (others && others.length) || 0;
-        let hint =
+        const hint =
             otherCount === 0
                 ? ''
                 : `${otherCount} more messages are hidden. Add the process environment` +
@@ -148,16 +148,11 @@ export abstract class CloudFunctionProxy<TReq, TContext, TRes>
             }
             // show message, and others.
             else {
-                this.log(message, LogLevel.Debug, hint);
+                this.log(message, LogLevel.Debug, ...others);
             }
         }
         // DEBUG_MODE not exists in process.env.
         else {
-            hint =
-                otherCount === 0
-                    ? ''
-                    : `${otherCount} messages are hidden. Add the process environment` +
-                      "variable 'DEBUG_MODE' with value 'true' to show them.";
             // don't sho anything if debug only
             if (message === DebugMode.DebugOnly) {
                 return;

@@ -721,8 +721,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             'configset'
         ];
         keyPrefix.push(name);
-        // NOTE: path.normalize() ensure converting Windows path style to unix path style
-        const filePath = path.normalize(path.join(...keyPrefix.filter(k => !!k)));
+        const filePath = path.posix.join(...keyPrefix.filter(k => !!k));
         this.proxy.logAsDebug(`load blob in: container [${bucket}], path:` + `[${filePath}]`);
         const content = await this.adaptee.getS3ObjectContent(bucket, filePath);
         this.proxy.logAsInfo('configset loaded.');
@@ -752,7 +751,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             return [];
         }
 
-        const location = path.join(
+        const location = path.posix.join(
             ...[keyPrefix, 'configset', subDirectory || null].filter(r => !!r)
         );
 
@@ -775,7 +774,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         );
         return await Promise.all(
             blobs.map(async blob => {
-                const filePath = path.join(licenseDirectoryName, blob.fileName);
+                const filePath = path.posix.join(licenseDirectoryName, blob.fileName);
                 const content = await this.adaptee.getS3ObjectContent(
                     storageContainerName,
                     filePath

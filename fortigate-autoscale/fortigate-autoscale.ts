@@ -187,7 +187,7 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
         await this.bootstrapConfigStrategy.apply();
         const bootstrapConfig = this.bootstrapConfigStrategy.getConfiguration();
         // output configuration content in debug level so that we can turn it off on production
-        this.proxy.logAsDebug(`configuration: ${bootstrapConfig}`);
+        this.proxy.logAsDebug('configuration loaded.', `configuration: ${bootstrapConfig}`);
         this.proxy.logAsInfo('called handleBootstrap.');
         return bootstrapConfig;
     }

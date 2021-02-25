@@ -866,8 +866,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
 
         const keyPrefix = [keyPrefixSetting.value, 'configset'];
         keyPrefix.push(name);
-        // NOTE: path.normalize() ensure converting Windows path style to unix path style
-        const blobFilePath = path.normalize(path.join(...keyPrefix.filter(k => !!k)));
+        const blobFilePath = path.posix.join(...keyPrefix.filter(k => !!k));
         this.proxy.logAsDebug(
             `load blob in: container [${containerName.value}], path:` + `[${blobFilePath}]`
         );
@@ -888,9 +887,8 @@ export class AzurePlatformAdapter implements PlatformAdapter {
 
         const container = 'configset';
 
-        // NOTE: path.normalize() ensure converting Windows path style to unix path style
-        const location = path.normalize(
-            path.join(...[keyPrefixSetting.value, subDirectory || null].filter(r => !!r))
+        const location = path.posix.join(
+            ...[keyPrefixSetting.value, subDirectory || null].filter(r => !!r)
         );
 
         try {
@@ -942,9 +940,10 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             licenseDirectoryName,
             `file count: ${blobs.length}`
         );
+        this.proxy.logAsDebug('blobs:', JSON.stringify(blobs));
         const licenseFiles = await Promise.all(
             blobs.map(async blob => {
-                const filePath = path.join(licenseDirectoryName, blob.fileName);
+                const filePath = path.posix.join(licenseDirectoryName, blob.fileName);
                 const content = await this.adaptee.getBlobContent(storageContainerName, filePath);
                 const algorithm = 'sha256';
                 const licenseFile: LicenseFile = {
