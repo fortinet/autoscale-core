@@ -5,7 +5,7 @@
     "main": "dist/index.js",
     "types": "dist/types/index.d.ts",
     "scripts": {
-        "postinstall": "npm run build",
+        "postinstall": "npm install typescript && npm run build",
         "pre-push": "npm-run-all lint-check audit-production test build",
         "audit-production": "npm audit --production",
         "bundle": "webpack",
@@ -50,7 +50,7 @@
         "sinon": "^9.0.1",
         "ts-loader": "^7.0.5",
         "ts-node": "^8.7.0",
-        "typescript": "^3.9.2",
+        "typescript": "^3.9.9",
         "webpack": "^5.20.2",
         "webpack-cli": "^4.5.0"
     },
@@ -88,7 +88,7 @@
         "rimraf": "^3.0.2",
         "shelljs": "^0.8.4",
         "sinon": "^9.0.1",
-        "typescript": "^3.9.2"
+        "typescript": "^3.9.9"
     },
     "repository": {
         "type": "git",
