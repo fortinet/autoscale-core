@@ -888,8 +888,9 @@ export class AzurePlatformAdapter implements PlatformAdapter {
 
         const container = 'configset';
 
-        const location = path.join(
-            ...[keyPrefixSetting.value, subDirectory || null].filter(r => !!r)
+        // NOTE: path.normalize() ensure converting Windows path style to unix path style
+        const location = path.normalize(
+            path.join(...[keyPrefixSetting.value, subDirectory || null].filter(r => !!r))
         );
 
         try {
@@ -931,11 +932,17 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         storageContainerName: string,
         licenseDirectoryName: string
     ): Promise<LicenseFile[]> {
+        this.proxy.logAsInfo('calling listLicenseFiles');
         const blobs: Blob[] = await this.adaptee.listBlob(
             storageContainerName,
             licenseDirectoryName
         );
-        return await Promise.all(
+        this.proxy.logAsInfo(
+            storageContainerName,
+            licenseDirectoryName,
+            `file count: ${blobs.length}`
+        );
+        const licenseFiles = await Promise.all(
             blobs.map(async blob => {
                 const filePath = path.join(licenseDirectoryName, blob.fileName);
                 const content = await this.adaptee.getBlobContent(storageContainerName, filePath);
@@ -949,6 +956,8 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                 return licenseFile;
             })
         );
+        this.proxy.logAsInfo('calling listLicenseFiles');
+        return licenseFiles;
     }
     async listLicenseStock(productName: string): Promise<LicenseStockRecord[]> {
         this.proxy.logAsInfo('calling listLicenseStock');

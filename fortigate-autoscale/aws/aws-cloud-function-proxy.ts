@@ -88,29 +88,22 @@ export class AwsApiGatewayEventProxy extends CloudFunctionProxy<
 > {
     request: APIGatewayProxyEvent;
     context: Context;
-    log(message: string, level: LogLevel): void {
+    log(message: string, level: LogLevel, ...others: unknown[]): void {
         switch (level) {
             case LogLevel.Debug:
-                if (process.env.DEBUG_MODE === 'true') {
-                    console.debug(message);
-                } else {
-                    console.debug(
-                        'Debug level log is disabled. To view debug level logs, please' +
-                            " add the process environment variable 'DEBUG_MODE' with value 'true'."
-                    );
-                }
+                console.debug(message, ...others);
                 break;
             case LogLevel.Error:
-                console.error(message);
+                console.error(message, ...others);
                 break;
             case LogLevel.Info:
-                console.info(message);
+                console.info(message, ...others);
                 break;
             case LogLevel.Warn:
-                console.warn(message);
+                console.warn(message, ...others);
                 break;
             default:
-                console.log(message);
+                console.log(message, ...others);
         }
     }
 

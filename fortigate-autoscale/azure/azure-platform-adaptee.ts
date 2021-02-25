@@ -896,11 +896,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
      * @returns {Promise} an array of blob objects in the given location
      */
     async listBlob(container: string, subdirectory?: string): Promise<Blob[]> {
-        let prefix = subdirectory || '';
-        if (prefix && !prefix.endsWith('/')) {
-            prefix = `${subdirectory}/`;
-        }
-        prefix = subdirectory.endsWith('/') ? subdirectory : `${subdirectory}/`;
+        const prefix = subdirectory || '';
 
         // DEBUG: for local debugging use, the next lines get files from local file system instead
         // it is usually useful when doing a mock test that do not require real api calls

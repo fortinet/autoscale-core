@@ -30,34 +30,26 @@ export class AzureFunctionInvocationProxy extends CloudFunctionProxy<
     request: HttpRequest;
     context: Context;
     private messageQueue: LogItem[] = [];
-    log(message: string, level: LogLevel, ...optionalParams: unknown[]): void {
+    log(message: string, level: LogLevel, ...others: unknown[]): void {
         if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED === 'true') {
-            this.enqueue(message, level, ...optionalParams);
+            this.enqueue(message, level, ...others);
             return;
         }
         switch (level) {
             case LogLevel.Debug:
-                if (process.env.DEBUG_MODE === 'true') {
-                    this.context.log(message, ...optionalParams);
-                } else {
-                    this.context.log(
-                        'Debug level log is disabled. To view debug level logs, please' +
-                            " add the process environment variable 'DEBUG_MODE' with value 'true'.",
-                        ...optionalParams
-                    );
-                }
+                this.context.log(message, ...others);
                 break;
             case LogLevel.Error:
-                this.context.log.error(message, ...optionalParams);
+                this.context.log.error(message, ...others);
                 break;
             case LogLevel.Info:
-                this.context.log.info(message, ...optionalParams);
+                this.context.log.info(message, ...others);
                 break;
             case LogLevel.Warn:
-                this.context.log.warn(message, ...optionalParams);
+                this.context.log.warn(message, ...others);
                 break;
             default:
-                this.context.log.error(message, ...optionalParams);
+                this.context.log.error(message, ...others);
         }
     }
 
