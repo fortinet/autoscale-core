@@ -664,14 +664,16 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             if (
                 // read cache first then read api when cache not found
                 (cacheOption === ApiCacheOption.ReadCacheFirst && !res) ||
-                // read data from api only
-                cacheOption === ApiCacheOption.ReadApiOnly
+                // read data from api only, will not cache the result
+                cacheOption === ApiCacheOption.ReadApiOnly ||
+                // read data from api and then update the cache
+                cacheOption === ApiCacheOption.ReadApiFirst
             ) {
                 // read data from api
                 data = await dataProcessor();
                 if (data) {
                     // if it requires to save cache, save cache.
-                    if (cacheOption === ApiCacheOption.ReadCacheFirst) {
+                    if (cacheOption !== ApiCacheOption.ReadApiOnly) {
                         if (!res) {
                             res = {
                                 stringifiedData: '',
@@ -745,8 +747,17 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         // NOTE: need to find the corresponding vm.instanceId using vm.vmId by listing all
         // instances in the vmss and find the vm.
         if (!isFinite(Number(id))) {
-            const listResult = await this.listInstances(scalingGroupName, cacheOption);
+            let listResult = await this.listInstances(scalingGroupName, cacheOption);
             data = listResult.result.find(v => v.vmId && v.vmId === id);
+            // NOTE: if vm is a new vm, it won't exist in the cache so try to read from api again
+            // then update cache, just once.
+            if (!data) {
+                listResult = await this.listInstances(
+                    scalingGroupName,
+                    ApiCacheOption.ReadApiFirst
+                );
+                data = listResult.result.find(v => v.vmId && v.vmId === id);
+            }
             if (data) {
                 instanceId = data.instanceId;
             } else {
