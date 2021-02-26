@@ -4,7 +4,7 @@ export interface CloudFunctionPeerInvocation<TProxy, TPlatform> {
     proxy: TProxy;
     platform: TPlatform;
     executeInvocable(payload: CloudFunctionInvocationPayload, invocable: string): Promise<void>;
-    handleLambdaPeerInvocation(functionEndpoint: string): Promise<void>;
+    handlePeerInvocation(functionEndpoint: string): Promise<void>;
 }
 
 export interface CloudFunctionInvocationPayload extends JSONable {
