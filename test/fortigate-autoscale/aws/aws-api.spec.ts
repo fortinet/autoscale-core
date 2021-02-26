@@ -41,6 +41,9 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     constructor() {
         this.executionStartTime = Date.now();
     }
+    getReqBody(): unknown {
+        return 'fake-body-as-string';
+    }
     getReqBody(): Promise<unknown> {
         return Promise.resolve('fake-body-as-string');
     }

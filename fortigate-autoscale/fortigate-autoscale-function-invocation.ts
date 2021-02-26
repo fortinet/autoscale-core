@@ -21,8 +21,8 @@ export abstract class FortiGateAutoscaleFunctionInvocationHandler
         invocable: string
     ): Promise<void>;
 
-    async handleLambdaPeerInvocation(functionEndpoint: string): Promise<void> {
-        this.proxy.logAsInfo('calling handleLambdaPeerInvocation.');
+    async handlePeerInvocation(functionEndpoint: string): Promise<void> {
+        this.proxy.logAsInfo('calling handlePeerInvocation.');
         try {
             // init the platform. this step is important
             await this.platform.init();
@@ -30,7 +30,7 @@ export abstract class FortiGateAutoscaleFunctionInvocationHandler
             const settings = await this.platform.getSettings();
             if (requestType !== ReqType.CloudFunctionPeerInvocation) {
                 this.proxy.logAsWarning('Not a CloudFunctionPeerInvocation type request. Skip it.');
-                this.proxy.logAsInfo('called handleLambdaPeerInvocation.');
+                this.proxy.logAsInfo('called handlePeerInvocation.');
                 return;
             }
             // get the invocation payload
@@ -115,11 +115,11 @@ export abstract class FortiGateAutoscaleFunctionInvocationHandler
                     throw e;
                 }
             }
-            this.proxy.logAsInfo('called handleLambdaPeerInvocation.');
+            this.proxy.logAsInfo('called handlePeerInvocation.');
             return;
         } catch (error) {
             // ASSERT: error is always an instance of Error
-            this.proxy.logForError('called handleLambdaPeerInvocation.', error);
+            this.proxy.logForError('called handlePeerInvocation.', error);
         }
     }
 }
