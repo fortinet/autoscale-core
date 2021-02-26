@@ -10,7 +10,6 @@ import fs from 'fs';
 import { describe, it } from 'mocha';
 import path from 'path';
 import Sinon from 'sinon';
-
 import { Settings } from '../../../autoscale-setting';
 import {
     CloudFunctionProxyAdapter,
@@ -40,9 +39,6 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     private executionStartTime: number;
     constructor() {
         this.executionStartTime = Date.now();
-    }
-    getReqBody(): unknown {
-        return 'fake-body-as-string';
     }
     getReqBody(): Promise<unknown> {
         return Promise.resolve('fake-body-as-string');

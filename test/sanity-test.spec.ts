@@ -1,6 +1,5 @@
 import { describe, it } from 'mocha';
 import * as Sinon from 'sinon';
-
 import { Autoscale } from '../autoscale-core';
 import { AutoscaleEnvironment } from '../autoscale-environment';
 import { AutoscaleSetting, SettingItem, Settings } from '../autoscale-setting';
@@ -266,9 +265,6 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     private executionStartTime: number;
     constructor() {
         this.executionStartTime = Date.now();
-    }
-    getReqBody(): unknown {
-        return 'fake-body-as-string';
     }
     getReqBody(): Promise<unknown> {
         return Promise.resolve('fake-body-as-string');
