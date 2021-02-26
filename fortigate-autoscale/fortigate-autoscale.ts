@@ -1,5 +1,4 @@
 import * as HttpStatusCodes from 'http-status-codes';
-
 import { Autoscale, AutoscaleHandler, HttpError } from '../autoscale-core';
 import { AutoscaleEnvironment } from '../autoscale-environment';
 import { CloudFunctionProxy, ReqType } from '../cloud-function-proxy';
