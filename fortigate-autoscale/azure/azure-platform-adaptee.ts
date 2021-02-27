@@ -180,44 +180,51 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         );
     }
 
-    reloadSettings(invalidateCache: boolean): Promise<ApiCache<Settings>> {
+    async reloadSettings(invalidateCache: boolean): Promise<ApiCache<Settings>> {
         const req: ApiCacheRequest = {
             api: 'loadSettings',
             parameters: [],
             ttl: TTLS.loadSettings // expected time to live
         };
 
-        const requestProcessor = async (): Promise<Settings> => {
+        const requestProcessor = async (): Promise<AzureSettingsDbItem[]> => {
             const table = new AzureSettings();
-            const records: Map<string, AzureSettingsDbItem> = new Map();
             const queryResult: CosmosDBQueryResult<AzureSettingsDbItem> = await this.listItemFromDb<
                 AzureSettingsDbItem
             >(table);
-            queryResult.result.forEach(rec => records.set(rec.settingKey, rec));
-            const settings: Settings = new Map<string, SettingItem>();
-            Object.values(AzureFortiGateAutoscaleSetting).forEach(value => {
-                if (records.has(value)) {
-                    const record = records.get(value);
-                    const settingItem = new SettingItem(
-                        record.settingKey,
-                        record.settingValue,
-                        record.description,
-                        record.editable,
-                        record.jsonEncoded
-                    );
-                    settings.set(value, settingItem);
-                }
-            });
-            return settings;
+            return queryResult.result || [];
         };
         if (invalidateCache) {
             this.settings = null;
         }
-        return this.requestWithCaching<Settings>(
+        const res = await this.requestWithCaching<AzureSettingsDbItem[]>(
             req,
             invalidateCache ? ApiCacheOption.ReadCacheAndDelete : ApiCacheOption.ReadCacheFirst,
             requestProcessor
         );
+        const records: Map<string, AzureSettingsDbItem> = new Map();
+        res.result.forEach(rec => records.set(rec.settingKey, rec));
+        const settings: Settings = new Map<string, SettingItem>();
+        Object.values(AzureFortiGateAutoscaleSetting).forEach(value => {
+            if (records.has(value)) {
+                const record = records.get(value);
+                const settingItem = new SettingItem(
+                    record.settingKey,
+                    record.settingValue,
+                    record.description,
+                    record.editable,
+                    record.jsonEncoded
+                );
+                settings.set(value, settingItem);
+            }
+        });
+        const cache: ApiCache<Settings> = {
+            result: settings,
+            hitCache: res.hitCache,
+            cacheTime: res.cacheTime,
+            ttl: res.ttl
+        };
+        return cache;
     }
 
     async loadSettings(): Promise<Settings> {

@@ -18,6 +18,7 @@ import {
     FazReactiveAuthorizationStrategy
 } from '../fortigate-faz-integration-strategy';
 import { AzureFunctionInvocationProxy } from './azure-cloud-function-proxy';
+import { AzureFortiGateAutoscaleSetting } from './azure-fortigate-autoscale-settings';
 import { AzureFortiGateBootstrapStrategy } from './azure-fortigate-bootstrap-config-strategy';
 import { AzureFunctionInvocable } from './azure-function-invocable';
 import { AzureHybridScalingGroupStrategy } from './azure-hybrid-scaling-group-strategy';
@@ -62,7 +63,7 @@ export class AzureFortiGateAutoscale<TReq, TContext, TRes> extends FortiGateAuto
     }
 }
 
-export abstract class AzureFunctionInvocationHandler extends FortiGateAutoscaleFunctionInvocationHandler {
+export class AzureFortiGateAutoscaleFazIntegrationHandler extends FortiGateAutoscaleFunctionInvocationHandler {
     autoscale: AzureFortiGateAutoscale<JSONable, Context, void>;
     constructor(autoscale: AzureFortiGateAutoscale<JSONable, Context, void>) {
         super();
@@ -81,7 +82,14 @@ export abstract class AzureFunctionInvocationHandler extends FortiGateAutoscaleF
         invocable: string
     ): Promise<void> {
         const payloadData: JSONable = JSON.parse(payload.stringifiedData);
+        const settings = await this.platform.getSettings();
         if (invocable === AzureFunctionInvocable.TriggerFazDeviceAuth) {
+            const fazIpSettingItem = settings.get(AzureFortiGateAutoscaleSetting.FortiAnalyzerIp);
+            if (!fazIpSettingItem.value) {
+                throw new CloudFunctionInvocationTimeOutError(
+                    'FortiAnalyzer IP address not specified.'
+                );
+            }
             const deviceAuthorization: FazDeviceAuthorization = {
                 vmId: payloadData.vmId as string,
                 privateIp: payloadData.privateIp && String(payloadData.privateIp),
@@ -90,13 +98,13 @@ export abstract class AzureFunctionInvocationHandler extends FortiGateAutoscaleF
 
             // extract the autoscale admin user and faz info
             const username: string = await this.platform.getSecretFromKeyVault(
-                'AUTOSCALE_ADMIN_USERNAME'
+                'faz-autoscale-admin-username'
             );
             const password: string = await this.platform.getSecretFromKeyVault(
-                'AUTOSCALE_ADMIN_PASSWORD'
+                'faz-autoscale-admin-password'
             );
-            const fazIp: string = process.env.FORTIANALYZER_IP;
-            const fazPort: string = process.env.FORTIANALYZER_PORT;
+            const fazIp: string = fazIpSettingItem.value;
+            const fazPort = '443';
 
             await this.autoscale.fazIntegrationStrategy
                 .processAuthorizationRequest(

@@ -208,6 +208,8 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             } else {
                 throw new Error(`Unsupported request method: ${reqMethod}`);
             }
+        } else if (url.pathname === '/api/peer-invocation') {
+            return Promise.resolve(ReqType.CloudFunctionPeerInvocation);
         } else if (url.pathname === '/api/custom-log') {
             return Promise.resolve(ReqType.CustomLog);
         } else {
@@ -1307,12 +1309,11 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         // see: https://docs.microsoft.com/en-us/azure/azure-functions/functions-bindings-http-webhook-trigger?tabs=csharp#authorization-keys
         const reqHeaders = await this.proxy.getReqHeaders();
         const reqQueryParams = await this.proxy.getReqQueryParameters();
-        const functionAccessKey =
-            String(reqHeaders['x-functions-key']) || reqQueryParams.code || null;
+        const functionAccessKey = reqHeaders['x-functions-key'] || reqQueryParams.code || null;
         const response = await this.adaptee.invokeAzureFunction(
             functionEndpoint,
             JSON.stringify(p),
-            functionAccessKey
+            functionAccessKey && String(functionAccessKey)
         );
         this.proxy.logAsInfo(`invocation response status code: ${response.status}`);
         this.proxy.logAsInfo('called invokeAutoscaleFunction');
