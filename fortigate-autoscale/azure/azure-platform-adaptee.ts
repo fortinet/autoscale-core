@@ -976,7 +976,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             data: JSON.parse(payload),
             // NOTE: see the hard timeout
             // https://docs.microsoft.com/en-us/azure/azure-functions/functions-scale#timeout
-            timeout: 230
+            timeout: 230000 // ms
         };
         return await axios(reqOptions);
     }

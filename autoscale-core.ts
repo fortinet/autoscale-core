@@ -53,17 +53,6 @@ export interface AutoscaleHandler<TReq, TContext, TRes> {
     ): Promise<TRes>;
 }
 
-export interface AutoscaleServiceProvider<TRes> {
-    handleServiceRequest(): Promise<TRes>;
-    startAutoscale(): Promise<boolean>;
-    stopAutoscale(): Promise<boolean>;
-    SaveAutoscaleSettings(props: { [key: string]: string }): Promise<boolean>;
-}
-
-export interface FazIntegrationServiceProvider<TReq, TRes> {
-    handleServiceRequest(request: TReq): Promise<TRes>;
-}
-
 export interface AutoscaleCore
     extends AutoscaleContext,
         ScalingGroupContext,

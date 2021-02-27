@@ -1,9 +1,9 @@
 import { CloudFormationCustomResourceEvent, Context } from 'aws-lambda';
-
-import { AutoscaleServiceProvider } from '../../autoscale-core';
+import { AutoscaleServiceProvider } from '../../autoscale-service-provider';
 import { ReqType } from '../../cloud-function-proxy';
 import { NicAttachmentStrategyResult } from '../../context-strategy/nic-attachment-context';
 import { VpnAttachmentStrategyResult } from '../../context-strategy/vpn-attachment-context';
+import { FortiGateAutoscaleServiceType } from '../fortigate-autoscale-service-provider';
 import { AwsCloudFormationCustomResourceEventProxy } from './aws-cloud-function-proxy';
 import { AwsFortiGateAutoscale } from './aws-fortigate-autoscale';
 import {
@@ -11,6 +11,11 @@ import {
     AwsFortiGateAutoscaleSettingItemDictionary
 } from './aws-fortigate-autoscale-settings';
 import { AwsPlatformAdapter } from './aws-platform-adapter';
+
+export const AwsFortiGateAutoscaleServiceType = {
+    ...FortiGateAutoscaleServiceType,
+    InitiateAutoscale: 'initiateAutoscale'
+};
 
 export type AwsFortiGateAutoscaleServiceEvent =
     | AwsFortiGateAutoscaleServiceEventStartAutoscale
@@ -25,7 +30,7 @@ export interface AwsFortiGateAutoscaleServiceEventBase {
 
 export interface AwsFortiGateAutoscaleServiceEventStartAutoscale
     extends AwsFortiGateAutoscaleServiceEventBase {
-    ServiceType: 'startAutoscale' | 'initiateAutoscale';
+    ServiceType: 'initiateAutoscale' | 'startAutoscale';
     DesireCapacity?: number;
     MinSize?: number;
     MaxSize?: number;
@@ -61,7 +66,8 @@ export interface AwsFortiGateAutoscaleServiceEventUnknown
     [key: string]: string;
 }
 
-export class AwsFortiGateAutoscaleCfnServiceProvider implements AutoscaleServiceProvider<void> {
+export class AwsFortiGateAutoscaleCfnServiceProvider
+    implements AutoscaleServiceProvider<CloudFormationCustomResourceEvent, void> {
     autoscale: AwsFortiGateAutoscale<CloudFormationCustomResourceEvent, Context, void>;
     constructor(
         autoscale: AwsFortiGateAutoscale<CloudFormationCustomResourceEvent, Context, void>
@@ -92,23 +98,25 @@ export class AwsFortiGateAutoscaleCfnServiceProvider implements AutoscaleService
                     case 'Create':
                     case 'Update':
                         switch (serviceEvent.ServiceType) {
-                            case 'initiateAutoscale':
-                            case 'startAutoscale':
+                            case AwsFortiGateAutoscaleServiceType.InitiateAutoscale:
+                            case AwsFortiGateAutoscaleServiceType.StartAutoscale:
                                 await this.autoscale.init();
                                 await this.startAutoscale();
                                 break;
-                            case 'saveSettings':
-                                await this.SaveAutoscaleSettings(serviceEvent);
+                            case AwsFortiGateAutoscaleServiceType.SaveAutoscaleSettings:
+                                await this.saveAutoscaleSettings(serviceEvent);
                                 break;
-                            case 'stopAutoscale':
+                            case AwsFortiGateAutoscaleServiceType.StopAutoscale:
                                 this.proxy.logAsWarning(
                                     `ServiceType: [${serviceEvent.ServiceType}] is skipped in ` +
                                         `the RequestType: [${serviceEventType}]`
                                 );
                                 break;
-                            case 'registerFortiAnalyzer':
+                            case AwsFortiGateAutoscaleServiceType.RegisterFortiAnalyzer:
                                 await this.autoscale.init();
-                                await this.registerFortiAnalyzer(serviceEvent);
+                                await this.registerFortiAnalyzer(
+                                    serviceEvent as AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer
+                                );
                                 break;
                             case undefined:
                             default:
@@ -119,16 +127,16 @@ export class AwsFortiGateAutoscaleCfnServiceProvider implements AutoscaleService
                         break;
                     case 'Delete':
                         switch (serviceEvent.ServiceType) {
-                            case 'initiateAutoscale':
-                            case 'startAutoscale':
-                            case 'saveSettings':
-                            case 'registerFortiAnalyzer':
+                            case AwsFortiGateAutoscaleServiceType.InitiateAutoscale:
+                            case AwsFortiGateAutoscaleServiceType.StartAutoscale:
+                            case AwsFortiGateAutoscaleServiceType.SaveAutoscaleSettings:
+                            case AwsFortiGateAutoscaleServiceType.RegisterFortiAnalyzer:
                                 this.proxy.logAsWarning(
                                     `ServiceType: [${serviceEvent.ServiceType}] is skipped in ` +
                                         `the RequestType: [${serviceEventType}]`
                                 );
                                 break;
-                            case 'stopAutoscale':
+                            case AwsFortiGateAutoscaleServiceType.StopAutoscale:
                                 await this.autoscale.init();
                                 await this.stopAutoscale();
                                 break;
@@ -263,7 +271,7 @@ export class AwsFortiGateAutoscaleCfnServiceProvider implements AutoscaleService
      * @param {AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer} event the trigger event
      * for the certain FortiGate Autoscale service.
      */
-    async SaveAutoscaleSettings(
+    async saveAutoscaleSettings(
         event: AwsFortiGateAutoscaleServiceEventSaveSettings
     ): Promise<boolean> {
         this.proxy.logAsInfo('calling saveAutoscaleSettings');

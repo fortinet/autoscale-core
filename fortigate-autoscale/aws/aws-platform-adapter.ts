@@ -42,6 +42,7 @@ import {
     PrimaryRecordVoteState
 } from '../../primary-election';
 import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../../virtual-machine';
+import { FortiGateAutoscaleServiceRequestSource } from '../fortigate-autoscale-service-provider';
 import {
     AwsApiGatewayEventProxy,
     AwsCloudFormationCustomResourceEventProxy,
@@ -185,7 +186,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                             `Unsupported request detail-type: [${body['detail-type']}]`
                     );
                 }
-            } else if (body.source === 'fortinet.autoscale') {
+            } else if (body.source === FortiGateAutoscaleServiceRequestSource.FortiGateAutoscale) {
                 if (String(body['detail-type']) === 'FortiAnalyzer Authorization Request') {
                     return Promise.resolve(ReqType.ServiceProviderRequest);
                 }

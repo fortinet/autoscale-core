@@ -1,7 +1,7 @@
 import { Context, ScheduledEvent } from 'aws-lambda';
-
-import { FazIntegrationServiceProvider } from '../../autoscale-core';
+import { AutoscaleServiceProvider } from '../../autoscale-service-provider';
 import { ReqType } from '../../cloud-function-proxy';
+import { FortiGateAutoscaleServiceRequestSource } from '../fortigate-autoscale-service-provider';
 import { AwsScheduledEventProxy } from './aws-cloud-function-proxy';
 import { AwsFortiGateAutoscale } from './aws-fortigate-autoscale';
 import { AwsPlatformAdapter } from './aws-platform-adapter';
@@ -21,8 +21,8 @@ export type AwsFazAuthorizationServiceType = 'triggerFazDeviceAuth' | string;
 export type AwsFazAuthorizationEventSource = 'fortinet.autoscale' | string;
 export type AwsFazAuthorizationEventDetailType = 'FortiAnalyzer Authorization Request' | string;
 
-export class AwsFortiGateAutoscaleFazIntegrationServiceProvider
-    implements FazIntegrationServiceProvider<AwsFazAuthorizationServiceEvent, void> {
+export class AwsFortiGateAutoscaleFortiGateAutoscaleServiceProvider
+    implements AutoscaleServiceProvider<AwsFazAuthorizationServiceEvent, void> {
     constructor(
         readonly autoscale: AwsFortiGateAutoscale<
             ScheduledEvent<AwsFazAuthorizationServiceDetail>,
@@ -31,6 +31,19 @@ export class AwsFortiGateAutoscaleFazIntegrationServiceProvider
         >
     ) {
         this.autoscale = autoscale;
+    }
+    startAutoscale(): Promise<boolean> {
+        this.autoscale.proxy.logAsWarning('[startAutoscale] Method not implemented.');
+        return Promise.resolve(true);
+    }
+    stopAutoscale(): Promise<boolean> {
+        this.autoscale.proxy.logAsWarning('[stopAutoscale] Method not implemented.');
+        return Promise.resolve(true);
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    saveAutoscaleSettings(props: { [key: string]: string }): Promise<boolean> {
+        this.autoscale.proxy.logAsWarning('[SaveAutoscaleSettings] Method not implemented.');
+        return Promise.resolve(true);
     }
     get proxy(): AwsScheduledEventProxy {
         return this.autoscale.proxy as AwsScheduledEventProxy;
@@ -42,7 +55,6 @@ export class AwsFortiGateAutoscaleFazIntegrationServiceProvider
         this.proxy.logAsInfo('calling handleServiceRequest');
         try {
             const reqType: ReqType = await this.platform.getRequestType();
-            // NOTE: source now supports 'fortinet.autoscale' only
             const source: AwsFazAuthorizationEventSource = (await this.proxy.getReqBody()).source;
             // NOTE: detail must be type: FazAuthorizationServiceDetail
             const serviceDetail: AwsFazAuthorizationServiceDetail = {
@@ -53,7 +65,10 @@ export class AwsFortiGateAutoscaleFazIntegrationServiceProvider
             if (serviceDetail.ServiceToken !== this.proxy.context.invokedFunctionArn) {
                 throw new Error(`Invalid ServiceToken: ${serviceDetail.ServiceToken}.`);
             }
-            if (source === 'fortinet.autoscale' && reqType === ReqType.ServiceProviderRequest) {
+            if (
+                source === FortiGateAutoscaleServiceRequestSource.FortiGateAutoscale &&
+                reqType === ReqType.ServiceProviderRequest
+            ) {
                 switch (serviceDetail.ServiceType) {
                     case 'triggerFazDeviceAuth':
                         await this.autoscale.init();

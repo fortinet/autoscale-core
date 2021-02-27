@@ -17,7 +17,7 @@ import {
     FazDeviceAuthorization,
     FazReactiveAuthorizationStrategy
 } from '../fortigate-faz-integration-strategy';
-import { AzureFunctionInvocationProxy } from './azure-cloud-function-proxy';
+import { AzureFunctionHttpTriggerProxy } from './azure-cloud-function-proxy';
 import { AzureFortiGateAutoscaleSetting } from './azure-fortigate-autoscale-settings';
 import { AzureFortiGateBootstrapStrategy } from './azure-fortigate-bootstrap-config-strategy';
 import { AzureFunctionInvocable } from './azure-function-invocable';
@@ -63,14 +63,14 @@ export class AzureFortiGateAutoscale<TReq, TContext, TRes> extends FortiGateAuto
     }
 }
 
-export class AzureFortiGateAutoscaleFazIntegrationHandler extends FortiGateAutoscaleFunctionInvocationHandler {
+export class AzureFortiGateAutoscaleFazAuthHandler extends FortiGateAutoscaleFunctionInvocationHandler {
     autoscale: AzureFortiGateAutoscale<JSONable, Context, void>;
     constructor(autoscale: AzureFortiGateAutoscale<JSONable, Context, void>) {
         super();
         this.autoscale = autoscale;
     }
-    get proxy(): AzureFunctionInvocationProxy {
-        return this.autoscale.proxy as AzureFunctionInvocationProxy;
+    get proxy(): AzureFunctionHttpTriggerProxy {
+        return this.autoscale.proxy as AzureFunctionHttpTriggerProxy;
     }
 
     get platform(): AzurePlatformAdapter {

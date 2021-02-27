@@ -1,7 +1,6 @@
 import * as AzureComputeModels from '@azure/arm-compute/esm/models';
 import * as AzureNetworkModels from '@azure/arm-network/esm/models';
 import path from 'path';
-import { URL } from 'url';
 import { SettingItemDefinition, Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
 import {
@@ -18,6 +17,7 @@ import {
     SaveCondition
 } from '../../db-definitions';
 import { genChecksum } from '../../helper-function';
+import { JSONable } from '../../jsonable';
 import {
     LicenseFile,
     LicenseStockRecord,
@@ -32,7 +32,13 @@ import {
     PrimaryRecordVoteState
 } from '../../primary-election';
 import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../../virtual-machine';
-import { AzureFunctionInvocationProxy, LogItem } from './azure-cloud-function-proxy';
+import { FortiGateAutoscaleServiceRequestSource } from '../fortigate-autoscale-service-provider';
+import {
+    AzureFunctionHttpTriggerProxy,
+    AzureFunctionInvocationProxy,
+    AzureFunctionServiceProviderProxy,
+    LogItem
+} from './azure-cloud-function-proxy';
 import {
     AzureAutoscale,
     AzureAutoscaleDbItem,
@@ -51,6 +57,7 @@ import {
     AzureFortiGateAutoscaleSetting,
     AzureFortiGateAutoscaleSettingItemDictionary
 } from './azure-fortigate-autoscale-settings';
+import * as AzureFunctionDefs from './azure-function-definitions';
 import { ApiCache, ApiCacheOption, AzurePlatformAdaptee } from './azure-platform-adaptee';
 
 export type ConsistenyCheckType<T> = { [key in keyof T]?: string | number | boolean | null };
@@ -171,51 +178,66 @@ export class AzurePlatformAdapter implements PlatformAdapter {
     async getRequestType(): Promise<ReqType> {
         const reqMethod = await this.proxy.getReqMethod();
         const headers = await this.proxy.getReqHeaders();
-        const url = new URL(this.proxy.request.url);
-        if (url.pathname === '/api/byol-license') {
-            if (reqMethod === ReqMethod.GET) {
-                if (headers['fos-instance-id'] === null) {
-                    throw new Error(
-                        'Invalid request. fos-instance-id is missing in [GET] request header.'
-                    );
+        const body = await this.proxy.getReqBody();
+        const functionName = this.proxy.context.executionContext.functionName;
+        if (this.proxy instanceof AzureFunctionHttpTriggerProxy) {
+            if (functionName === AzureFunctionDefs.ByolLicense.name) {
+                if (reqMethod === ReqMethod.GET) {
+                    if (headers['fos-instance-id'] === null) {
+                        throw new Error(
+                            'Invalid request. fos-instance-id is missing in [GET] request header.'
+                        );
+                    } else {
+                        return Promise.resolve(ReqType.ByolLicense);
+                    }
                 } else {
-                    return Promise.resolve(ReqType.ByolLicense);
+                    throw new Error(`Invalid request. Method [${reqMethod}] not allowd`);
                 }
+            } else if (functionName === AzureFunctionDefs.FortiGateAutoscaleHandler.name) {
+                if (reqMethod === ReqMethod.GET) {
+                    if (headers['fos-instance-id'] === null) {
+                        throw new Error(
+                            'Invalid request. fos-instance-id is missing in [GET] request header.'
+                        );
+                    } else {
+                        return Promise.resolve(ReqType.BootstrapConfig);
+                    }
+                } else if (reqMethod === ReqMethod.POST) {
+                    if ((body as JSONable).status) {
+                        return Promise.resolve(ReqType.StatusMessage);
+                    } else if (body.instance) {
+                        return Promise.resolve(ReqType.HeartbeatSync);
+                    } else {
+                        throw new Error(
+                            `Invalid request body: [instance: ${body.instance}],` +
+                                ` [status: ${body.status}]`
+                        );
+                    }
+                } else {
+                    throw new Error(`Unsupported request method: ${reqMethod}`);
+                }
+            } else if (functionName === AzureFunctionDefs.FazAuthHandler.name) {
+                return Promise.resolve(ReqType.CloudFunctionPeerInvocation);
+            } else if (functionName === AzureFunctionDefs.CustomLog.name) {
+                return Promise.resolve(ReqType.CustomLog);
             } else {
-                throw new Error(`Invalid request. Method [${reqMethod}] not allowd`);
+                throw new Error('Unknown request type.');
             }
-        } else if (url.pathname === '/api/fgt-as-handler') {
-            if (reqMethod === ReqMethod.GET) {
-                if (headers['fos-instance-id'] === null) {
+        }
+        // NOTE: if request is a service provider request
+        else if (this.proxy instanceof AzureFunctionServiceProviderProxy) {
+            switch (body.source) {
+                case FortiGateAutoscaleServiceRequestSource.FortiGateAutoscale:
+                    return Promise.resolve(ReqType.ServiceProviderRequest);
+                default:
                     throw new Error(
-                        'Invalid request. fos-instance-id is missing in [GET] request header.'
+                        `Unsupported CloudFunctionProxy. Request: ${JSON.stringify(
+                            this.proxy.request
+                        )}`
                     );
-                } else {
-                    return Promise.resolve(ReqType.BootstrapConfig);
-                }
-            } else if (reqMethod === ReqMethod.POST) {
-                const body = await this.proxy.getReqBody();
-                if (body.status) {
-                    return Promise.resolve(ReqType.StatusMessage);
-                } else if (body.instance) {
-                    return Promise.resolve(ReqType.HeartbeatSync);
-                } else {
-                    throw new Error(
-                        `Invalid request body: [instance: ${body.instance}],` +
-                            ` [status: ${body.status}]`
-                    );
-                }
-            } else {
-                throw new Error(`Unsupported request method: ${reqMethod}`);
             }
-        } else if (url.pathname === '/api/peer-invocation') {
-            return Promise.resolve(ReqType.CloudFunctionPeerInvocation);
-        } else if (url.pathname === '/api/custom-log') {
-            return Promise.resolve(ReqType.CustomLog);
         } else {
-            throw new Error(
-                `Unsupported CloudFunctionProxy. Request: ${JSON.stringify(this.proxy.request)}`
-            );
+            throw new Error(`Unsupported CloudFunctionProxy: ${JSON.stringify(this.proxy)}`);
         }
     }
     /**

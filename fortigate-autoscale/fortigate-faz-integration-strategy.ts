@@ -52,7 +52,7 @@ export class FazReactiveAuthorizationStrategy implements FazIntegrationStrategy 
      * @param {VirtualMachine} vm the vm to process FAZ authorization in a different Lambda function
      * instance.
      */
-    async createAuthorizationRequest(vm: VirtualMachine): Promise<void> {
+    async createAuthorizationRequest(vm?: VirtualMachine): Promise<void> {
         this.proxy.logAsInfo('calling FazReactiveRegsitrationStrategy.createAuthorizationRequest.');
         // TODO: require implementation
         const settings = await this.platform.getSettings();
