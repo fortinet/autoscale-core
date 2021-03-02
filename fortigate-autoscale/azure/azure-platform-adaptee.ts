@@ -203,7 +203,9 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             requestProcessor
         );
         const records: Map<string, AzureSettingsDbItem> = new Map();
-        res.result.forEach(rec => records.set(rec.settingKey, rec));
+        if (res && res.result) {
+            res.result.forEach(rec => records.set(rec.settingKey, rec));
+        }
         const settings: Settings = new Map<string, SettingItem>();
         Object.values(AzureFortiGateAutoscaleSetting).forEach(value => {
             if (records.has(value)) {
@@ -663,7 +665,6 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             if (cacheOption === ApiCacheOption.ReadCacheAndDelete && res) {
                 await this.apiRequestDeleteCache(req);
                 cacheTime = 0;
-                data = null;
             }
         }
         // for those options require reading data from api
