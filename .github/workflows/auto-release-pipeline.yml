@@ -110,6 +110,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       # (required) install dependencies
+      # in case of failing to install dependencies due to the ssh-related issue:
+      # npm ERR! /usr/bin/git ls-remote -h -t ssh://git@github.com/<your github account>/<repo>.git
+      # npm ERR! Warning: Permanently added the RSA host key for IP address <a public ip address> to the list of known hosts.
+      # npm ERR! git@github.com: Permission denied (publickey).
+      # npm ERR! fatal: Could not read from remote repository.
+      #
+      # follow the instruction to setup the SSH_PRIVATE_KEY
+      # see instruction in: https://github.com/actions/setup-node/issues/214
       - name: Install
         run: npm ci
       # check node package dependency vulneraility on production level
@@ -148,6 +156,14 @@ jobs:
           git config user.name "Fortinet(GitHub Automation)"
           git config user.email github@fortinet.com
       # (required) install dependencies
+      # in case of failing to install dependencies due to the ssh-related issue:
+      # npm ERR! /usr/bin/git ls-remote -h -t ssh://git@github.com/<your github account>/<repo>.git
+      # npm ERR! Warning: Permanently added the RSA host key for IP address <a public ip address> to the list of known hosts.
+      # npm ERR! git@github.com: Permission denied (publickey).
+      # npm ERR! fatal: Could not read from remote repository.
+      #
+      # follow the instruction to setup the SSH_PRIVATE_KEY
+      # see instruction in: https://github.com/actions/setup-node/issues/214
       - name: Install
         # if needs to bump version and create tag
         if: >-
@@ -215,6 +231,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       # (required) install dependencies
+      # in case of failing to install dependencies due to the ssh-related issue:
+      # npm ERR! /usr/bin/git ls-remote -h -t ssh://git@github.com/<your github account>/<repo>.git
+      # npm ERR! Warning: Permanently added the RSA host key for IP address <a public ip address> to the list of known hosts.
+      # npm ERR! git@github.com: Permission denied (publickey).
+      # npm ERR! fatal: Could not read from remote repository.
+      #
+      # follow the instruction to setup the SSH_PRIVATE_KEY
+      # see instruction in: https://github.com/actions/setup-node/issues/214
       - name: Install
         run: npm ci
       # run build process for the new release

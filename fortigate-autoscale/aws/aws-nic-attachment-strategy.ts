@@ -1,5 +1,5 @@
 import { SubnetPair, SubnetPairIndex } from '../../autoscale-setting';
-import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
+import { CloudFunctionProxyAdapter, DebugMode } from '../../cloud-function-proxy';
 import {
     NicAttachmentRecord,
     NicAttachmentStatus,
@@ -26,11 +26,11 @@ export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
     }
 
     protected async listRecord(vm: VirtualMachine): Promise<NicAttachmentRecord[]> {
-        this.proxy.logAsDebug('calling AwsNicAttachmentStrategy.getRecord');
+        this.proxy.logAsDebug(DebugMode.DebugOnly, 'calling AwsNicAttachmentStrategy.getRecord');
         const records = (await this.platform.listNicAttachmentRecord()).filter(rec => {
             return rec.vmId === vm.id;
         });
-        this.proxy.logAsDebug('called AwsNicAttachmentStrategy.getRecord');
+        this.proxy.logAsDebug(DebugMode.DebugOnly, 'called AwsNicAttachmentStrategy.getRecord');
         return records;
     }
 

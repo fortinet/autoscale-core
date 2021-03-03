@@ -5,12 +5,11 @@ import {
     Context,
     ScheduledEvent
 } from 'aws-lambda';
-
-import { mapHttpMethod } from '../../autoscale-core';
 import {
     CloudFunctionProxy,
     CloudFunctionResponseBody,
     LogLevel,
+    mapHttpMethod,
     ReqBody,
     ReqHeaders,
     ReqMethod
@@ -61,14 +60,24 @@ export class AwsScheduledEventProxy extends CloudFunctionProxy<
     ): { [key: string]: unknown } {
         return {};
     }
-    getReqBody(): ScheduledEvent {
-        return this.request;
+    getReqBody(): Promise<ScheduledEvent> {
+        return Promise.resolve(this.request);
     }
-    getRequestAsString(): string {
-        return JSON.stringify(this.request);
+    getRequestAsString(): Promise<string> {
+        return Promise.resolve(JSON.stringify(this.request));
     }
-    getRemainingExecutionTime(): number {
-        return this.context.getRemainingTimeInMillis();
+    getRemainingExecutionTime(): Promise<number> {
+        return Promise.resolve(this.context.getRemainingTimeInMillis());
+    }
+
+    getReqHeaders(): Promise<ReqHeaders> {
+        return Promise.resolve({});
+    }
+    getReqMethod(): Promise<ReqMethod> {
+        return Promise.resolve(null);
+    }
+    getReqQueryParameters(): Promise<{ [name: string]: string }> {
+        return Promise.resolve(null);
     }
 }
 
@@ -79,29 +88,22 @@ export class AwsApiGatewayEventProxy extends CloudFunctionProxy<
 > {
     request: APIGatewayProxyEvent;
     context: Context;
-    log(message: string, level: LogLevel): void {
+    log(message: string, level: LogLevel, ...others: unknown[]): void {
         switch (level) {
             case LogLevel.Debug:
-                if (process.env.DEBUG_MODE === 'true') {
-                    console.debug(message);
-                } else {
-                    console.debug(
-                        'Debug level log is disabled. To view debug level logs, please' +
-                            " add the process environment variable 'DEBUG_MODE' with value 'true'."
-                    );
-                }
+                console.debug(message, ...others);
                 break;
             case LogLevel.Error:
-                console.error(message);
+                console.error(message, ...others);
                 break;
             case LogLevel.Info:
-                console.info(message);
+                console.info(message, ...others);
                 break;
             case LogLevel.Warn:
-                console.warn(message);
+                console.warn(message, ...others);
                 break;
             default:
-                console.log(message);
+                console.log(message, ...others);
         }
     }
 
@@ -124,25 +126,35 @@ export class AwsApiGatewayEventProxy extends CloudFunctionProxy<
             isBase64Encoded: false
         };
     }
-    getRequestAsString(): string {
-        return JSON.stringify(this.request);
+    getRequestAsString(): Promise<string> {
+        return Promise.resolve(JSON.stringify(this.request));
     }
-    getReqBody(): ReqBody {
+    getReqBody(): Promise<ReqBody> {
         let body: ReqBody;
         try {
             body = (this.request.body && JSON.parse(this.request.body)) || {};
         } catch (error) {}
-        return body;
+        return Promise.resolve(body || {});
     }
-    getReqHeaders(): ReqHeaders {
-        const headers: ReqHeaders = { ...this.request.headers };
-        return headers;
+    getReqHeaders(): Promise<ReqHeaders> {
+        // NOTE: header keys will be treated case-insensitive as per
+        // the RFC https://tools.ietf.org/html/rfc7540#section-8.1.2
+        const headers: ReqHeaders = (this.request.headers && {}) || null;
+        if (this.request.headers) {
+            Object.entries(this.request.headers).forEach(([k, v]) => {
+                headers[String(k).toLowerCase()] = v;
+            });
+        }
+        return Promise.resolve(headers);
     }
-    getReqMethod(): ReqMethod {
-        return mapHttpMethod(this.request.httpMethod);
+    getReqMethod(): Promise<ReqMethod> {
+        return Promise.resolve(mapHttpMethod(this.request.httpMethod));
     }
-    getRemainingExecutionTime(): number {
-        return this.context.getRemainingTimeInMillis();
+    getRemainingExecutionTime(): Promise<number> {
+        return Promise.resolve(this.context.getRemainingTimeInMillis());
+    }
+    getReqQueryParameters(): Promise<{ [name: string]: string }> {
+        return Promise.resolve(this.request.queryStringParameters);
     }
 }
 
@@ -203,11 +215,11 @@ export class AwsCloudFormationCustomResourceEventProxy extends CloudFunctionProx
     ): AwsCloudFormationCustomResourceEventResponse {
         throw new Error('Not supposed to call the formatResponse method in this implementation.');
     }
-    getReqBody(): CloudFormationCustomResourceEvent {
-        return this.request;
+    getReqBody(): Promise<CloudFormationCustomResourceEvent> {
+        return Promise.resolve(this.request);
     }
-    getRequestAsString(): string {
-        return JSON.stringify(this.request);
+    getRequestAsString(): Promise<string> {
+        return Promise.resolve(JSON.stringify(this.request));
     }
 
     async sendResponse(successful?: boolean, data?: JSONable): Promise<void> {
@@ -219,8 +231,18 @@ export class AwsCloudFormationCustomResourceEventProxy extends CloudFunctionProx
             data || {}
         );
     }
-    getRemainingExecutionTime(): number {
-        return this.context.getRemainingTimeInMillis();
+    getRemainingExecutionTime(): Promise<number> {
+        return Promise.resolve(this.context.getRemainingTimeInMillis());
+    }
+
+    getReqHeaders(): Promise<ReqHeaders> {
+        return Promise.resolve({});
+    }
+    getReqMethod(): Promise<ReqMethod> {
+        return Promise.resolve(null);
+    }
+    getReqQueryParameters(): Promise<{ [name: string]: string }> {
+        return Promise.resolve(null);
     }
 }
 
@@ -270,25 +292,35 @@ export class AwsLambdaInvocationProxy extends CloudFunctionProxy<JSONable, Conte
         throw new Error('Not supposed to call the formatResponse method in this implementation.');
     }
 
-    getReqBody(): JSONable {
+    getReqBody(): Promise<JSONable> {
         try {
             if (typeof this.request === 'string') {
                 return JSON.parse(this.request as string);
             } else if (typeof this.request === 'object') {
-                return this.request;
+                return Promise.resolve(this.request);
             } else {
-                return null;
+                return Promise.resolve({});
             }
         } catch (error) {
-            return null;
+            return Promise.resolve({});
         }
     }
 
-    getRequestAsString(): string {
-        return JSON.stringify(this.request);
+    getRequestAsString(): Promise<string> {
+        return Promise.resolve(JSON.stringify(this.request));
     }
 
-    getRemainingExecutionTime(): number {
-        return this.context.getRemainingTimeInMillis();
+    getRemainingExecutionTime(): Promise<number> {
+        return Promise.resolve(this.context.getRemainingTimeInMillis());
+    }
+
+    getReqHeaders(): Promise<ReqHeaders> {
+        return Promise.resolve({});
+    }
+    getReqMethod(): Promise<ReqMethod> {
+        return Promise.resolve(null);
+    }
+    getReqQueryParameters(): Promise<{ [name: string]: string }> {
+        return Promise.resolve(null);
     }
 }

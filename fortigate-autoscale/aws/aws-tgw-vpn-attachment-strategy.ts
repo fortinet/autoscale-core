@@ -1,3 +1,4 @@
+import { CloudFunctionInvocationTimeOutError } from '../../cloud-function-peer-invocation';
 import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import {
     VpnAttachmentStrategy,
@@ -12,10 +13,7 @@ import {
 import { ResourceFilter, TgwVpnAttachmentRecord } from '../../platform-adapter';
 import { VirtualMachine } from '../../virtual-machine';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import {
-    AwsLambdaInvocable,
-    AwsLambdaInvocableExecutionTimeOutError
-} from './aws-lambda-invocable';
+import { AwsLambdaInvocable } from './aws-lambda-invocable';
 import { AwsPlatformAdapter } from './aws-platform-adapter';
 import {
     AwsTgwVpnUpdateAttachmentRouteTableRequest,
@@ -213,9 +211,7 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
             AwsFortiGateAutoscaleSetting.AwsTransitGatewayVpnHandlerName
         ).value;
         await this.platform.invokeAutoscaleFunction(
-            {
-                ...request
-            },
+            request,
             handlerName,
             AwsLambdaInvocable.UpdateTgwAttachmentRouteTable
         );
@@ -289,16 +285,14 @@ export class AwsTgwVpnAttachmentStrategy implements VpnAttachmentStrategy {
             return this.platform.getAwsTgwVpnAttachmentState(attachmentId);
         };
 
-        const checker: WaitForConditionChecker<AwsVpnAttachmentState> = (
+        const checker: WaitForConditionChecker<AwsVpnAttachmentState> = async (
             state: AwsVpnAttachmentState,
             callCount: number
         ) => {
+            const remainingTime = await this.proxy.getRemainingExecutionTime();
             // wait for nearly the end of Lambda Function execution timeout
-            if (
-                callCount * waitForInterval >
-                this.proxy.getRemainingExecutionTime() - timeBeforeRemainingExecution
-            ) {
-                throw new AwsLambdaInvocableExecutionTimeOutError(
+            if (callCount * waitForInterval > remainingTime - timeBeforeRemainingExecution) {
+                throw new CloudFunctionInvocationTimeOutError(
                     'Execution timeout. Maximum amount of waiting time:' +
                         ` ${(callCount * waitForInterval) / 1000} seconds, have been reached.`
                 );

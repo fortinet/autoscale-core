@@ -17,10 +17,10 @@ import fs from 'fs';
 import { isIPv4 } from 'net';
 import path from 'path';
 
-import { PlatformAdaptee } from '../../autoscale-core';
+import { PlatformAdaptee } from '../../platform-adaptee';
 import { SettingItem, Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
-import { CreateOrUpdate, KeyValue, SettingsDbItem, Table } from '../../db-definitions';
+import { SaveCondition, KeyValue, SettingsDbItem, Table } from '../../db-definitions';
 import { ResourceFilter } from '../../platform-adapter';
 import * as AwsDBDef from './aws-db-definitions';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
@@ -81,11 +81,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
     ): Promise<void> {
         // CAUTION: validate the db input
         table.validateInput<T>(item);
-        if (
-            conditionExp &&
-            conditionExp.type &&
-            conditionExp.type === CreateOrUpdate.UpdateExisting
-        ) {
+        if (conditionExp && conditionExp.type && conditionExp.type === SaveCondition.UpdateOnly) {
             const keys: DocumentClient.Key = {};
             // get the key names from table,
             // then assign the value of each key name of item to the key
@@ -149,7 +145,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         return (result.Item && table.convertRecord(result.Item)) || null;
     }
     /**
-     * Delte a given item from the db
+     * Delete a given item from the db
      * @param  {Table<T>} table the instance of Table to delete the item.
      * @param  {T} item the item to be deleted from the db table.
      * @param  {AwsDdbOperations} condition (optional) the condition expression for deleting the item

@@ -1,19 +1,22 @@
 import EC2 from 'aws-sdk/clients/ec2';
 import path from 'path';
-
 import { Settings } from '../../autoscale-setting';
 import { Blob } from '../../blob';
+import {
+    CloudFunctionInvocationPayload,
+    constructInvocationPayload
+} from '../../cloud-function-peer-invocation';
 import { CloudFunctionProxyAdapter, ReqMethod, ReqType } from '../../cloud-function-proxy';
 import { NicAttachmentRecord } from '../../context-strategy/nic-attachment-context';
 import {
     AutoscaleDbItem,
-    CreateOrUpdate,
     FortiAnalyzerDbItem,
     KeyValue,
     LicenseStockDbItem,
     LicenseUsageDbItem,
     NicAttachmentDbItem,
     PrimaryElectionDbItem,
+    SaveCondition,
     SettingsDbItem,
     VpnAttachmentDbItem
 } from '../../db-definitions';
@@ -39,16 +42,16 @@ import {
     PrimaryRecordVoteState
 } from '../../primary-election';
 import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../../virtual-machine';
+import { FortiGateAutoscaleServiceRequestSource } from '../fortigate-autoscale-service-provider';
 import {
     AwsApiGatewayEventProxy,
     AwsCloudFormationCustomResourceEventProxy,
     AwsLambdaInvocationProxy,
     AwsScheduledEventProxy
 } from './aws-cloud-function-proxy';
-import { LifecycleItemDbItem } from './aws-db-definitions';
 import * as AwsDBDef from './aws-db-definitions';
+import { LifecycleItemDbItem } from './aws-db-definitions';
 import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsLambdaInvocationPayload } from './aws-lambda-invocable';
 import { AwsPlatformAdaptee } from './aws-platform-adaptee';
 import { AwsVpnAttachmentState, AwsVpnConnection } from './transit-gateway-context';
 
@@ -58,7 +61,7 @@ export const TAG_KEY_AUTOSCALE_ROLE = 'AutoscaleRole';
 export interface AwsDdbOperations {
     Expression: string;
     ExpressionAttributeValues?: { [key: string]: string | number | boolean };
-    type?: CreateOrUpdate;
+    type?: SaveCondition;
 }
 
 export enum LifecycleActionResult {
@@ -126,20 +129,29 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called deleteVmFromScalingGroup');
     }
 
-    getRequestType(): Promise<ReqType> {
+    async getRequestType(): Promise<ReqType> {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {
-            const reqMethod = this.proxy.getReqMethod();
+            const reqMethod = await this.proxy.getReqMethod();
             if (reqMethod === ReqMethod.GET) {
-                const headers = this.proxy.getReqHeaders();
-                if (headers['Fos-instance-id'] === null) {
+                const headers = await this.proxy.getReqHeaders();
+                if (headers['fos-instance-id'] === null) {
                     throw new Error(
-                        'Invalid request. Fos-instance-id is missing in [GET] request header.'
+                        'Invalid request. fos-instance-id is missing in [GET] request header.'
                     );
                 } else {
-                    return Promise.resolve(ReqType.BootstrapConfig);
+                    const reqPath =
+                        this.proxy.request.path && this.proxy.request.path.toLowerCase();
+                    switch (reqPath) {
+                        case '/fgt-as-handler':
+                            return Promise.resolve(ReqType.BootstrapConfig);
+                        case '/byol-license':
+                            return Promise.resolve(ReqType.ByolLicense);
+                        default:
+                            throw new Error(`Unsupported request method: ${reqMethod}`);
+                    }
                 }
             } else if (reqMethod === ReqMethod.POST) {
-                const body = this.proxy.getReqBody();
+                const body = await this.proxy.getReqBody();
                 if (body.status) {
                     return Promise.resolve(ReqType.StatusMessage);
                 } else if (body.instance) {
@@ -154,7 +166,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 throw new Error(`Unsupported request method: ${reqMethod}`);
             }
         } else if (this.proxy instanceof AwsScheduledEventProxy) {
-            const body = this.proxy.getReqBody();
+            const body = await this.proxy.getReqBody();
             if (body.source === 'aws.autoscaling') {
                 if (String(body['detail-type']) === 'EC2 Instance-launch Lifecycle Action') {
                     return Promise.resolve(ReqType.LaunchingVm);
@@ -174,14 +186,14 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                             `Unsupported request detail-type: [${body['detail-type']}]`
                     );
                 }
-            } else if (body.source === 'fortinet.autoscale') {
+            } else if (body.source === FortiGateAutoscaleServiceRequestSource.FortiGateAutoscale) {
                 if (String(body['detail-type']) === 'FortiAnalyzer Authorization Request') {
                     return Promise.resolve(ReqType.ServiceProviderRequest);
                 }
             }
             throw new Error(`Unknown supported source: [${body.source}]`);
         } else if (this.proxy instanceof AwsCloudFormationCustomResourceEventProxy) {
-            const body = this.proxy.getReqBody();
+            const body = await this.proxy.getReqBody();
             const arn = this.proxy.context.invokedFunctionArn;
             // NOTE: only accept requests to the specific service handler Lambda function.
             // validate requests by comparing the service token against the lambda function arn.
@@ -223,48 +235,48 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: CreateOrUpdate.CreateOrReplace
+            type: SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<SettingsDbItem>(table, item, conditionExp);
         return item.settingKey;
     }
 
-    getReqVmId(): string {
+    async getReqVmId(): Promise<string> {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {
-            const reqMethod = this.proxy.getReqMethod();
+            const reqMethod = await this.proxy.getReqMethod();
             if (reqMethod === ReqMethod.GET) {
-                const headers = this.proxy.getReqHeaders();
-                return headers['Fos-instance-id'] as string;
+                const headers = await this.proxy.getReqHeaders();
+                return Promise.resolve(headers['fos-instance-id'] as string);
             } else if (reqMethod === ReqMethod.POST) {
-                const body = this.proxy.getReqBody();
-                return body.instance as string;
+                const body = await this.proxy.getReqBody();
+                return Promise.resolve(body.instance as string);
             } else {
-                throw new Error(`Cannot get vm id in unknown request method: ${reqMethod}`);
+                throw new Error(`Cannot get vm id in unsupported request method: ${reqMethod}`);
             }
         } else if (this.proxy instanceof AwsScheduledEventProxy) {
-            const body = this.proxy.getReqBody();
+            const body = await this.proxy.getReqBody();
             if (body.source === 'aws.autoscaling') {
-                return body.detail.EC2InstanceId;
+                return Promise.resolve(body.detail.EC2InstanceId);
             } else {
-                throw new Error(`Cannot get vm id in unknown request: ${JSON.stringify(body)}`);
+                throw new Error(`Cannot get vm id in unsupported request: ${JSON.stringify(body)}`);
             }
         } else {
-            throw new Error('Cannot get vm id in unknown request.');
+            throw new Error('Cannot get vm id in unsupported request.');
         }
     }
-    getReqHeartbeatInterval(): number {
+    async getReqHeartbeatInterval(): Promise<number> {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {
-            const body = this.proxy.getReqBody();
+            const body = await this.proxy.getReqBody();
             return (body.interval && Number(body.interval)) || NaN;
         } else {
             return NaN;
         }
     }
-    getReqAsString(): string {
+    getReqAsString(): Promise<string> {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {
-            return JSON.stringify(this.proxy.request);
+            return Promise.resolve(JSON.stringify(this.proxy.request));
         } else if (this.proxy instanceof AwsScheduledEventProxy) {
-            return JSON.stringify(this.proxy.request);
+            return Promise.resolve(JSON.stringify(this.proxy.request));
         } else {
             throw new Error('Unknown request.');
         }
@@ -341,7 +353,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
 
     async getTargetVm(): Promise<VirtualMachine> {
         this.proxy.logAsInfo('calling getTargetVm');
-        const instance = await this.adaptee.describeInstance(this.getReqVmId());
+        const instance = await this.adaptee.describeInstance(await this.getReqVmId());
         let vm: VirtualMachine;
         if (instance) {
             const byolGroupName = this.settings.get(
@@ -586,7 +598,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: CreateOrUpdate.CreateOrReplace
+            type: SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<AutoscaleDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called createHealthCheckRecord');
@@ -615,7 +627,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: CreateOrUpdate.UpdateExisting
+            type: SaveCondition.UpdateOnly
         };
         await this.adaptee.saveItemToDb<AutoscaleDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called updateHealthCheckRecord');
@@ -641,7 +653,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             // if it exists but timeout
             const conditionExp: AwsDdbOperations = {
                 Expression: 'attribute_not_exists(scalingGroupName)',
-                type: CreateOrUpdate.CreateOrReplace
+                type: SaveCondition.InsertOnly
             };
             // if specified an old rec to purge, use a strict conditional expression to replace.
             if (oldRec) {
@@ -710,10 +722,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             'configset'
         ];
         keyPrefix.push(name);
-        const content = await this.adaptee.getS3ObjectContent(
-            bucket,
-            path.normalize(path.resolve('/', ...keyPrefix).substr(1))
-        );
+        const filePath = path.posix.join(...keyPrefix.filter(k => !!k));
+        this.proxy.logAsDebug(`load blob in: container [${bucket}], path:` + `[${filePath}]`);
+        const content = await this.adaptee.getS3ObjectContent(bucket, filePath);
         this.proxy.logAsInfo('configset loaded.');
         return content;
     }
@@ -741,7 +752,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             return [];
         }
 
-        const location = path.join(
+        const location = path.posix.join(
             ...[keyPrefix, 'configset', subDirectory || null].filter(r => !!r)
         );
 
@@ -764,7 +775,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         );
         return await Promise.all(
             blobs.map(async blob => {
-                const filePath = path.join(licenseDirectoryName, blob.fileName);
+                const filePath = path.posix.join(licenseDirectoryName, blob.fileName);
                 const content = await this.adaptee.getS3ObjectContent(
                     storageContainerName,
                     filePath
@@ -851,15 +862,15 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     Expression: ''
                 };
                 let typeText: string;
-                // recrod exisit, update it
+                // recrod exists, update it
                 if (items.has(record.checksum)) {
                     stockRecordChecksums.splice(stockRecordChecksums.indexOf(record.checksum), 1);
-                    conditionExp.type = CreateOrUpdate.UpdateExisting;
+                    conditionExp.type = SaveCondition.UpdateOnly;
                     typeText =
                         `update existing item (filename: ${record.fileName},` +
                         ` checksum: ${record.checksum})`;
                 } else {
-                    conditionExp.type = CreateOrUpdate.CreateOrReplace;
+                    conditionExp.type = SaveCondition.Upsert;
                     typeText =
                         `create new item (filename: ${record.fileName},` +
                         ` checksum: ${record.checksum})`;
@@ -938,7 +949,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                         errorCount++;
                         return Promise.resolve();
                     }
-                    conditionExp.type = CreateOrUpdate.UpdateExisting;
+                    conditionExp.type = SaveCondition.UpdateOnly;
                     // the conditional expression ensures the consistency of the DB system (ACID)
                     conditionExp.Expression =
                         'attribute_exists(checksum) AND vmId = :vmId' +
@@ -976,7 +987,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 }
                 // create if record not exists
                 else {
-                    conditionExp.type = CreateOrUpdate.CreateOrReplace;
+                    conditionExp.type = SaveCondition.Upsert;
                     // the conditional expression ensures the consistency of the DB system (ACID)
                     conditionExp.Expression = 'attribute_not_exists(checksum)';
                     typeText =
@@ -1044,7 +1055,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             };
             const conditionExp: AwsDdbOperations = {
                 Expression: '',
-                type: CreateOrUpdate.CreateOrReplace
+                type: SaveCondition.Upsert
             };
             await this.adaptee.saveItemToDb<NicAttachmentDbItem>(table, item, conditionExp);
         } catch (error) {
@@ -1342,7 +1353,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: CreateOrUpdate.CreateOrReplace
+            type: SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<LifecycleItemDbItem>(table, dbItem, conditionExp);
         this.proxy.logAsInfo('called createLifecycleItem');
@@ -1365,7 +1376,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: CreateOrUpdate.UpdateExisting
+            type: SaveCondition.UpdateOnly
         };
         await this.adaptee.saveItemToDb<LifecycleItemDbItem>(table, dbItem, conditionExp);
         this.proxy.logAsInfo('called updateLifecycleItem');
@@ -1573,7 +1584,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: CreateOrUpdate.CreateOrReplace
+            type: SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<VpnAttachmentDbItem>(table, dbItem, conditionExp);
         this.proxy.logAsInfo('called saveTgwVpnAttachmentRecord');
@@ -1672,25 +1683,36 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called removePrimaryRoleTag.');
     }
 
-    createAutoscaleFunctionInvocationKey(functionName: string, payload: JSONable): string {
+    createAutoscaleFunctionInvocationKey(
+        payload: unknown,
+        functionEndpoint: string,
+        invocable: string
+    ): string {
         const psk = this.settings.get(AwsFortiGateAutoscaleSetting.FortiGatePskSecret).value;
-        return genChecksum(`${functionName}:${psk}:${JSON.stringify(payload)}`, 'sha256');
+        return genChecksum(
+            `${functionEndpoint}:${invocable}:${psk}:${JSON.stringify(payload)}`,
+            'sha256'
+        );
     }
 
     async invokeAutoscaleFunction(
-        payload: JSONable,
+        payload: unknown,
         functionEndpoint: string,
         invocable: string,
         executionTime?: number
     ): Promise<number> {
         this.proxy.logAsInfo('calling invokeAutoscaleFunction');
-        const secretKey = this.createAutoscaleFunctionInvocationKey(functionEndpoint, payload);
-        const p: AwsLambdaInvocationPayload = {
-            invocable: invocable,
-            invocationSecretKey: secretKey,
-            executionTime: executionTime
-        };
-        Object.assign(p, payload);
+        const secretKey = this.createAutoscaleFunctionInvocationKey(
+            payload,
+            functionEndpoint,
+            invocable
+        );
+        const p: CloudFunctionInvocationPayload = constructInvocationPayload(
+            payload,
+            invocable,
+            secretKey,
+            executionTime
+        );
         const response = await this.adaptee.invokeLambda(
             functionEndpoint,
             'Event',
@@ -1836,7 +1858,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         }
     }
 
-    async getDecryptedEnvironmentVariable(name): Promise<string> {
+    async getDecryptedEnvironmentVariable(name: string): Promise<string> {
         const encrypted = process.env[name];
         try {
             const decrypted = await this.adaptee.kmsDecrypt(encrypted);
@@ -1879,7 +1901,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: CreateOrUpdate.CreateOrReplace
+            type: SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<FortiAnalyzerDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called registerFortiAnalyzer');

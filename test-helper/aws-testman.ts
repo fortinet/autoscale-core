@@ -15,14 +15,13 @@ import EC2 from 'aws-sdk/clients/ec2';
 import ELBv2 from 'aws-sdk/clients/elbv2';
 import Lambda, { InvocationRequest } from 'aws-sdk/clients/lambda';
 import S3 from 'aws-sdk/clients/s3';
+import chalk from 'chalk';
 import * as commentJson from 'comment-json';
 import fs from 'fs';
 import path from 'path';
 import Sinon, { SinonStub } from 'sinon';
-
 import { SettingItem, Settings } from '../autoscale-setting';
 import { JSONable } from '../jsonable';
-import chalk from 'chalk';
 
 export type ApiGatewayRequestHandler = (
     event: APIGatewayProxyEvent,
@@ -308,7 +307,7 @@ export class MockS3 extends TestFixture {
     s3: S3;
     constructor(s3: S3, rootDir: string) {
         super();
-        this.rootDir = path.join(rootDir, 's3');
+        this.rootDir = path.posix.join(rootDir, 's3');
         this.s3 = s3;
         this.init();
     }
@@ -346,7 +345,7 @@ export class MockS3 extends TestFixture {
                         ETag: '"mockup-etag-2141b4a96a36ee71e662"',
                         StorageClass: 'MOCKUP-DATA',
                         Size: 1024,
-                        Key: path.join(request.Prefix, fname)
+                        Key: path.posix.join(request.Prefix, fname)
                     };
                 })
             };
@@ -380,7 +379,7 @@ export class MockEC2 extends TestFixture {
     ec2: EC2;
     constructor(ec2: EC2, rootDir: string) {
         super();
-        this.rootDir = path.join(rootDir, 'ec2');
+        this.rootDir = path.posix.join(rootDir, 'ec2');
         this.ec2 = ec2;
         this.init();
     }
@@ -751,7 +750,7 @@ export class MockAutoScaling extends TestFixture {
     autoscaling: AutoScaling;
     constructor(autoscaling: AutoScaling, rootDir: string) {
         super();
-        this.rootDir = path.join(rootDir, 'autoscaling');
+        this.rootDir = path.posix.join(rootDir, 'autoscaling');
         this.autoscaling = autoscaling;
         this.init();
     }
@@ -871,7 +870,7 @@ export class MockLambda extends TestFixture {
     lambda: Lambda;
     constructor(lambda: Lambda, rootDir: string) {
         super();
-        this.rootDir = path.join(rootDir, 'lambda');
+        this.rootDir = path.posix.join(rootDir, 'lambda');
         this.lambda = lambda;
         this.init();
     }
@@ -902,7 +901,7 @@ export class MockDocClient extends TestFixture {
     docClient: DocumentClient;
     constructor(docClient: DocumentClient, rootDir: string) {
         super();
-        this.rootDir = path.join(rootDir, 'docclient');
+        this.rootDir = path.posix.join(rootDir, 'docclient');
         this.docClient = docClient;
         this.init();
     }

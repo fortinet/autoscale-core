@@ -79,7 +79,7 @@
             "jsonEncoded": false
         },
         {
-            "settingValue": "https://j3si9drpz5.execute-api.no-where-1.amazonaws.com/prod/fgt-asg-handler",
+            "settingValue": "https://j3si9drpz5.execute-api.no-where-1.amazonaws.com/prod/fgt-as-handler",
             "settingKey": "autoscale-handler-url",
             "editable": false,
             "description": "The FortiGate Autoscale handler URL.",

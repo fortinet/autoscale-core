@@ -1,6 +1,5 @@
 import { describe, it } from 'mocha';
 import * as Sinon from 'sinon';
-
 import { Autoscale } from '../autoscale-core';
 import { AutoscaleEnvironment } from '../autoscale-environment';
 import { AutoscaleSetting, SettingItem, Settings } from '../autoscale-setting';
@@ -8,21 +7,33 @@ import {
     CloudFunctionProxyAdapter,
     CloudFunctionResponseBody,
     LogLevel,
+    ReqHeaders,
+    ReqMethod,
     ReqType
 } from '../cloud-function-proxy';
 import {
     ConstantIntervalHeartbeatSyncStrategy,
     HeartbeatSyncStrategy,
-    PrimaryElectionStrategy,
-    PrimaryElectionStrategyResult,
     NoopTaggingVmStrategy,
-    PreferredGroupPrimaryElection
+    PreferredGroupPrimaryElection,
+    PrimaryElectionStrategy,
+    PrimaryElectionStrategyResult
 } from '../context-strategy/autoscale-context';
 import {
     NoopScalingGroupStrategy,
     ScalingGroupStrategy
 } from '../context-strategy/scaling-group-context';
+import { AwsFortiGateAutoscaleSetting } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
 import { FortiGateAutoscaleSetting } from '../fortigate-autoscale/fortigate-autoscale-settings';
+import { NoopFazIntegrationStrategy } from '../fortigate-autoscale/fortigate-faz-integration-strategy';
+import { compare } from '../helper-function';
+import {
+    LicenseFile,
+    LicenseStockRecord,
+    LicenseUsageRecord,
+    PlatformAdapter,
+    ResourceFilter
+} from '../platform-adapter';
 import {
     HealthCheckRecord,
     HealthCheckResult,
@@ -31,17 +42,7 @@ import {
     PrimaryRecord,
     PrimaryRecordVoteState
 } from '../primary-election';
-import {
-    LicenseFile,
-    LicenseStockRecord,
-    LicenseUsageRecord,
-    PlatformAdapter,
-    ResourceFilter
-} from '../platform-adapter';
 import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../virtual-machine';
-import { compare } from '../helper-function';
-import { AwsFortiGateAutoscaleSetting } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
-import { NoopFazIntegrationStrategy } from '../fortigate-autoscale/fortigate-faz-integration-strategy';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 
@@ -100,6 +101,21 @@ class TestAutoscale extends Autoscale {
 }
 
 class TestPlatformAdapter implements PlatformAdapter {
+    invokeAutoscaleFunction(
+        payload: unknown,
+        functionEndpoint: string,
+        invocable: string,
+        executionTime?: number
+    ): Promise<number> {
+        return Promise.resolve(0);
+    }
+    createAutoscaleFunctionInvocationKey(
+        payload: unknown,
+        functionEndpoint: string,
+        invocable: string
+    ): string {
+        return '';
+    }
     saveSettingItem(
         key: string,
         value: string,
@@ -144,12 +160,12 @@ class TestPlatformAdapter implements PlatformAdapter {
     loadLicenseFileContent(storageContainerName: string, filePath: string): Promise<string> {
         throw new Error('Method not implemented.');
     }
-    getReqAsString(): string {
-        return 'fake-req-as-string';
+    getReqAsString(): Promise<string> {
+        return Promise.resolve('fake-req-as-string');
     }
     createTime: number = Date.now();
-    getReqVmId(): string {
-        return 'fake-req-vm-id';
+    getReqVmId(): Promise<string> {
+        return Promise.resolve('fake-req-vm-id');
     }
     checkRequestIntegrity(): void {
         throw new Error('Method not implemented.');
@@ -199,8 +215,8 @@ class TestPlatformAdapter implements PlatformAdapter {
     getRequestType(): Promise<ReqType> {
         throw new Error('Method not implemented.');
     }
-    getReqHeartbeatInterval(): number {
-        return 30;
+    getReqHeartbeatInterval(): Promise<number> {
+        return Promise.resolve(30);
     }
     getSettings(): Promise<Settings> {
         throw new Error('Method not implemented.');
@@ -250,12 +266,15 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     constructor() {
         this.executionStartTime = Date.now();
     }
-    getRemainingExecutionTime(): number {
-        // set it to 60 seconds
-        return this.executionStartTime + 60000 - Date.now();
+    getReqBody(): Promise<unknown> {
+        return Promise.resolve('fake-body-as-string');
     }
-    getRequestAsString(): string {
-        return 'fake-req-as-string';
+    getRemainingExecutionTime(): Promise<number> {
+        // set it to 60 seconds
+        return Promise.resolve(this.executionStartTime + 60000 - Date.now());
+    }
+    getRequestAsString(): Promise<string> {
+        return Promise.resolve('fake-req-as-string');
     }
     formatResponse(httpStatusCode: number, body: CloudFunctionResponseBody, headers: {}): {} {
         throw new Error('Method not implemented.');
@@ -277,6 +296,12 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     }
     logForError(messagePrefix: string, error: Error): void {
         console.log(error);
+    }
+    getReqHeaders(): Promise<ReqHeaders> {
+        return Promise.resolve({});
+    }
+    getReqMethod(): Promise<ReqMethod> {
+        return Promise.resolve(null);
     }
 }
 

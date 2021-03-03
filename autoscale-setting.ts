@@ -8,6 +8,8 @@ import { JSONable } from './jsonable';
  */
 export enum AutoscaleSetting {
     AdditionalConfigSetNameList = 'additional-configset-name-list',
+    AutoscaleFunctionExtendExecution = 'autoscale-function-extend-execution',
+    AutoscaleFunctionMaxExecutionTime = 'autoscale-function-max-execution-time',
     AutoscaleHandlerUrl = 'autoscale-handler-url',
     AssetStorageContainer = 'asset-storage-name',
     AssetStorageDirectory = 'asset-storage-key-prefix',
@@ -174,6 +176,25 @@ export const AutoscaleSettingItemDictionary: SettingItemDictionary = {
             ' are required dependencies for the Autoscale to work for a certain ' +
             ' deployment. Can be left empty.',
         editable: false,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.AutoscaleFunctionExtendExecution]: {
+        keyName: AutoscaleSetting.AutoscaleFunctionExtendExecution,
+        description:
+            'Allow one single Autoscale function to be executed in multiple extended invocations' +
+            ' of a cloud platform function if it cannot finish within one invocation and its' +
+            ' functionality supports splitting into extended invocations.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: true
+    },
+    [AutoscaleSetting.AutoscaleFunctionMaxExecutionTime]: {
+        keyName: AutoscaleSetting.AutoscaleFunctionMaxExecutionTime,
+        description:
+            'Maximum execution time (in second) allowed for an Autoscale Cloud Function that can' +
+            ' run in one cloud function invocation or multiple extended invocations.',
+        editable: true,
         jsonEncoded: false,
         booleanType: false
     },
@@ -364,7 +385,11 @@ export const AutoscaleSettingItemDictionary: SettingItemDictionary = {
     },
     [AutoscaleSetting.ResourceTagPrefix]: {
         keyName: AutoscaleSetting.ResourceTagPrefix,
-        description: 'Resource tag prefix.',
+        description:
+            'Resource tag prefix. Used on any resource that supports tagging or labeling.' +
+            ' Such resource will be given a tag or label starting with this prefix.' +
+            ' Also used as the name of the logical group for Autoscale resources' +
+            ' in those cloud platforms which support such logical grouping.',
         editable: true,
         jsonEncoded: false,
         booleanType: false

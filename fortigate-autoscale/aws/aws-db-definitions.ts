@@ -22,7 +22,7 @@ export const AwsTypeRefs: TypeRefMap = new Map<TypeRef, string>([
     [TypeRef.NumberType, 'N'],
     [TypeRef.BooleanType, 'BOOL'],
     [TypeRef.PrimaryKey, 'HASH'],
-    [TypeRef.SecondaryKey, 'RANG']
+    [TypeRef.SecondaryKey, 'RANGE']
 ]);
 
 export class DynamoDBTypeConverter extends TypeConverter {

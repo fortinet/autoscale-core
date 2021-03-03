@@ -1,8 +1,7 @@
 import path from 'path';
-
 import { AutoscaleEnvironment } from './autoscale-environment';
 import { AutoscaleSetting, SettingItemDictionary, Settings } from './autoscale-setting';
-import { CloudFunctionProxy, CloudFunctionProxyAdapter, ReqMethod } from './cloud-function-proxy';
+import { CloudFunctionProxy, CloudFunctionProxyAdapter } from './cloud-function-proxy';
 import {
     AutoscaleContext,
     HeartbeatSyncStrategy,
@@ -38,31 +37,6 @@ export class HttpError extends Error {
     }
 }
 
-const reqMethod: Map<string, ReqMethod> = new Map([
-    ['GET', ReqMethod.GET],
-    ['POST', ReqMethod.POST],
-    ['PUT', ReqMethod.PUT],
-    ['DELETE', ReqMethod.DELETE],
-    ['PATCH', ReqMethod.PATCH],
-    ['HEAD', ReqMethod.HEAD],
-    ['TRACE', ReqMethod.TRACE],
-    ['OPTIONS', ReqMethod.OPTIONS],
-    ['CONNECT', ReqMethod.CONNECT]
-]);
-
-export function mapHttpMethod(s: string): ReqMethod {
-    return s && reqMethod.get(s.toUpperCase());
-}
-
-export interface PlatformAdaptee {
-    loadSettings(): Promise<Settings>;
-    // getReqType(proxy: CloudFunctionProxyAdapter): Promise<ReqType>;
-    // getReqMethod(proxy: CloudFunctionProxyAdapter): ReqMethod;
-    // checkReqIntegrity(proxy: CloudFunctionProxyAdapter): void;
-    // getReqBody(proxy: CloudFunctionProxyAdapter): ReqBody;
-    // getReqHeaders(proxy: CloudFunctionProxyAdapter): ReqHeaders;
-}
-
 /**
  * To provide Cloud Function handling logics
  */
@@ -77,17 +51,6 @@ export interface AutoscaleHandler<TReq, TContext, TRes> {
         platform: PlatformAdapter,
         env: AutoscaleEnvironment
     ): Promise<TRes>;
-}
-
-export interface AutoscaleServiceProvider<TRes> {
-    handleServiceRequest(): Promise<TRes>;
-    startAutoscale(): Promise<boolean>;
-    stopAutoscale(): Promise<boolean>;
-    SaveAutoscaleSettings(props: { [key: string]: string }): Promise<boolean>;
-}
-
-export interface FazIntegrationServiceProvider<TReq, TRes> {
-    handleServiceRequest(request: TReq): Promise<TRes>;
 }
 
 export interface AutoscaleCore
@@ -525,30 +488,31 @@ export abstract class Autoscale implements AutoscaleCore {
         const customAssetContainer =
             (settings.get(AutoscaleSetting.CustomAssetContainer) &&
                 settings.get(AutoscaleSetting.CustomAssetContainer).value) ||
-            null;
+            '';
         const customAssetDirectory =
             (settings.get(AutoscaleSetting.CustomAssetDirectory) &&
                 settings.get(AutoscaleSetting.CustomAssetDirectory).value) ||
-            null;
+            '';
         const defaultAssetContainer =
             (settings.get(AutoscaleSetting.AssetStorageContainer) &&
                 settings.get(AutoscaleSetting.AssetStorageContainer).value) ||
-            null;
+            '';
         const defaultAssetDirectory =
             (settings.get(AutoscaleSetting.AssetStorageDirectory) &&
                 settings.get(AutoscaleSetting.AssetStorageDirectory).value) ||
-            null;
+            '';
         const licenseFileDirectory =
             (settings.get(AutoscaleSetting.LicenseFileDirectory) &&
                 settings.get(AutoscaleSetting.LicenseFileDirectory).value) ||
-            null;
+            '';
         const assetContainer = customAssetContainer || defaultAssetContainer;
         const assetDirectory =
             (customAssetContainer && customAssetDirectory) || defaultAssetDirectory;
 
-        // NOTE: the first '/' is used to form an absolute path, then will be removed by .substr(1)
-        const licenseDirectory: string = path.normalize(
-            path.resolve('/', assetDirectory, licenseFileDirectory, productName).substr(1)
+        const licenseDirectory: string = path.posix.join(
+            assetDirectory,
+            licenseFileDirectory,
+            productName
         );
         this.licensingStrategy.prepare(
             this.env.targetVm,

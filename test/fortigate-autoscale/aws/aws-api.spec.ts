@@ -1,21 +1,22 @@
 /* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import AutoScaling from 'aws-sdk/clients/autoscaling';
+import { DocumentClient } from 'aws-sdk/clients/dynamodb';
 import EC2 from 'aws-sdk/clients/ec2';
 import ELBv2 from 'aws-sdk/clients/elbv2';
 import Lambda from 'aws-sdk/clients/lambda';
 import S3 from 'aws-sdk/clients/s3';
-import { DocumentClient } from 'aws-sdk/clients/dynamodb';
 import fs from 'fs';
 import { describe, it } from 'mocha';
 import path from 'path';
 import Sinon from 'sinon';
-
 import { Settings } from '../../../autoscale-setting';
 import {
     CloudFunctionProxyAdapter,
     CloudFunctionResponseBody,
-    LogLevel
+    LogLevel,
+    ReqHeaders,
+    ReqMethod
 } from '../../../cloud-function-proxy';
 import { AwsFortiGateAutoscaleSetting } from '../../../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
 import { AwsPlatformAdaptee } from '../../../fortigate-autoscale/aws/aws-platform-adaptee';
@@ -39,8 +40,11 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     constructor() {
         this.executionStartTime = Date.now();
     }
-    getRequestAsString(): string {
-        return 'fake-req-as-string';
+    getReqBody(): Promise<unknown> {
+        return Promise.resolve('fake-body-as-string');
+    }
+    getRequestAsString(): Promise<string> {
+        return Promise.resolve('fake-req-as-string');
     }
     formatResponse(httpStatusCode: number, body: CloudFunctionResponseBody, headers: {}): {} {
         throw new Error('Method not implemented.');
@@ -63,9 +67,15 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     logForError(messagePrefix: string, error: Error): void {
         console.log(error);
     }
-    getRemainingExecutionTime(): number {
+    getRemainingExecutionTime(): Promise<number> {
         // set it to 60 seconds
-        return this.executionStartTime + 60000 - Date.now();
+        return Promise.resolve(this.executionStartTime + 60000 - Date.now());
+    }
+    getReqHeaders(): Promise<ReqHeaders> {
+        throw new Error('Method not implemented.');
+    }
+    getReqMethod(): Promise<ReqMethod> {
+        throw new Error('Method not implemented.');
     }
 }
 
@@ -375,7 +385,7 @@ describe('AWS api test', () => {
         // NOTE: test
         callCount = mockAutoscaling.getStub('describeAutoScalingGroups').callCount;
         const stub0 = Sinon.stub(awsPlatformAdapter, 'getReqVmId').callsFake(() => {
-            return instanceId;
+            return Promise.resolve(instanceId);
         });
         await awsPlatformAdapter.getTargetVm();
         Sinon.assert.match(

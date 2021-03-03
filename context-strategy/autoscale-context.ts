@@ -92,7 +92,7 @@ export class PreferredGroupPrimaryElection implements PrimaryElectionStrategy {
             settings.get(AutoscaleSetting.PrimaryElectionTimeout).value
         );
         const signature = this.env.candidate
-            ? `${this.env.candidate.scalingGroupName}:${this.env.candidate.id}:${Date.now()}`
+            ? `${this.env.candidate.scalingGroupName}:${this.env.candidate.id}`
             : '';
         const primaryRecord: PrimaryRecord = {
             id: `${signature}`,
@@ -214,7 +214,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         let oldLossCount = 0;
         let newLossCount = 0;
         let oldInterval = 0;
-        const newInterval = this.platform.getReqHeartbeatInterval() * 1000;
+        const newInterval = (await this.platform.getReqHeartbeatInterval()) * 1000;
         const heartbeatArriveTime: number = this.platform.createTime;
         let delay = 0;
         let oldSeq = 0;

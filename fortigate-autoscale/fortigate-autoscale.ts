@@ -1,5 +1,4 @@
 import * as HttpStatusCodes from 'http-status-codes';
-
 import { Autoscale, AutoscaleHandler, HttpError } from '../autoscale-core';
 import { AutoscaleEnvironment } from '../autoscale-environment';
 import { CloudFunctionProxy, ReqType } from '../cloud-function-proxy';
@@ -94,7 +93,7 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             // init the platform. this step is important
             await this.platform.init();
             const requestType = await this.platform.getRequestType();
-            if (requestType === ReqType.BootstrapConfig) {
+            if (requestType === ReqType.ByolLicense) {
                 responseBody = await this.handleLicenseAssignment(PRODUCT_NAME_FORTIGATE);
             } else {
                 throw new Error(`Unsupported request type: ${requestType}.`);
@@ -188,7 +187,7 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
         await this.bootstrapConfigStrategy.apply();
         const bootstrapConfig = this.bootstrapConfigStrategy.getConfiguration();
         // output configuration content in debug level so that we can turn it off on production
-        this.proxy.logAsDebug(`configuration: ${bootstrapConfig}`);
+        this.proxy.logAsDebug('configuration loaded.', `configuration: ${bootstrapConfig}`);
         this.proxy.logAsInfo('called handleBootstrap.');
         return bootstrapConfig;
     }
