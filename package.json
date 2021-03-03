@@ -6,11 +6,11 @@
     "types": "dist/types/index.d.ts",
     "scripts": {
         "pre-push": "npm-run-all lint-check audit-production test build",
-        "audit-production": "npm audit --production",
+        "audit-production": "yarn audit",
         "bundle": "webpack",
         "compile": "tsc",
         "clear-dist": "rimraf dist",
-        "build": "npm run clear-dist && npm run compile",
+        "build": "npm-run-all clear-dist compile",
         "make-dist": "node dist/scripts/make-dist.js",
         "build-artifacts": "npm-run-all build make-dist",
         "test": "mocha --timeout 3600000 -r ts-node/register test/{*,**/**/*}.spec.ts",
@@ -19,8 +19,8 @@
     },
     "husky": {
         "hooks": {
-            "pre-commit": "npm run lint-check",
-            "pre-push": "npm run pre-push"
+            "pre-commit": "yarn run lint-check",
+            "pre-push": "yarn run pre-push"
         }
     },
     "keywords": [],
@@ -43,7 +43,6 @@
         "json-loader": "^0.5.7",
         "mocha": "^8.3.0",
         "mocha-loader": "^5.1.5",
-        "npm-run-all": "^4.1.5",
         "prettier": "^1.19.1",
         "shelljs": "^0.8.4",
         "sinon": "^9.0.1",
@@ -76,6 +75,7 @@
         "chalk": "^4.0.0",
         "express": "^4.17.1",
         "http-status-codes": "^1.4.0",
+        "npm-run-all": "^3.1.1",
         "rimraf": "^3.0.2",
         "xml2js": "^0.4.23"
     },

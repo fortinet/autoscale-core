@@ -26,21 +26,25 @@ jobs:
         uses: actions/setup-node@v1
         with:
           node-version: ${{ matrix.node-version }}
-      # in case of failing to install dependencies due to the ssh-related issue:
-      # npm ERR! /usr/bin/git ls-remote -h -t ssh://git@github.com/<your github account>/<repo>.git
-      # npm ERR! Warning: Permanently added the RSA host key for IP address <a public ip address> to the list of known hosts.
-      # npm ERR! git@github.com: Permission denied (publickey).
-      # npm ERR! fatal: Could not read from remote repository.
-      #
-      # follow the instruction to setup the SSH_PRIVATE_KEY
-      # see instruction in: https://github.com/actions/setup-node/issues/214
+      - name: Get yarn cache directory path
+        id: yarn-cache-dir-path
+        run: echo "::set-output name=dir::$(yarn cache dir)"
+
+      - uses: actions/cache@v2
+        id: yarn-cache # use this to check for `cache-hit` (`steps.yarn-cache.outputs.cache-hit != 'true'`)
+        with:
+          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
       - name: Check - install
-        run: npm ci
+        run: yarn install
       - name: Check - audit (production)
-        run: npm audit --production
+        run: yarn audit
+        # lint-check currently incompatible with yarn 2. use yarn classic only
       - name: Check - format
-        run: npm run lint-check
+        run: yarn run lint-check
       - name: Check - build
-        run: npm run build
+        run: yarn run build
       - name: Run tests
-        run: npm test
+        run: yarn test
