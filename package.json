@@ -42,7 +42,7 @@
         "eslint-config-prettier": "^6.10.1",
         "eslint-plugin-mocha": "^6.3.0",
         "eslint-plugin-prettier": "^3.1.2",
-        "ftnt-devops-ci": "github:fortinet/ftnt-devops-ci",
+        "ftnt-devops-ci": "git+ssh://git@github.com:fortinet/ftnt-devops-ci.git",
         "husky": "^4.3.0",
         "json-loader": "^0.5.7",
         "mocha": "^7.1.1",
