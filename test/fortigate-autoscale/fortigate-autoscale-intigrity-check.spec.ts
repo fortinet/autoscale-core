@@ -3,24 +3,23 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import * as path from 'path';
-import { describe, it } from 'mocha';
 import { APIGatewayProxyEvent, Context } from 'aws-lambda';
+import { describe, it } from 'mocha';
+import * as path from 'path';
+import Sinon from 'sinon';
 import {
     AwsFortiGateAutoscaleSetting,
     AwsFortiGateAutoscaleSettingItemDictionary
-} from '../../fortigate-autoscale';
+} from '../../fortigate-autoscale/aws';
 import {
     AwsTestMan,
-    MockEC2,
-    MockS3,
     MockAutoScaling,
+    MockDocClient,
+    MockEC2,
     MockElbv2,
     MockLambda,
-    MockDocClient
+    MockS3
 } from '../../test-helper/aws-testman';
-
-import Sinon from 'sinon';
 import { createAwsApiGatewayEventHandler } from '../../test-helper/test-aws-helper-function';
 
 describe('FortiGate sanity test.', () => {

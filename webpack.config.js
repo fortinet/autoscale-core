@@ -3,7 +3,9 @@ const path = require('path');
 
 module.exports = {
     entry: {
-        index: './index.ts'
+        ['core']: './index.ts',
+        ['furtigate-autoscale-azure']: './fortigate-autoscale/azure/index.ts',
+        ['furtigate-autoscale-aws']: './fortigate-autoscale/aws/index.ts'
     },
     devtool: 'inline-source-map',
     mode: 'production',

@@ -1,3 +1,6 @@
+// export fortigate-autoscale module files
+export * from '../index';
+// export aws-fortigate-autoscale module files
 export * from './aws-cloud-function-proxy';
 export * from './aws-db-definitions';
 export * from './aws-fortianalyzer-integration-service';

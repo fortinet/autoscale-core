@@ -9,7 +9,6 @@ export * from './autoscale-service-provider';
 export * from './autoscale-setting';
 export * from './cloud-function-proxy';
 export * from './context-strategy';
-export * from './fortigate-autoscale';
 export * from './helper-function';
 export * from './jsonable';
 export * from './platform-adaptee';

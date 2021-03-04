@@ -1,11 +1,11 @@
-import { AwsPlatformAdaptee } from '../index';
+import { AwsPlatformAdaptee } from '../fortigate-autoscale/aws';
 import {
-    MockEC2,
-    MockS3,
     MockAutoScaling,
+    MockDocClient,
+    MockEC2,
     MockElbv2,
     MockLambda,
-    MockDocClient
+    MockS3
 } from './aws-testman';
 export class TestAwsPlatformAdaptee extends AwsPlatformAdaptee {
     stubAwsServices(
