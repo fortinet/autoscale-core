@@ -20,8 +20,7 @@ import * as commentJson from 'comment-json';
 import fs from 'fs';
 import path from 'path';
 import Sinon, { SinonStub } from 'sinon';
-import { SettingItem, Settings } from '../autoscale-setting';
-import { JSONable } from '../jsonable';
+import { JSONable, SettingItem, Settings } from '../fortigate-autoscale/aws';
 
 export type ApiGatewayRequestHandler = (
     event: APIGatewayProxyEvent,

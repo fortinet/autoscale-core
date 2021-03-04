@@ -1,15 +1,15 @@
 import {
     AwsFortiGateAutoscale,
-    PrimaryElectionStrategy,
-    BootstrapConfigurationStrategy,
-    HeartbeatSyncStrategy,
+    AwsFortiGateAutoscaleCfnServiceProvider,
     AwsFortiGateAutoscaleTgw,
     AwsFortiGateBootstrapTgwStrategy,
-    LicensingStrategy
-} from '../index';
-import { AwsFortiGateAutoscaleCfnServiceProvider } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-service';
-import { AwsNicAttachmentStrategy, AwsTgwVpnAttachmentStrategy } from '../fortigate-autoscale';
-
+    AwsNicAttachmentStrategy,
+    AwsTgwVpnAttachmentStrategy,
+    BootstrapConfigurationStrategy,
+    HeartbeatSyncStrategy,
+    LicensingStrategy,
+    PrimaryElectionStrategy
+} from '../fortigate-autoscale/aws';
 export class TestAwsFortiGateAutoscale<TReq, TContext, TRes> extends AwsFortiGateAutoscale<
     TReq,
     TContext,
