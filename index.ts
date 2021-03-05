@@ -24,6 +24,6 @@ export * from './primary-election';
 /**
  * export test-helpers
  */
-export * from './test-helper';
+// export * from './test-helper';
 export * from './virtual-machine';
 export { DBDef };
