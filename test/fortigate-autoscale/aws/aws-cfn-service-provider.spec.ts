@@ -7,7 +7,6 @@ import { CloudFormationCustomResourceEvent, Context } from 'aws-lambda';
 import { describe, it } from 'mocha';
 import * as path from 'path';
 import Sinon from 'sinon';
-
 import * as AwsCfnResponse from '../../../fortigate-autoscale/aws/aws-cfn-response';
 import { AwsFortiGateAutoscaleSetting } from '../../../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
 import {
@@ -18,8 +17,8 @@ import {
     MockElbv2,
     MockLambda,
     MockS3
-} from '../../../test-helper/aws-testman';
-import { createAwsCloudFormationCustomResourceEventHandler } from '../../../test-helper/test-aws-helper-function';
+} from '../../../fortigate-autoscale/aws/test-helper/aws-testman';
+import { createAwsCloudFormationCustomResourceEventHandler } from '../../../fortigate-autoscale/aws/test-helper/test-aws-helper-function';
 
 describe('FortiGate Autoscale AWS CloudFormation service provider.', () => {
     let mockDataRootDir: string;

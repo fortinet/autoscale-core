@@ -9,7 +9,7 @@ import {
     HeartbeatSyncStrategy,
     LicensingStrategy,
     PrimaryElectionStrategy
-} from '../fortigate-autoscale/aws';
+} from '..';
 export class TestAwsFortiGateAutoscale<TReq, TContext, TRes> extends AwsFortiGateAutoscale<
     TReq,
     TContext,

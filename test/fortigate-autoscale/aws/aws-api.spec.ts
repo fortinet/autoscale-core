@@ -21,8 +21,6 @@ import {
 import { AwsFortiGateAutoscaleSetting } from '../../../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
 import { AwsPlatformAdaptee } from '../../../fortigate-autoscale/aws/aws-platform-adaptee';
 import { AwsPlatformAdapter } from '../../../fortigate-autoscale/aws/aws-platform-adapter';
-import { compare } from '../../../helper-function';
-import { ResourceFilter } from '../../../platform-adapter';
 import {
     AwsTestMan,
     MockAutoScaling,
@@ -31,7 +29,9 @@ import {
     MockLambda,
     MockS3,
     readFileAsJson
-} from '../../../test-helper/aws-testman';
+} from '../../../fortigate-autoscale/aws/test-helper/aws-testman';
+import { compare } from '../../../helper-function';
+import { ResourceFilter } from '../../../platform-adapter';
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */

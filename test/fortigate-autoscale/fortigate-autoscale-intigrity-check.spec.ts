@@ -19,8 +19,8 @@ import {
     MockElbv2,
     MockLambda,
     MockS3
-} from '../../test-helper/aws-testman';
-import { createAwsApiGatewayEventHandler } from '../../test-helper/test-aws-helper-function';
+} from '../../fortigate-autoscale/aws/test-helper/aws-testman';
+import { createAwsApiGatewayEventHandler } from '../../fortigate-autoscale/aws/test-helper/test-aws-helper-function';
 
 describe('FortiGate sanity test.', () => {
     let mockDataRootDir: string;
