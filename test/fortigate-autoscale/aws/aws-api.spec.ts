@@ -10,17 +10,19 @@ import fs from 'fs';
 import { describe, it } from 'mocha';
 import path from 'path';
 import Sinon from 'sinon';
-import { Settings } from '../../../autoscale-setting';
 import {
+    AwsFortiGateAutoscaleSetting,
+    AwsPlatformAdaptee,
+    AwsPlatformAdapter,
     CloudFunctionProxyAdapter,
     CloudFunctionResponseBody,
+    compare,
     LogLevel,
     ReqHeaders,
-    ReqMethod
-} from '../../../cloud-function-proxy';
-import { AwsFortiGateAutoscaleSetting } from '../../../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
-import { AwsPlatformAdaptee } from '../../../fortigate-autoscale/aws/aws-platform-adaptee';
-import { AwsPlatformAdapter } from '../../../fortigate-autoscale/aws/aws-platform-adapter';
+    ReqMethod,
+    ResourceFilter,
+    Settings
+} from '../../../fortigate-autoscale/aws';
 import {
     AwsTestMan,
     MockAutoScaling,
@@ -29,9 +31,7 @@ import {
     MockLambda,
     MockS3,
     readFileAsJson
-} from '../../../fortigate-autoscale/aws/test-helper/aws-testman';
-import { compare } from '../../../helper-function';
-import { ResourceFilter } from '../../../platform-adapter';
+} from '../../../fortigate-autoscale/aws/test-helper';
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
