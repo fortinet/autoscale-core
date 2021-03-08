@@ -1,18 +1,16 @@
 import { Context } from '@azure/functions';
 import {
     AutoscaleServiceProvider,
-    AutoscaleServiceRequest
-} from '../../autoscale-service-provider';
-import { ReqType } from '../../cloud-function-proxy';
-import { JSONable } from '../../jsonable';
-import {
+    AutoscaleServiceRequest,
+    AzureFortiGateAutoscale,
+    AzureFuncionDef,
+    AzureFunctionServiceProviderProxy,
+    AzurePlatformAdapter,
     FortiGateAutoscaleServiceRequestSource,
-    FortiGateAutoscaleServiceType
-} from '../fortigate-autoscale-service-provider';
-import { AzureFunctionServiceProviderProxy } from './azure-cloud-function-proxy';
-import { AzureFortiGateAutoscale } from './azure-fortigate-autoscale';
-import * as AzureFuncionDef from './azure-function-definitions';
-import { AzurePlatformAdapter } from './azure-platform-adapter';
+    FortiGateAutoscaleServiceType,
+    JSONable,
+    ReqType
+} from './index';
 
 export class AzureFortiGateAutoscaleServiceProvider
     implements AutoscaleServiceProvider<AutoscaleServiceRequest, void> {

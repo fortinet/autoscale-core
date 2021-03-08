@@ -19,29 +19,23 @@ import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import fs from 'fs';
 import * as HttpStatusCodes from 'http-status-codes';
 import path from 'path';
-import { SettingItem, Settings } from '../../autoscale-setting';
-import { Blob } from '../../blob';
-import {
-    DbDeleteError,
-    DbErrorCode,
-    DbReadError,
-    DbSaveError,
-    KeyValue,
-    SaveCondition,
-    Table
-} from '../../db-definitions';
-import { jsonParseReviver, jsonStringifyReplacer } from '../../helper-function';
-import { PlatformAdaptee } from '../../platform-adaptee';
 import {
     AzureApiRequestCache,
+    AzureFortiGateAutoscaleSetting,
     AzureSettings,
     AzureSettingsDbItem,
+    Blob,
+    ConsistenyCheckType as ConditionCheckType,
     CosmosDBQueryResult,
     CosmosDBQueryWhereClause,
-    CosmosDbTableMetaData
-} from './azure-db-definitions';
-import { AzureFortiGateAutoscaleSetting } from './azure-fortigate-autoscale-settings';
-import { ConsistenyCheckType as ConditionCheckType } from './azure-platform-adapter';
+    CosmosDbTableMetaData,
+    DBDef,
+    jsonParseReviver,
+    jsonStringifyReplacer,
+    PlatformAdaptee,
+    SettingItem,
+    Settings
+} from './index';
 
 export enum requiredEnvVars {
     AUTOSCALE_DB_ACCOUNT = 'AUTOSCALE_DB_ACCOUNT',
@@ -242,12 +236,12 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
      * get a single item.
      * @param  {Table<T>} table the instance of Table<T> to delete the item.
      * T is the db item type of the given table.
-     * @param  {KeyValue[]} partitionKeys the partition keys (primary key)
+     * @param  {DBDef.KeyValue[]} partitionKeys the partition keys (primary key)
      * of the table
      * @returns {Promise<T>} T
      */
-    async getItemFromDb<T>(table: Table<T>, partitionKeys: KeyValue[]): Promise<T> {
-        const primaryKey: KeyValue = partitionKeys[0];
+    async getItemFromDb<T>(table: DBDef.Table<T>, partitionKeys: DBDef.KeyValue[]): Promise<T> {
+        const primaryKey: DBDef.KeyValue = partitionKeys[0];
         try {
             const itemResponse = await this.autoscaleDBRef
                 .container(table.name)
@@ -264,7 +258,10 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             if (error.code === HttpStatusCodes.NOT_FOUND) {
                 return null;
             } else {
-                throw new DbReadError(DbErrorCode.UnexpectedResponse, JSON.stringify(error));
+                throw new DBDef.DbReadError(
+                    DBDef.DbErrorCode.UnexpectedResponse,
+                    JSON.stringify(error)
+                );
             }
         }
     }
@@ -278,7 +275,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
      * @see https://docs.microsoft.com/en-us/azure/cosmos-db/sql-query-select
      */
     async listItemFromDb<T>(
-        table: Table<T>,
+        table: DBDef.Table<T>,
         listClause?: CosmosDBQueryWhereClause[],
         limit?: number
     ): Promise<CosmosDBQueryResult<T>> {
@@ -324,15 +321,15 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
      * strictly compare each defined (including null, false and empty value) property
      * @param  {Table<T>} table the instance of Table to save the item.
      * @param  {T} item the item to save
-     * @param  {SaveCondition} condition save condition
+     * @param  {DBDef.SaveCondition} condition save condition
      * @param  {boolean| object} consistencyCheck (optional) ensure data consistency to prevent
      * saving outdated data.
      * @returns {Promise<T>} a promise of item of type T
      */
     async saveItemToDb<T extends CosmosDbTableMetaData>(
-        table: Table<T>,
+        table: DBDef.Table<T>,
         item: T,
-        condition: SaveCondition,
+        condition: DBDef.SaveCondition,
         consistencyCheck: boolean | ConditionCheckType<T> = true
     ): Promise<T> {
         // CAUTION: validate the db input (non meta data)
@@ -361,8 +358,8 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                             return `key: ${k}, expected: ${v}, existing: ${itemSnapshot[k]}`;
                         })
                         .join('; ');
-                    throw new DbSaveError(
-                        DbErrorCode.InconsistentData,
+                    throw new DBDef.DbSaveError(
+                        DBDef.DbErrorCode.InconsistentData,
                         'Inconsistent data. The following value not match:' +
                             `${inconsistentDataDetailString}`
                     );
@@ -377,17 +374,17 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             };
         }
         // update only but no record found
-        if (condition === SaveCondition.UpdateOnly && !itemSnapshot) {
-            throw new DbSaveError(
-                DbErrorCode.NotFound,
+        if (condition === DBDef.SaveCondition.UpdateOnly && !itemSnapshot) {
+            throw new DBDef.DbSaveError(
+                DBDef.DbErrorCode.NotFound,
                 `Unable to update the item (id: ${item.id}).` +
                     ` The item not exists in the table (name: ${table.name}).`
             );
         }
         // insert only but record found
-        else if (condition === SaveCondition.InsertOnly && itemSnapshot) {
-            throw new DbSaveError(
-                DbErrorCode.KeyConflict,
+        else if (condition === DBDef.SaveCondition.InsertOnly && itemSnapshot) {
+            throw new DBDef.DbSaveError(
+                DBDef.DbErrorCode.KeyConflict,
                 `Unable to insert the item (id: ${item.id}).` +
                     ` The item already exists in the table (name: ${table.name}).`
             );
@@ -399,8 +396,8 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             itemSnapshot &&
             item[table.primaryKey.name] !== itemSnapshot[table.primaryKey.name]
         ) {
-            throw new DbSaveError(
-                DbErrorCode.InconsistentData,
+            throw new DBDef.DbSaveError(
+                DBDef.DbErrorCode.InconsistentData,
                 'Inconsistent data.' +
                     ' Primary key values not match.' +
                     'Cannot save item back into db due to' +
@@ -431,16 +428,16 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             result.statusCode === HttpStatusCodes.CREATED
         ) {
             if (!result.resource) {
-                throw new DbSaveError(
-                    DbErrorCode.UnexpectedResponse,
+                throw new DBDef.DbSaveError(
+                    DBDef.DbErrorCode.UnexpectedResponse,
                     "Upsert doesn't return expected data. see the detailed upsert " +
                         `result:${JSON.stringify(result)}`
                 );
             }
             return table.convertRecord(result.resource);
         } else {
-            throw new DbSaveError(
-                DbErrorCode.UnexpectedResponse,
+            throw new DBDef.DbSaveError(
+                DBDef.DbErrorCode.UnexpectedResponse,
                 'Saving item unsuccessfull. SDK returned unexpected response with ' +
                     ` httpStatusCode: ${result.statusCode}.`
             );
@@ -457,7 +454,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
      * @returns {Promise<void>} a promise of void
      */
     async deleteItemFromDb<T extends CosmosDbTableMetaData>(
-        table: Table<T>,
+        table: DBDef.Table<T>,
         item: T,
         ensureDataConsistency = true
     ): Promise<void> {
@@ -475,9 +472,9 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                     }
                 ]);
             } catch (error) {
-                if (error instanceof DbReadError) {
-                    throw new DbDeleteError(
-                        DbErrorCode.NotFound,
+                if (error instanceof DBDef.DbReadError) {
+                    throw new DBDef.DbDeleteError(
+                        DBDef.DbErrorCode.NotFound,
                         'Cannot delete item. ' +
                             `Item (id: ${item.id}) not found in table (name: ${table.name}).`
                     );
@@ -499,8 +496,8 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                     itemSnapshot[key] !== item[key]
             );
             if (keyDiff.length > 0) {
-                throw new DbDeleteError(
-                    DbErrorCode.InconsistentData,
+                throw new DBDef.DbDeleteError(
+                    DBDef.DbErrorCode.InconsistentData,
                     `Inconsistent data. The attributes don't match: ${keyDiff.join()}. ` +
                         ` Item to delete: ${JSON.stringify(item)}.` +
                         ` Item in the db: ${JSON.stringify(itemSnapshot)}.`
@@ -509,16 +506,16 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         }
         // CAUTION: validate the db input (only primary key)
         if (item[table.primaryKey.name] === null) {
-            throw new DbDeleteError(
-                DbErrorCode.InconsistentData,
+            throw new DBDef.DbDeleteError(
+                DBDef.DbErrorCode.InconsistentData,
                 `Required primary key attribute: ${table.primaryKey.name} not` +
                     ` found in item: ${JSON.stringify(item)}`
             );
         }
         // ASSERT: the id and primary key should have the same value
         if (item.id !== item[table.primaryKey.name]) {
-            throw new DbDeleteError(
-                DbErrorCode.InconsistentData,
+            throw new DBDef.DbDeleteError(
+                DBDef.DbErrorCode.InconsistentData,
                 "Item primary key value and id value don't match. Make sure the id" +
                     ' and primary key have the same value.'
             );
@@ -534,14 +531,14 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         ) {
             return;
         } else if (deleteResponse.statusCode === HttpStatusCodes.NOT_FOUND) {
-            throw new DbDeleteError(
-                DbErrorCode.NotFound,
+            throw new DBDef.DbDeleteError(
+                DBDef.DbErrorCode.NotFound,
                 `Item (${table.primaryKey.name}: ` +
                     `${item.id}) not found in table (${table.name})`
             );
         } else {
-            throw new DbDeleteError(
-                DbErrorCode.UnexpectedResponse,
+            throw new DBDef.DbDeleteError(
+                DBDef.DbErrorCode.UnexpectedResponse,
                 'Deletion unsuccessful. SDK returned unexpected response with ' +
                     ` httpStatusCode: ${deleteResponse.statusCode}.`
             );
@@ -576,8 +573,8 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                 };
             }
         } catch (error) {
-            if (error instanceof DbReadError) {
-                if (error.code !== DbErrorCode.NotFound) {
+            if (error instanceof DBDef.DbReadError) {
+                if (error.code !== DBDef.DbErrorCode.NotFound) {
                     throw error;
                 }
             }
@@ -618,7 +615,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         const savedItem = await this.saveItemToDb<typeof item>(
             table,
             item,
-            SaveCondition.Upsert,
+            DBDef.SaveCondition.Upsert,
             false
         );
         if (savedItem) {

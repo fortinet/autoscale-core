@@ -1,42 +1,16 @@
-import {
-    ApiRequestCache,
-    ApiRequestCacheDbItem,
-    Attribute,
-    Autoscale,
-    AutoscaleDbItem,
-    BidirectionalCastable,
-    CustomLog,
-    CustomLogDbItem,
-    FortiAnalyzer,
-    FortiAnalyzerDbItem,
-    LicenseStock,
-    LicenseStockDbItem,
-    LicenseUsage,
-    LicenseUsageDbItem,
-    PrimaryElection,
-    PrimaryElectionDbItem,
-    Record,
-    Settings,
-    SettingsDbItem,
-    Table,
-    TypeConverter,
-    TypeRef,
-    TypeRefMap,
-    VmInfoCache,
-    VmInfoCacheDbItem
-} from '../../db-definitions';
+import { DBDef } from './index';
 
 // NOTE: Azure Cosmos DB Data modeling concepts
 // see: https://docs.microsoft.com/en-us/azure/cosmos-db/modeling-data
 // Cosmos DB is a schema-free type of database so the data type definitions have no effect on
 // items.
 // The types here are still given just for good readabilty.
-export const AzureTypeRefs: TypeRefMap = new Map<TypeRef, string>([
-    [TypeRef.StringType, 'string'],
-    [TypeRef.NumberType, 'number'],
-    [TypeRef.BooleanType, 'boolean'],
-    [TypeRef.PrimaryKey, 'hash'],
-    [TypeRef.SecondaryKey, 'range']
+export const AzureTypeRefs: DBDef.TypeRefMap = new Map<DBDef.TypeRef, string>([
+    [DBDef.TypeRef.StringType, 'string'],
+    [DBDef.TypeRef.NumberType, 'number'],
+    [DBDef.TypeRef.BooleanType, 'boolean'],
+    [DBDef.TypeRef.PrimaryKey, 'hash'],
+    [DBDef.TypeRef.SecondaryKey, 'range']
 ]);
 
 export interface CosmosDBQueryWhereClause {
@@ -64,37 +38,37 @@ export interface CosmosDbTableMetaData {
 export const CosmosDbTableMetaDataAttributes = [
     {
         name: 'id',
-        attrType: TypeRef.StringType,
+        attrType: DBDef.TypeRef.StringType,
         isKey: false
     },
     {
         name: '_attachments',
-        attrType: TypeRef.StringType,
+        attrType: DBDef.TypeRef.StringType,
         isKey: false
     },
     {
         name: '_etag',
-        attrType: TypeRef.StringType,
+        attrType: DBDef.TypeRef.StringType,
         isKey: false
     },
     {
         name: '_rid',
-        attrType: TypeRef.StringType,
+        attrType: DBDef.TypeRef.StringType,
         isKey: false
     },
     {
         name: '_self',
-        attrType: TypeRef.StringType,
+        attrType: DBDef.TypeRef.StringType,
         isKey: false
     },
     {
         name: '_ts',
-        attrType: TypeRef.NumberType,
+        attrType: DBDef.TypeRef.NumberType,
         isKey: false
     }
 ];
 
-export class CosmosDBTypeConverter extends TypeConverter {
+export class CosmosDBTypeConverter extends DBDef.TypeConverter {
     valueToString(value: unknown): string {
         return value as string;
     }
@@ -106,10 +80,10 @@ export class CosmosDBTypeConverter extends TypeConverter {
     }
 }
 
-export interface AzureAutoscaleDbItem extends AutoscaleDbItem, CosmosDbTableMetaData {}
+export interface AzureAutoscaleDbItem extends DBDef.AutoscaleDbItem, CosmosDbTableMetaData {}
 
-export class AzureAutoscale extends Autoscale
-    implements BidirectionalCastable<AutoscaleDbItem, AzureAutoscaleDbItem> {
+export class AzureAutoscale extends DBDef.Autoscale
+    implements DBDef.BidirectionalCastable<DBDef.AutoscaleDbItem, AzureAutoscaleDbItem> {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new CosmosDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
@@ -118,7 +92,7 @@ export class AzureAutoscale extends Autoscale
     /**
      * @override override to provide additional meta data
      */
-    convertRecord(record: Record): AzureAutoscaleDbItem {
+    convertRecord(record: DBDef.Record): AzureAutoscaleDbItem {
         const item: AzureAutoscaleDbItem = {
             ...super.convertRecord(record),
             id: this.typeConvert.valueToString(record.id),
@@ -131,7 +105,7 @@ export class AzureAutoscale extends Autoscale
         return item;
     }
 
-    downcast(record: AutoscaleDbItem): AzureAutoscaleDbItem {
+    downcast(record: DBDef.AutoscaleDbItem): AzureAutoscaleDbItem {
         const item: AzureAutoscaleDbItem = {
             ...record,
             // NOTE: id will be automatically use the primary key value
@@ -147,7 +121,7 @@ export class AzureAutoscale extends Autoscale
         return item;
     }
 
-    upcast(record: AzureAutoscaleDbItem): AutoscaleDbItem {
+    upcast(record: AzureAutoscaleDbItem): DBDef.AutoscaleDbItem {
         const item: AzureAutoscaleDbItem = {
             ...record
         };
@@ -164,9 +138,12 @@ export class AzureAutoscale extends Autoscale
     }
 }
 
-export interface AzurePrimaryElectionDbItem extends PrimaryElectionDbItem, CosmosDbTableMetaData {}
-export class AzurePrimaryElection extends PrimaryElection
-    implements BidirectionalCastable<PrimaryElectionDbItem, AzurePrimaryElectionDbItem> {
+export interface AzurePrimaryElectionDbItem
+    extends DBDef.PrimaryElectionDbItem,
+        CosmosDbTableMetaData {}
+export class AzurePrimaryElection extends DBDef.PrimaryElection
+    implements
+        DBDef.BidirectionalCastable<DBDef.PrimaryElectionDbItem, AzurePrimaryElectionDbItem> {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new CosmosDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
@@ -176,7 +153,7 @@ export class AzurePrimaryElection extends PrimaryElection
     /**
      * @override override to provide additional meta data
      */
-    convertRecord(record: Record): AzurePrimaryElectionDbItem {
+    convertRecord(record: DBDef.Record): AzurePrimaryElectionDbItem {
         const item: AzurePrimaryElectionDbItem = {
             ...super.convertRecord(record),
             _attachments: this.typeConvert.valueToString(record._attachments),
@@ -188,7 +165,7 @@ export class AzurePrimaryElection extends PrimaryElection
         return item;
     }
 
-    downcast(record: PrimaryElectionDbItem): AzurePrimaryElectionDbItem {
+    downcast(record: DBDef.PrimaryElectionDbItem): AzurePrimaryElectionDbItem {
         const item: AzurePrimaryElectionDbItem = {
             ...record,
             // NOTE: id will be automatically use the primary key value
@@ -204,7 +181,7 @@ export class AzurePrimaryElection extends PrimaryElection
         return item;
     }
 
-    upcast(record: AzurePrimaryElectionDbItem): PrimaryElectionDbItem {
+    upcast(record: AzurePrimaryElectionDbItem): DBDef.PrimaryElectionDbItem {
         const item: AzurePrimaryElectionDbItem = {
             ...record
         };
@@ -221,10 +198,12 @@ export class AzurePrimaryElection extends PrimaryElection
     }
 }
 
-export interface AzureFortiAnalyzerDbItem extends FortiAnalyzerDbItem, CosmosDbTableMetaData {}
+export interface AzureFortiAnalyzerDbItem
+    extends DBDef.FortiAnalyzerDbItem,
+        CosmosDbTableMetaData {}
 
-export class AzureFortiAnalyzer extends FortiAnalyzer
-    implements BidirectionalCastable<FortiAnalyzerDbItem, AzureFortiAnalyzerDbItem> {
+export class AzureFortiAnalyzer extends DBDef.FortiAnalyzer
+    implements DBDef.BidirectionalCastable<DBDef.FortiAnalyzerDbItem, AzureFortiAnalyzerDbItem> {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new CosmosDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
@@ -234,7 +213,7 @@ export class AzureFortiAnalyzer extends FortiAnalyzer
     /**
      * @override override to provide additional meta data
      */
-    convertRecord(record: Record): AzureFortiAnalyzerDbItem {
+    convertRecord(record: DBDef.Record): AzureFortiAnalyzerDbItem {
         const item: AzureFortiAnalyzerDbItem = {
             ...super.convertRecord(record),
             id: this.typeConvert.valueToString(record.id),
@@ -247,7 +226,7 @@ export class AzureFortiAnalyzer extends FortiAnalyzer
         return item;
     }
 
-    downcast(record: FortiAnalyzerDbItem): AzureFortiAnalyzerDbItem {
+    downcast(record: DBDef.FortiAnalyzerDbItem): AzureFortiAnalyzerDbItem {
         const item: AzureFortiAnalyzerDbItem = {
             ...record,
             // NOTE: id will be automatically use the primary key value
@@ -263,7 +242,7 @@ export class AzureFortiAnalyzer extends FortiAnalyzer
         return item;
     }
 
-    upcast(record: AzureFortiAnalyzerDbItem): FortiAnalyzerDbItem {
+    upcast(record: AzureFortiAnalyzerDbItem): DBDef.FortiAnalyzerDbItem {
         const item: AzureFortiAnalyzerDbItem = {
             ...record
         };
@@ -280,10 +259,10 @@ export class AzureFortiAnalyzer extends FortiAnalyzer
     }
 }
 
-export interface AzureSettingsDbItem extends SettingsDbItem, CosmosDbTableMetaData {}
+export interface AzureSettingsDbItem extends DBDef.SettingsDbItem, CosmosDbTableMetaData {}
 
-export class AzureSettings extends Settings
-    implements BidirectionalCastable<SettingsDbItem, AzureSettingsDbItem> {
+export class AzureSettings extends DBDef.Settings
+    implements DBDef.BidirectionalCastable<DBDef.SettingsDbItem, AzureSettingsDbItem> {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new CosmosDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
@@ -293,7 +272,7 @@ export class AzureSettings extends Settings
     /**
      * @override override to provide additional meta data
      */
-    convertRecord(record: Record): AzureSettingsDbItem {
+    convertRecord(record: DBDef.Record): AzureSettingsDbItem {
         const item: AzureSettingsDbItem = {
             ...super.convertRecord(record),
             id: this.typeConvert.valueToString(record.id),
@@ -306,7 +285,7 @@ export class AzureSettings extends Settings
         return item;
     }
 
-    downcast(record: SettingsDbItem): AzureSettingsDbItem {
+    downcast(record: DBDef.SettingsDbItem): AzureSettingsDbItem {
         const item: AzureSettingsDbItem = {
             ...record,
             // NOTE: id will be automatically use the primary key value
@@ -322,7 +301,7 @@ export class AzureSettings extends Settings
         return item;
     }
 
-    upcast(record: AzureSettingsDbItem): SettingsDbItem {
+    upcast(record: AzureSettingsDbItem): DBDef.SettingsDbItem {
         const item: AzureSettingsDbItem = {
             ...record
         };
@@ -339,10 +318,10 @@ export class AzureSettings extends Settings
     }
 }
 
-export interface AzureVmInfoCacheDbItem extends VmInfoCacheDbItem, CosmosDbTableMetaData {}
+export interface AzureVmInfoCacheDbItem extends DBDef.VmInfoCacheDbItem, CosmosDbTableMetaData {}
 
-export class AzureVmInfoCache extends VmInfoCache
-    implements BidirectionalCastable<VmInfoCacheDbItem, AzureVmInfoCacheDbItem> {
+export class AzureVmInfoCache extends DBDef.VmInfoCache
+    implements DBDef.BidirectionalCastable<DBDef.VmInfoCacheDbItem, AzureVmInfoCacheDbItem> {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new CosmosDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
@@ -351,7 +330,7 @@ export class AzureVmInfoCache extends VmInfoCache
     /**
      * @override override to provide additional meta data
      */
-    convertRecord(record: Record): AzureVmInfoCacheDbItem {
+    convertRecord(record: DBDef.Record): AzureVmInfoCacheDbItem {
         const item: AzureVmInfoCacheDbItem = {
             ...super.convertRecord(record),
             _attachments: this.typeConvert.valueToString(record._attachments),
@@ -363,7 +342,7 @@ export class AzureVmInfoCache extends VmInfoCache
         return item;
     }
 
-    downcast(record: VmInfoCacheDbItem): AzureVmInfoCacheDbItem {
+    downcast(record: DBDef.VmInfoCacheDbItem): AzureVmInfoCacheDbItem {
         const item: AzureVmInfoCacheDbItem = {
             ...record,
             // NOTE: id will be automatically use the primary key value
@@ -379,7 +358,7 @@ export class AzureVmInfoCache extends VmInfoCache
         return item;
     }
 
-    upcast(record: AzureVmInfoCacheDbItem): VmInfoCacheDbItem {
+    upcast(record: AzureVmInfoCacheDbItem): DBDef.VmInfoCacheDbItem {
         const item: AzureVmInfoCacheDbItem = {
             ...record
         };
@@ -396,10 +375,10 @@ export class AzureVmInfoCache extends VmInfoCache
     }
 }
 
-export interface AzureLicenseStockDbItem extends LicenseStockDbItem, CosmosDbTableMetaData {}
+export interface AzureLicenseStockDbItem extends DBDef.LicenseStockDbItem, CosmosDbTableMetaData {}
 
-export class AzureLicenseStock extends LicenseStock
-    implements BidirectionalCastable<LicenseStockDbItem, AzureLicenseStockDbItem> {
+export class AzureLicenseStock extends DBDef.LicenseStock
+    implements DBDef.BidirectionalCastable<DBDef.LicenseStockDbItem, AzureLicenseStockDbItem> {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new CosmosDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
@@ -408,7 +387,7 @@ export class AzureLicenseStock extends LicenseStock
     /**
      * @override override to provide additional meta data
      */
-    convertRecord(record: Record): AzureLicenseStockDbItem {
+    convertRecord(record: DBDef.Record): AzureLicenseStockDbItem {
         const item: AzureLicenseStockDbItem = {
             ...super.convertRecord(record),
             id: this.typeConvert.valueToString(record.id),
@@ -421,7 +400,7 @@ export class AzureLicenseStock extends LicenseStock
         return item;
     }
 
-    downcast(record: LicenseStockDbItem): AzureLicenseStockDbItem {
+    downcast(record: DBDef.LicenseStockDbItem): AzureLicenseStockDbItem {
         const item: AzureLicenseStockDbItem = {
             ...record,
             // NOTE: id will be automatically use the primary key value
@@ -437,7 +416,7 @@ export class AzureLicenseStock extends LicenseStock
         return item;
     }
 
-    upcast(record: AzureLicenseStockDbItem): LicenseStockDbItem {
+    upcast(record: AzureLicenseStockDbItem): DBDef.LicenseStockDbItem {
         const item: AzureLicenseStockDbItem = {
             ...record
         };
@@ -454,10 +433,10 @@ export class AzureLicenseStock extends LicenseStock
     }
 }
 
-export interface AzureLicenseUsageDbItem extends LicenseUsageDbItem, CosmosDbTableMetaData {}
+export interface AzureLicenseUsageDbItem extends DBDef.LicenseUsageDbItem, CosmosDbTableMetaData {}
 
-export class AzureLicenseUsage extends LicenseUsage
-    implements BidirectionalCastable<LicenseUsageDbItem, AzureLicenseUsageDbItem> {
+export class AzureLicenseUsage extends DBDef.LicenseUsage
+    implements DBDef.BidirectionalCastable<DBDef.LicenseUsageDbItem, AzureLicenseUsageDbItem> {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new CosmosDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
@@ -466,7 +445,7 @@ export class AzureLicenseUsage extends LicenseUsage
     /**
      * @override override to provide additional meta data
      */
-    convertRecord(record: Record): AzureLicenseUsageDbItem {
+    convertRecord(record: DBDef.Record): AzureLicenseUsageDbItem {
         const item: AzureLicenseUsageDbItem = {
             ...super.convertRecord(record),
             id: this.typeConvert.valueToString(record.id),
@@ -479,7 +458,7 @@ export class AzureLicenseUsage extends LicenseUsage
         return item;
     }
 
-    downcast(record: LicenseUsageDbItem): AzureLicenseUsageDbItem {
+    downcast(record: DBDef.LicenseUsageDbItem): AzureLicenseUsageDbItem {
         const item: AzureLicenseUsageDbItem = {
             ...record,
             // NOTE: id will be automatically use the primary key value
@@ -495,7 +474,7 @@ export class AzureLicenseUsage extends LicenseUsage
         return item;
     }
 
-    upcast(record: AzureLicenseUsageDbItem): LicenseUsageDbItem {
+    upcast(record: AzureLicenseUsageDbItem): DBDef.LicenseUsageDbItem {
         const item: AzureLicenseUsageDbItem = {
             ...record
         };
@@ -512,10 +491,10 @@ export class AzureLicenseUsage extends LicenseUsage
     }
 }
 
-export interface AzureCustomLogDbItem extends CustomLogDbItem, CosmosDbTableMetaData {}
+export interface AzureCustomLogDbItem extends DBDef.CustomLogDbItem, CosmosDbTableMetaData {}
 
-export class AzureCustomLog extends CustomLog
-    implements BidirectionalCastable<CustomLogDbItem, AzureCustomLogDbItem> {
+export class AzureCustomLog extends DBDef.CustomLog
+    implements DBDef.BidirectionalCastable<DBDef.CustomLogDbItem, AzureCustomLogDbItem> {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new CosmosDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
@@ -524,7 +503,7 @@ export class AzureCustomLog extends CustomLog
     /**
      * @override override to provide additional meta data
      */
-    convertRecord(record: Record): AzureCustomLogDbItem {
+    convertRecord(record: DBDef.Record): AzureCustomLogDbItem {
         const item: AzureCustomLogDbItem = {
             ...super.convertRecord(record),
             _attachments: this.typeConvert.valueToString(record._attachments),
@@ -536,7 +515,7 @@ export class AzureCustomLog extends CustomLog
         return item;
     }
 
-    downcast(record: CustomLogDbItem): AzureCustomLogDbItem {
+    downcast(record: DBDef.CustomLogDbItem): AzureCustomLogDbItem {
         const item: AzureCustomLogDbItem = {
             ...record,
             // NOTE: id will be automatically use the primary key value
@@ -552,7 +531,7 @@ export class AzureCustomLog extends CustomLog
         return item;
     }
 
-    upcast(record: AzureCustomLogDbItem): CustomLogDbItem {
+    upcast(record: AzureCustomLogDbItem): DBDef.CustomLogDbItem {
         const item: AzureCustomLogDbItem = {
             ...record
         };
@@ -569,22 +548,25 @@ export class AzureCustomLog extends CustomLog
     }
 }
 
-export interface AzureApiRequestCacheDbItem extends ApiRequestCacheDbItem, CosmosDbTableMetaData {}
+export interface AzureApiRequestCacheDbItem
+    extends DBDef.ApiRequestCacheDbItem,
+        CosmosDbTableMetaData {}
 
-export class AzureApiRequestCache extends Table<AzureApiRequestCacheDbItem>
-    implements BidirectionalCastable<ApiRequestCacheDbItem, AzureApiRequestCacheDbItem> {
-    static __attributes: Attribute[] = [
+export class AzureApiRequestCache extends DBDef.Table<AzureApiRequestCacheDbItem>
+    implements
+        DBDef.BidirectionalCastable<DBDef.ApiRequestCacheDbItem, AzureApiRequestCacheDbItem> {
+    static __attributes: DBDef.Attribute[] = [
         ...CosmosDbTableMetaDataAttributes, // NOTE: add addtional Azure CosmosDB table meta data attributes
         // NOTE: use the same attributes of a sibling class, attributes with the same key will
         // those in ...CosmosDbTableMetaDataAttributes
-        ...ApiRequestCache.__attributes
+        ...DBDef.ApiRequestCache.__attributes
     ];
-    private siblingClass: ApiRequestCache;
+    private siblingClass: DBDef.ApiRequestCache;
     constructor(namePrefix = '', nameSuffix = '') {
         const converter = new CosmosDBTypeConverter();
         super(converter, namePrefix, nameSuffix);
         // NOTE: set the sibling class reference
-        this.siblingClass = new ApiRequestCache(converter, namePrefix, nameSuffix);
+        this.siblingClass = new DBDef.ApiRequestCache(converter, namePrefix, nameSuffix);
         // NOTE: use Azure CosmosDB type refs
         this.alterAttributesUsingTypeReference(AzureTypeRefs);
         // CAUTION: don't forget to set a correct name.
@@ -597,7 +579,7 @@ export class AzureApiRequestCache extends Table<AzureApiRequestCacheDbItem>
     /**
      * @override override to provide additional meta data
      */
-    convertRecord(record: Record): AzureApiRequestCacheDbItem {
+    convertRecord(record: DBDef.Record): AzureApiRequestCacheDbItem {
         const item: AzureApiRequestCacheDbItem = {
             ...this.siblingClass.convertRecord(record),
             _attachments: this.typeConvert.valueToString(record._attachments),
@@ -611,7 +593,7 @@ export class AzureApiRequestCache extends Table<AzureApiRequestCacheDbItem>
         return item;
     }
 
-    downcast(record: ApiRequestCacheDbItem): AzureApiRequestCacheDbItem {
+    downcast(record: DBDef.ApiRequestCacheDbItem): AzureApiRequestCacheDbItem {
         const item: AzureApiRequestCacheDbItem = {
             ...record,
             // NOTE: id will be automatically use the primary key value
@@ -627,7 +609,7 @@ export class AzureApiRequestCache extends Table<AzureApiRequestCacheDbItem>
         return item;
     }
 
-    upcast(record: AzureApiRequestCacheDbItem): ApiRequestCacheDbItem {
+    upcast(record: AzureApiRequestCacheDbItem): DBDef.ApiRequestCacheDbItem {
         const item: AzureApiRequestCacheDbItem = {
             ...record
         };

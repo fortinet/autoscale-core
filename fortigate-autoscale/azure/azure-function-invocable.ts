@@ -1,8 +1,8 @@
-import { FortiGateAutoscaleFunctionInvocable } from '../fortigate-autoscale-function-invocation';
 import {
     CloudFunctionInvocationPayload,
-    CloudFunctionInvocationTimeOutError
-} from '../../cloud-function-peer-invocation';
+    CloudFunctionInvocationTimeOutError,
+    FortiGateAutoscaleFunctionInvocable
+} from './index';
 
 export type AzureFunctionInvocationPayload = CloudFunctionInvocationPayload;
 

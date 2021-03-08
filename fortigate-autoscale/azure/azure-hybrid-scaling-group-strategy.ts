@@ -1,6 +1,4 @@
-import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
-import { ScalingGroupStrategy } from '../../context-strategy/scaling-group-context';
-import { AzurePlatformAdapter } from './azure-platform-adapter';
+import { AzurePlatformAdapter, CloudFunctionProxyAdapter, ScalingGroupStrategy } from './index';
 
 export class AzureHybridScalingGroupStrategy implements ScalingGroupStrategy {
     platform: AzurePlatformAdapter;

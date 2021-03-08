@@ -1,30 +1,26 @@
 import { Context } from '@azure/functions';
-import { AutoscaleEnvironment } from '../../autoscale-environment';
 import {
+    AutoscaleEnvironment,
+    AzureFortiGateAutoscaleSetting,
+    AzureFortiGateBootstrapStrategy,
+    AzureFunctionHttpTriggerProxy,
+    AzureFunctionInvocable,
+    AzureHybridScalingGroupStrategy,
+    AzurePlatformAdapter,
+    AzureRoutingEgressTrafficViaPrimaryVmStrategy,
+    AzureTaggingAutoscaleVmStrategy,
     CloudFunctionInvocationPayload,
-    CloudFunctionInvocationTimeOutError
-} from '../../cloud-function-peer-invocation';
-import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
-import {
+    CloudFunctionInvocationTimeOutError,
+    CloudFunctionProxyAdapter,
     ConstantIntervalHeartbeatSyncStrategy,
-    PreferredGroupPrimaryElection
-} from '../../context-strategy/autoscale-context';
-import { ReusableLicensingStrategy } from '../../context-strategy/licensing-context';
-import { JSONable } from '../../jsonable';
-import { FortiGateAutoscale } from '../fortigate-autoscale';
-import { FortiGateAutoscaleFunctionInvocationHandler } from '../fortigate-autoscale-function-invocation';
-import {
     FazDeviceAuthorization,
-    FazReactiveAuthorizationStrategy
-} from '../fortigate-faz-integration-strategy';
-import { AzureFunctionHttpTriggerProxy } from './azure-cloud-function-proxy';
-import { AzureFortiGateAutoscaleSetting } from './azure-fortigate-autoscale-settings';
-import { AzureFortiGateBootstrapStrategy } from './azure-fortigate-bootstrap-config-strategy';
-import { AzureFunctionInvocable } from './azure-function-invocable';
-import { AzureHybridScalingGroupStrategy } from './azure-hybrid-scaling-group-strategy';
-import { AzurePlatformAdapter } from './azure-platform-adapter';
-import { AzureRoutingEgressTrafficViaPrimaryVmStrategy } from './azure-routing-egress-traffic-via-primary-vm-strategy';
-import { AzureTaggingAutoscaleVmStrategy } from './azure-tagging-autoscale-vm-strategy';
+    FazReactiveAuthorizationStrategy,
+    FortiGateAutoscale,
+    FortiGateAutoscaleFunctionInvocationHandler,
+    JSONable,
+    PreferredGroupPrimaryElection,
+    ReusableLicensingStrategy
+} from './index';
 
 export class AzureFortiGateAutoscale<TReq, TContext, TRes> extends FortiGateAutoscale<
     TReq,

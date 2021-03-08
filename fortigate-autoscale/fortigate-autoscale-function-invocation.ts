@@ -2,11 +2,12 @@ import {
     CloudFunctionInvocationPayload,
     CloudFunctionInvocationTimeOutError,
     CloudFunctionPeerInvocation,
-    extractFromInvocationPayload
-} from '../cloud-function-peer-invocation';
-import { CloudFunctionProxyAdapter, ReqType } from '../cloud-function-proxy';
-import { PlatformAdapter } from '../platform-adapter';
-import { FortiGateAutoscaleSetting } from './fortigate-autoscale-settings';
+    CloudFunctionProxyAdapter,
+    extractFromInvocationPayload,
+    FortiGateAutoscaleSetting,
+    PlatformAdapter,
+    ReqType
+} from './index';
 
 export const FortiGateAutoscaleFunctionInvocable = {
     TriggerFazDeviceAuth: 'TriggerFazDeviceAuth'

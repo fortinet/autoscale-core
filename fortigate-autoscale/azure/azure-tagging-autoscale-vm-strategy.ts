@@ -1,6 +1,9 @@
-import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
-import { TaggingVmStrategy, VmTagging } from '../../context-strategy/autoscale-context';
-import { AzurePlatformAdapter } from './azure-platform-adapter';
+import {
+    AzurePlatformAdapter,
+    CloudFunctionProxyAdapter,
+    TaggingVmStrategy,
+    VmTagging
+} from './index';
 
 export class AzureTaggingAutoscaleVmStrategy implements TaggingVmStrategy {
     protected platform: AzurePlatformAdapter;

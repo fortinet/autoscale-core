@@ -1,64 +1,54 @@
 import * as AzureComputeModels from '@azure/arm-compute/esm/models';
 import * as AzureNetworkModels from '@azure/arm-network/esm/models';
 import path from 'path';
-import { SettingItemDefinition, Settings } from '../../autoscale-setting';
-import { Blob } from '../../blob';
 import {
-    CloudFunctionInvocationPayload,
-    constructInvocationPayload
-} from '../../cloud-function-peer-invocation';
-import { ReqMethod, ReqType } from '../../cloud-function-proxy';
-import { NicAttachmentRecord } from '../../context-strategy/nic-attachment-context';
-import {
-    DbDeleteError,
-    DbErrorCode,
-    DbSaveError,
-    KeyValue,
-    SaveCondition
-} from '../../db-definitions';
-import { genChecksum } from '../../helper-function';
-import { JSONable } from '../../jsonable';
-import {
-    LicenseFile,
-    LicenseStockRecord,
-    LicenseUsageRecord,
-    PlatformAdapter,
-    ResourceFilter
-} from '../../platform-adapter';
-import {
-    HealthCheckRecord,
-    HealthCheckSyncState,
-    PrimaryRecord,
-    PrimaryRecordVoteState
-} from '../../primary-election';
-import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../../virtual-machine';
-import { FortiGateAutoscaleServiceRequestSource } from '../fortigate-autoscale-service-provider';
-import {
-    AzureFunctionHttpTriggerProxy,
-    AzureFunctionInvocationProxy,
-    AzureFunctionServiceProviderProxy,
-    LogItem
-} from './azure-cloud-function-proxy';
-import {
+    ApiCache,
+    ApiCacheOption,
     AzureAutoscale,
     AzureAutoscaleDbItem,
     AzureCustomLog,
     AzureFortiAnalyzer,
+    AzureFortiGateAutoscaleSetting,
+    AzureFortiGateAutoscaleSettingItemDictionary,
+    AzureFuncionDef,
+    AzureFunctionHttpTriggerProxy,
+    AzureFunctionInvocationProxy,
+    AzureFunctionServiceProviderProxy,
     AzureLicenseStock,
     AzureLicenseStockDbItem,
     AzureLicenseUsage,
     AzureLicenseUsageDbItem,
+    AzurePlatformAdaptee,
     AzurePrimaryElection,
     AzurePrimaryElectionDbItem,
     AzureSettings,
-    CosmosDBQueryWhereClause
-} from './azure-db-definitions';
-import {
-    AzureFortiGateAutoscaleSetting,
-    AzureFortiGateAutoscaleSettingItemDictionary
-} from './azure-fortigate-autoscale-settings';
-import * as AzureFunctionDefs from './azure-function-definitions';
-import { ApiCache, ApiCacheOption, AzurePlatformAdaptee } from './azure-platform-adaptee';
+    Blob,
+    CloudFunctionInvocationPayload,
+    constructInvocationPayload,
+    CosmosDBQueryWhereClause,
+    DBDef,
+    FortiGateAutoscaleServiceRequestSource,
+    genChecksum,
+    HealthCheckRecord,
+    HealthCheckSyncState,
+    JSONable,
+    LicenseFile,
+    LicenseStockRecord,
+    LicenseUsageRecord,
+    LogItem,
+    NetworkInterface,
+    NicAttachmentRecord,
+    PlatformAdapter,
+    PrimaryRecord,
+    PrimaryRecordVoteState,
+    ReqMethod,
+    ReqType,
+    ResourceFilter,
+    SettingItemDefinition,
+    Settings,
+    VirtualMachine,
+    VirtualMachineState
+} from './index';
 
 export type ConsistenyCheckType<T> = { [key in keyof T]?: string | number | boolean | null };
 export class AzurePlatformAdapter implements PlatformAdapter {
@@ -167,7 +157,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         const savedItem = await this.adaptee.saveItemToDb<typeof item>(
             table,
             item,
-            SaveCondition.Upsert
+            DBDef.SaveCondition.Upsert
         );
         return savedItem.settingKey;
     }
@@ -181,7 +171,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         const body = await this.proxy.getReqBody();
         const functionName = this.proxy.context.executionContext.functionName;
         if (this.proxy instanceof AzureFunctionHttpTriggerProxy) {
-            if (functionName === AzureFunctionDefs.ByolLicense.name) {
+            if (functionName === AzureFuncionDef.ByolLicense.name) {
                 if (reqMethod === ReqMethod.GET) {
                     if (headers['fos-instance-id'] === null) {
                         throw new Error(
@@ -193,7 +183,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                 } else {
                     throw new Error(`Invalid request. Method [${reqMethod}] not allowd`);
                 }
-            } else if (functionName === AzureFunctionDefs.FortiGateAutoscaleHandler.name) {
+            } else if (functionName === AzureFuncionDef.FortiGateAutoscaleHandler.name) {
                 if (reqMethod === ReqMethod.GET) {
                     if (headers['fos-instance-id'] === null) {
                         throw new Error(
@@ -216,9 +206,9 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                 } else {
                     throw new Error(`Unsupported request method: ${reqMethod}`);
                 }
-            } else if (functionName === AzureFunctionDefs.FazAuthHandler.name) {
+            } else if (functionName === AzureFuncionDef.FazAuthHandler.name) {
                 return Promise.resolve(ReqType.CloudFunctionPeerInvocation);
-            } else if (functionName === AzureFunctionDefs.CustomLog.name) {
+            } else if (functionName === AzureFuncionDef.CustomLog.name) {
                 return Promise.resolve(ReqType.CustomLog);
             } else {
                 throw new Error('Unknown request type.');
@@ -617,10 +607,10 @@ export class AzurePlatformAdapter implements PlatformAdapter {
     }
     /**
      * Get the Autoscale health check record of the elected primary vm
-     * @param  {KeyValue[]} filters optional filter to match the record or null if not match
+     * @param  {DBDef.KeyValue[]} filters optional filter to match the record or null if not match
      * @returns {Promise} the health check record
      */
-    async getPrimaryRecord(filters?: KeyValue[]): Promise<PrimaryRecord> {
+    async getPrimaryRecord(filters?: DBDef.KeyValue[]): Promise<PrimaryRecord> {
         this.proxy.logAsInfo('calling getPrimaryRecord');
         const table = new AzurePrimaryElection();
         const listClause: CosmosDBQueryWhereClause[] =
@@ -705,7 +695,12 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             seq: rec.seq
         });
         // NOTE: when create a db record, do not need to check data consistency.
-        await this.adaptee.saveItemToDb<typeof item>(table, item, SaveCondition.InsertOnly, false);
+        await this.adaptee.saveItemToDb<typeof item>(
+            table,
+            item,
+            DBDef.SaveCondition.InsertOnly,
+            false
+        );
         this.proxy.logAsInfo('called createHealthCheckRecord');
     }
     /**
@@ -737,7 +732,12 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             scalingGroupName: rec.scalingGroupName,
             ip: rec.ip
         };
-        await this.adaptee.saveItemToDb<typeof item>(table, item, SaveCondition.UpdateOnly, check);
+        await this.adaptee.saveItemToDb<typeof item>(
+            table,
+            item,
+            DBDef.SaveCondition.UpdateOnly,
+            check
+        );
         this.proxy.logAsInfo('called updateHealthCheckRecord');
     }
     /**
@@ -784,7 +784,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             }
         } catch (error) {
             this.proxy.logForError('DB error.', error);
-            if (error instanceof DbDeleteError) {
+            if (error instanceof DBDef.DbDeleteError) {
                 this.proxy.logAsError(`Cannot purge old primary record (id: ${oldRec.id})`);
             }
             throw error;
@@ -794,12 +794,15 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             await this.adaptee.saveItemToDb<typeof item>(
                 table,
                 item,
-                SaveCondition.InsertOnly // ASSERT: if record exists, will throw error
+                DBDef.SaveCondition.InsertOnly // ASSERT: if record exists, will throw error
             );
             this.proxy.logAsInfo('called createPrimaryRecord.');
         } catch (error) {
             this.proxy.logForError('DB error.', error);
-            if (error instanceof DbSaveError && error.code === DbErrorCode.KeyConflict) {
+            if (
+                error instanceof DBDef.DbSaveError &&
+                error.code === DBDef.DbErrorCode.KeyConflict
+            ) {
                 this.proxy.logAsError(`Primary record already exists (id: ${item.id})`);
             }
             this.proxy.logAsInfo('called createPrimaryRecord.');
@@ -867,7 +870,12 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         };
 
         // upsert
-        await this.adaptee.saveItemToDb<typeof item>(table, item, SaveCondition.Upsert, check);
+        await this.adaptee.saveItemToDb<typeof item>(
+            table,
+            item,
+            DBDef.SaveCondition.Upsert,
+            check
+        );
         this.proxy.logAsInfo('called updatePrimaryRecord.');
     }
     /**
@@ -1045,16 +1053,16 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                     productName: record.productName
                 });
                 let typeText: string;
-                let saveCondition: SaveCondition;
+                let saveCondition: DBDef.SaveCondition;
                 // recrod exists, update it
                 if (items.has(record.checksum)) {
                     stockRecordChecksums.splice(stockRecordChecksums.indexOf(record.checksum), 1);
-                    saveCondition = SaveCondition.UpdateOnly;
+                    saveCondition = DBDef.SaveCondition.UpdateOnly;
                     typeText =
                         `update existing item (filename: ${record.fileName},` +
                         ` checksum: ${record.checksum})`;
                 } else {
-                    saveCondition = SaveCondition.Upsert;
+                    saveCondition = DBDef.SaveCondition.Upsert;
                     typeText =
                         `create new item (filename: ${record.fileName},` +
                         ` checksum: ${record.checksum})`;
@@ -1116,7 +1124,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                     vmInSync: rec.item.vmInSync
                 });
                 let typeText: string;
-                let saveCondition: SaveCondition;
+                let saveCondition: DBDef.SaveCondition;
                 // update if record exists
                 // NOTE: for updating an existing record, it requires a reference of the existing
                 // record as a snapshot of db data. Only when the record data at the time of updating
@@ -1132,7 +1140,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                         errorCount++;
                         return Promise.resolve();
                     }
-                    saveCondition = SaveCondition.UpdateOnly;
+                    saveCondition = DBDef.SaveCondition.UpdateOnly;
 
                     const check: ConsistenyCheckType<typeof item> = {
                         vmId: rec.reference.vmId,
@@ -1165,7 +1173,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                 }
                 // create if record not exists
                 else {
-                    saveCondition = SaveCondition.InsertOnly;
+                    saveCondition = DBDef.SaveCondition.InsertOnly;
                     typeText =
                         `create new item (checksum: ${item.checksum})` +
                         `New values (filename: ${item.fileName}, vmId: ${item.vmId}, ` +
@@ -1304,7 +1312,12 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             primary: primary,
             vip: vip
         });
-        await this.adaptee.saveItemToDb<typeof item>(table, item, SaveCondition.Upsert, false);
+        await this.adaptee.saveItemToDb<typeof item>(
+            table,
+            item,
+            DBDef.SaveCondition.Upsert,
+            false
+        );
         this.proxy.logAsInfo('called registerFortiAnalyzer');
     }
 
@@ -1394,13 +1407,17 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             const now = Date.now();
             logItem.id = `${now}-${Math.round(Math.random() * 1000)}`;
             logItem.timestamp = now;
-            return this.adaptee.saveItemToDb<typeof item>(table, item, SaveCondition.InsertOnly);
+            return this.adaptee.saveItemToDb<typeof item>(
+                table,
+                item,
+                DBDef.SaveCondition.InsertOnly
+            );
         };
 
         try {
             let tryAgainWhenFailed = false;
             await save(item).catch(error => {
-                if (error instanceof DbSaveError) {
+                if (error instanceof DBDef.DbSaveError) {
                     tryAgainWhenFailed = true;
                 } else {
                     throw error;

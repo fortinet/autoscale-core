@@ -7,6 +7,8 @@ export * from './autoscale-core';
 export * from './autoscale-environment';
 export * from './autoscale-service-provider';
 export * from './autoscale-setting';
+export * from './blob';
+export * from './cloud-function-peer-invocation';
 export * from './cloud-function-proxy';
 export * from './context-strategy';
 export * from './helper-function';
