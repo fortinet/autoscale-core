@@ -1,48 +1,44 @@
 import { describe, it } from 'mocha';
 import * as Sinon from 'sinon';
-import { Autoscale } from '../autoscale-core';
-import { AutoscaleEnvironment } from '../autoscale-environment';
-import { AutoscaleSetting, SettingItem, Settings } from '../autoscale-setting';
 import {
+    Autoscale,
+    AutoscaleEnvironment,
+    AutoscaleSetting,
     CloudFunctionProxyAdapter,
     CloudFunctionResponseBody,
-    LogLevel,
-    ReqHeaders,
-    ReqMethod,
-    ReqType
-} from '../cloud-function-proxy';
-import {
+    compare,
     ConstantIntervalHeartbeatSyncStrategy,
-    HeartbeatSyncStrategy,
-    NoopTaggingVmStrategy,
-    PreferredGroupPrimaryElection,
-    PrimaryElectionStrategy,
-    PrimaryElectionStrategyResult
-} from '../context-strategy/autoscale-context';
-import {
-    NoopScalingGroupStrategy,
-    ScalingGroupStrategy
-} from '../context-strategy/scaling-group-context';
-import { AwsFortiGateAutoscaleSetting } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-settings';
-import { FortiGateAutoscaleSetting } from '../fortigate-autoscale/fortigate-autoscale-settings';
-import { NoopFazIntegrationStrategy } from '../fortigate-autoscale/fortigate-faz-integration-strategy';
-import { compare } from '../helper-function';
-import {
-    LicenseFile,
-    LicenseStockRecord,
-    LicenseUsageRecord,
-    PlatformAdapter,
-    ResourceFilter
-} from '../platform-adapter';
-import {
+    FortiGateAutoscaleSetting,
     HealthCheckRecord,
     HealthCheckResult,
     HealthCheckSyncState,
+    HeartbeatSyncStrategy,
+    LicenseFile,
+    LicenseStockRecord,
+    LicenseUsageRecord,
+    LogLevel,
+    NetworkInterface,
+    NicAttachmentRecord,
+    NoopFazIntegrationStrategy,
+    NoopScalingGroupStrategy,
+    NoopTaggingVmStrategy,
+    PlatformAdapter,
+    PreferredGroupPrimaryElection,
     PrimaryElection,
+    PrimaryElectionStrategy,
+    PrimaryElectionStrategyResult,
     PrimaryRecord,
-    PrimaryRecordVoteState
-} from '../primary-election';
-import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../virtual-machine';
+    PrimaryRecordVoteState,
+    ReqHeaders,
+    ReqMethod,
+    ReqType,
+    ResourceFilter,
+    ScalingGroupStrategy,
+    SettingItem,
+    Settings,
+    VirtualMachine,
+    VirtualMachineState
+} from '../../fortigate-autoscale';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 
@@ -125,7 +121,7 @@ class TestPlatformAdapter implements PlatformAdapter {
     ): Promise<string> {
         throw new Error('Method not implemented.');
     }
-    listConfigSet(subDirectory?: string, custom?: boolean): Promise<import('../blob').Blob[]> {
+    listConfigSet(subDirectory?: string, custom?: boolean): Promise<import('../../blob').Blob[]> {
         return Promise.resolve([]);
     }
     listAutoscaleVm(identifyScalingGroup?: boolean, listNic?: boolean): Promise<VirtualMachine[]> {
@@ -170,7 +166,7 @@ class TestPlatformAdapter implements PlatformAdapter {
     checkRequestIntegrity(): void {
         throw new Error('Method not implemented.');
     }
-    listNicAttachmentRecord(): Promise<import('..').NicAttachmentRecord[]> {
+    listNicAttachmentRecord(): Promise<NicAttachmentRecord[]> {
         throw new Error('Method not implemented.');
     }
     updateNicAttachmentRecord(vmId: string, nicId: string, status: string): Promise<void> {
@@ -383,7 +379,7 @@ describe('sanity test', () => {
             Sinon.assert.match(conflict.length, 0); // expect no conflict
         };
         conflictCheck(FortiGateAutoscaleSetting, AutoscaleSetting);
-        conflictCheck(AwsFortiGateAutoscaleSetting, FortiGateAutoscaleSetting);
+        conflictCheck(FortiGateAutoscaleSetting, FortiGateAutoscaleSetting);
     });
     it('handlePrimaryElection', async () => {
         const stub1 = Sinon.stub(x, 'logAsInfo');

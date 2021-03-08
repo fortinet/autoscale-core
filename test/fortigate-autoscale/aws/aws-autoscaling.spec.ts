@@ -7,7 +7,6 @@ import { Context } from 'aws-lambda';
 import { describe, it } from 'mocha';
 import * as path from 'path';
 import Sinon from 'sinon';
-
 import {
     AwsTestMan,
     MockAutoScaling,
@@ -16,8 +15,8 @@ import {
     MockElbv2,
     MockLambda,
     MockS3
-} from '../../../test-helper/aws-testman';
-import { createTestAwsTgwScheduledEventHandler } from '../../../test-helper/test-aws-helper-function';
+} from '../../../fortigate-autoscale/aws/test-helper/aws-testman';
+import { createTestAwsTgwScheduledEventHandler } from '../../../fortigate-autoscale/aws/test-helper/test-aws-helper-function';
 
 describe('FortiGate Autoscale AWS Auto Scaling group tests.', () => {
     let mockDataRootDir: string;

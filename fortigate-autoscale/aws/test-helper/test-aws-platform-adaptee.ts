@@ -1,4 +1,4 @@
-import { AwsPlatformAdaptee } from '../fortigate-autoscale/aws';
+import { AwsPlatformAdaptee } from '..';
 import {
     MockAutoScaling,
     MockDocClient,

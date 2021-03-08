@@ -1,4 +1,4 @@
-import { AwsApiGatewayEventProxy, LogLevel } from '../fortigate-autoscale/aws';
+import { AwsApiGatewayEventProxy, LogLevel } from '..';
 export class TestAwsApiGatewayEventProxy extends AwsApiGatewayEventProxy {
     log(message: string, level: LogLevel): void {
         if (process.env.DEBUG_SHOW_LOG === 'true') {

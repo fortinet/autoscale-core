@@ -5,9 +5,9 @@ import {
     Context,
     ScheduledEvent
 } from 'aws-lambda';
-import { AutoscaleEnvironment, AwsPlatformAdapter } from '../fortigate-autoscale/aws';
-import { AwsCloudFormationCustomResourceEventProxy } from '../fortigate-autoscale/aws/aws-cloud-function-proxy';
-import { AwsFortiGateAutoscaleCfnServiceProvider } from '../fortigate-autoscale/aws/aws-fortigate-autoscale-service';
+import { AutoscaleEnvironment, AwsPlatformAdapter } from '..';
+import { AwsCloudFormationCustomResourceEventProxy } from '../aws-cloud-function-proxy';
+import { AwsFortiGateAutoscaleCfnServiceProvider } from '../aws-fortigate-autoscale-service';
 import { TestAwsApiGatewayEventProxy } from './test-aws-api-gateway-event-proxy';
 import {
     TestAwsFortiGateAutoscale,
