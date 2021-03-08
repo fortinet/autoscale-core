@@ -1,3 +1,4 @@
+import * as AzureFuncionDef from './azure-function-definitions';
 // export fortigate-autoscale module files.
 export * from '../index';
 // export azure-fortigate-autoscale module files.
@@ -7,10 +8,10 @@ export * from './azure-fortianalyzer-integration-service';
 export * from './azure-fortigate-autoscale';
 export * from './azure-fortigate-autoscale-settings';
 export * from './azure-fortigate-bootstrap-config-strategy';
-export * from './azure-function-definitions';
 export * from './azure-function-invocable';
 export * from './azure-hybrid-scaling-group-strategy';
 export * from './azure-platform-adaptee';
 export * from './azure-platform-adapter';
 export * from './azure-routing-egress-traffic-via-primary-vm-strategy';
 export * from './azure-tagging-autoscale-vm-strategy';
+export { AzureFuncionDef };

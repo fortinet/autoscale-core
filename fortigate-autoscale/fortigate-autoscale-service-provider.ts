@@ -1,4 +1,4 @@
-import { AutoscaleServiceType } from '../autoscale-service-provider';
+import { AutoscaleServiceType } from './index';
 
 // all supported FortiGate Autoscale Service type
 export const FortiGateAutoscaleServiceType = {

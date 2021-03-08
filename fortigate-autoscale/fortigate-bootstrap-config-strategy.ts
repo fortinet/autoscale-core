@@ -1,15 +1,15 @@
-import { configSetResourceFinder } from '../autoscale-core';
-import { AutoscaleEnvironment } from '../autoscale-environment';
-import { Settings } from '../autoscale-setting';
-import { Blob } from '../blob';
-import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
 import {
+    AutoscaleEnvironment,
+    Blob,
     BootstrapConfigStrategyResult,
-    BootstrapConfigurationStrategy
-} from '../context-strategy/bootstrap-context';
-import { PlatformAdapter } from '../platform-adapter';
-import { VirtualMachine } from '../virtual-machine';
-import { FortiGateAutoscaleSetting } from './fortigate-autoscale-settings';
+    BootstrapConfigurationStrategy,
+    CloudFunctionProxyAdapter,
+    configSetResourceFinder,
+    FortiGateAutoscaleSetting,
+    PlatformAdapter,
+    Settings,
+    VirtualMachine
+} from './index';
 
 export abstract class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationStrategy {
     static SUCCESS = 'SUCCESS';

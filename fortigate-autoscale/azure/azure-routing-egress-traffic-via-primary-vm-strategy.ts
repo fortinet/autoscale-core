@@ -1,7 +1,9 @@
-import { AutoscaleEnvironment } from '../../autoscale-environment';
-import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
-import { RoutingEgressTrafficStrategy } from '../../context-strategy/autoscale-context';
-import { AzurePlatformAdapter } from './azure-platform-adapter';
+import {
+    AutoscaleEnvironment,
+    AzurePlatformAdapter,
+    CloudFunctionProxyAdapter,
+    RoutingEgressTrafficStrategy
+} from './index';
 
 /**
  * This strategy updates the route table associated with the private subnets which need outgoing

@@ -1,15 +1,15 @@
 import { Context, HttpRequest } from '@azure/functions';
-import { AutoscaleServiceRequest } from '../../autoscale-service-provider';
 import {
+    AutoscaleServiceRequest,
     CloudFunctionProxy,
     CloudFunctionResponseBody,
+    JSONable,
+    jsonStringifyReplacer,
     LogLevel,
     mapHttpMethod,
     ReqHeaders,
     ReqMethod
-} from '../../cloud-function-proxy';
-import { jsonStringifyReplacer } from '../../helper-function';
-import { JSONable } from '../../jsonable';
+} from './index';
 
 export interface AzureFunctionResponse {
     status: number;
