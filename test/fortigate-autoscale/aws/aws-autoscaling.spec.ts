@@ -9,14 +9,14 @@ import * as path from 'path';
 import Sinon from 'sinon';
 import {
     AwsTestMan,
+    createTestAwsTgwScheduledEventHandler,
     MockAutoScaling,
     MockDocClient,
     MockEC2,
     MockElbv2,
     MockLambda,
     MockS3
-} from '../../../fortigate-autoscale/aws/test-helper/aws-testman';
-import { createTestAwsTgwScheduledEventHandler } from '../../../fortigate-autoscale/aws/test-helper/test-aws-helper-function';
+} from '../../../fortigate-autoscale/aws/test-helper';
 
 describe('FortiGate Autoscale AWS Auto Scaling group tests.', () => {
     let mockDataRootDir: string;
