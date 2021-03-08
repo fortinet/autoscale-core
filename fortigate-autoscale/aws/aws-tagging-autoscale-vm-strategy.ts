@@ -1,12 +1,13 @@
-import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
-import { TaggingVmStrategy, VmTagging } from '../../context-strategy/autoscale-context';
-import { ResourceFilter } from '../../platform-adapter';
-import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
 import {
+    AwsFortiGateAutoscaleSetting,
     AwsPlatformAdapter,
+    CloudFunctionProxyAdapter,
+    ResourceFilter,
+    TaggingVmStrategy,
     TAG_KEY_AUTOSCALE_ROLE,
-    TAG_KEY_RESOURCE_GROUP
-} from './aws-platform-adapter';
+    TAG_KEY_RESOURCE_GROUP,
+    VmTagging
+} from './index';
 
 export class AwsTaggingAutoscaleVmStrategy implements TaggingVmStrategy {
     protected platform: AwsPlatformAdapter;

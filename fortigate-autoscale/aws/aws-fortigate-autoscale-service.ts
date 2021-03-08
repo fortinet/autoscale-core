@@ -1,16 +1,16 @@
 import { CloudFormationCustomResourceEvent, Context } from 'aws-lambda';
-import { AutoscaleServiceProvider } from '../../autoscale-service-provider';
-import { ReqType } from '../../cloud-function-proxy';
-import { NicAttachmentStrategyResult } from '../../context-strategy/nic-attachment-context';
-import { VpnAttachmentStrategyResult } from '../../context-strategy/vpn-attachment-context';
-import { FortiGateAutoscaleServiceType } from '../fortigate-autoscale-service-provider';
-import { AwsCloudFormationCustomResourceEventProxy } from './aws-cloud-function-proxy';
-import { AwsFortiGateAutoscale } from './aws-fortigate-autoscale';
 import {
+    AutoscaleServiceProvider,
+    AwsCloudFormationCustomResourceEventProxy,
+    AwsFortiGateAutoscale,
     AwsFortiGateAutoscaleSetting,
-    AwsFortiGateAutoscaleSettingItemDictionary
-} from './aws-fortigate-autoscale-settings';
-import { AwsPlatformAdapter } from './aws-platform-adapter';
+    AwsFortiGateAutoscaleSettingItemDictionary,
+    AwsPlatformAdapter,
+    FortiGateAutoscaleServiceType,
+    NicAttachmentStrategyResult,
+    ReqType,
+    VpnAttachmentStrategyResult
+} from './index';
 
 export const AwsFortiGateAutoscaleServiceType = {
     ...FortiGateAutoscaleServiceType,

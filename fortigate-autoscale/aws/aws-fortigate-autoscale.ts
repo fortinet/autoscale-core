@@ -1,53 +1,44 @@
 import { Context } from 'aws-lambda';
-import { AutoscaleEnvironment } from '../../autoscale-environment';
 import {
+    AutoscaleEnvironment,
+    AwsFortiGateAutoscaleSetting,
+    AwsFortiGateBootstrapStrategy,
+    AwsFortiGateBootstrapTgwStrategy,
+    AwsHybridScalingGroupStrategy,
+    AwsLambdaInvocable,
+    AwsLambdaInvocationProxy,
+    AwsNicAttachmentStrategy,
+    AwsPlatformAdapter,
+    AwsRoutingEgressTrafficViaPrimaryVmStrategy,
+    AwsTaggingAutoscaleVmStrategy,
+    AwsTgwVpnAttachmentStrategy,
+    AwsTgwVpnUpdateAttachmentRouteTableRequest,
     CloudFunctionInvocationPayload,
-    CloudFunctionInvocationTimeOutError
-} from '../../cloud-function-peer-invocation';
-import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
-import {
+    CloudFunctionInvocationTimeOutError,
+    CloudFunctionProxyAdapter,
     ConstantIntervalHeartbeatSyncStrategy,
-    NoopRoutingEgressTrafficStrategy,
-    PreferredGroupPrimaryElection
-} from '../../context-strategy/autoscale-context';
-import { ReusableLicensingStrategy } from '../../context-strategy/licensing-context';
-import {
+    FazDeviceAuthorization,
+    FazReactiveAuthorizationStrategy,
+    FortiGateAutoscale,
+    FortiGateAutoscaleFunctionInvocationHandler,
+    JSONable,
     NicAttachmentContext,
     NicAttachmentStrategy,
     NicAttachmentStrategyResult,
-    NoopNicAttachmentStrategy
-} from '../../context-strategy/nic-attachment-context';
-import {
+    NoopNicAttachmentStrategy,
+    NoopRoutingEgressTrafficStrategy,
     NoopVpnAttachmentStrategy,
+    PreferredGroupPrimaryElection,
+    ReusableLicensingStrategy,
+    ScalingGroupState,
+    TransitGatewayContext,
+    VirtualMachineState,
     VpnAttachmentStrategy,
-    VpnAttachmentStrategyResult
-} from '../../context-strategy/vpn-attachment-context';
-import { waitFor, WaitForConditionChecker, WaitForPromiseEmitter } from '../../helper-function';
-import { JSONable } from '../../jsonable';
-import { VirtualMachineState } from '../../virtual-machine';
-import { FortiGateAutoscale } from '../fortigate-autoscale';
-import { FortiGateAutoscaleFunctionInvocationHandler } from '../fortigate-autoscale-function-invocation';
-import {
-    FazDeviceAuthorization,
-    FazReactiveAuthorizationStrategy
-} from '../fortigate-faz-integration-strategy';
-import { AwsLambdaInvocationProxy } from './aws-cloud-function-proxy';
-import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import {
-    AwsFortiGateBootstrapStrategy,
-    AwsFortiGateBootstrapTgwStrategy
-} from './aws-fortigate-bootstrap-config-strategy';
-import { AwsHybridScalingGroupStrategy } from './aws-hybrid-scaling-group-strategy';
-import { AwsLambdaInvocable } from './aws-lambda-invocable';
-import { AwsNicAttachmentStrategy } from './aws-nic-attachment-strategy';
-import { AwsPlatformAdapter, ScalingGroupState } from './aws-platform-adapter';
-import { AwsRoutingEgressTrafficViaPrimaryVmStrategy } from './aws-routing-egress-traffic-via-primary-vm-strategy';
-import { AwsTaggingAutoscaleVmStrategy } from './aws-tagging-autoscale-vm-strategy';
-import { AwsTgwVpnAttachmentStrategy } from './aws-tgw-vpn-attachment-strategy';
-import {
-    AwsTgwVpnUpdateAttachmentRouteTableRequest,
-    TransitGatewayContext
-} from './transit-gateway-context';
+    VpnAttachmentStrategyResult,
+    waitFor,
+    WaitForConditionChecker,
+    WaitForPromiseEmitter
+} from './index';
 
 /** ./aws-fortigate-autoscale-lambda-invocable
  * AWS FortiGate Autoscale - class, with capabilities:

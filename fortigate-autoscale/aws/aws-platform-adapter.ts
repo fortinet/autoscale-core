@@ -1,59 +1,45 @@
 import EC2 from 'aws-sdk/clients/ec2';
 import path from 'path';
-import { Settings } from '../../autoscale-setting';
-import { Blob } from '../../blob';
-import {
-    CloudFunctionInvocationPayload,
-    constructInvocationPayload
-} from '../../cloud-function-peer-invocation';
-import { CloudFunctionProxyAdapter, ReqMethod, ReqType } from '../../cloud-function-proxy';
-import { NicAttachmentRecord } from '../../context-strategy/nic-attachment-context';
-import {
-    AutoscaleDbItem,
-    FortiAnalyzerDbItem,
-    KeyValue,
-    LicenseStockDbItem,
-    LicenseUsageDbItem,
-    NicAttachmentDbItem,
-    PrimaryElectionDbItem,
-    SaveCondition,
-    SettingsDbItem,
-    VpnAttachmentDbItem
-} from '../../db-definitions';
-import {
-    genChecksum,
-    waitFor,
-    WaitForConditionChecker,
-    WaitForPromiseEmitter
-} from '../../helper-function';
-import { JSONable } from '../../jsonable';
-import {
-    LicenseFile,
-    LicenseStockRecord,
-    LicenseUsageRecord,
-    PlatformAdapter,
-    ResourceFilter,
-    TgwVpnAttachmentRecord
-} from '../../platform-adapter';
-import {
-    HealthCheckRecord,
-    HealthCheckSyncState,
-    PrimaryRecord,
-    PrimaryRecordVoteState
-} from '../../primary-election';
-import { NetworkInterface, VirtualMachine, VirtualMachineState } from '../../virtual-machine';
-import { FortiGateAutoscaleServiceRequestSource } from '../fortigate-autoscale-service-provider';
+import * as AwsDBDef from './index';
 import {
     AwsApiGatewayEventProxy,
     AwsCloudFormationCustomResourceEventProxy,
+    AwsFortiGateAutoscaleSetting,
     AwsLambdaInvocationProxy,
-    AwsScheduledEventProxy
-} from './aws-cloud-function-proxy';
-import * as AwsDBDef from './aws-db-definitions';
-import { LifecycleItemDbItem } from './aws-db-definitions';
-import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsPlatformAdaptee } from './aws-platform-adaptee';
-import { AwsVpnAttachmentState, AwsVpnConnection } from './transit-gateway-context';
+    AwsPlatformAdaptee,
+    AwsScheduledEventProxy,
+    AwsVpnAttachmentState,
+    AwsVpnConnection,
+    Blob,
+    CloudFunctionInvocationPayload,
+    CloudFunctionProxyAdapter,
+    constructInvocationPayload,
+    DBDef,
+    FortiGateAutoscaleServiceRequestSource,
+    genChecksum,
+    HealthCheckRecord,
+    HealthCheckSyncState,
+    JSONable,
+    LicenseFile,
+    LicenseStockRecord,
+    LicenseUsageRecord,
+    LifecycleItemDbItem,
+    NetworkInterface,
+    NicAttachmentRecord,
+    PlatformAdapter,
+    PrimaryRecord,
+    PrimaryRecordVoteState,
+    ReqMethod,
+    ReqType,
+    ResourceFilter,
+    Settings,
+    TgwVpnAttachmentRecord,
+    VirtualMachine,
+    VirtualMachineState,
+    waitFor,
+    WaitForConditionChecker,
+    WaitForPromiseEmitter
+} from './index';
 
 export const TAG_KEY_RESOURCE_GROUP = 'ResourceGroup';
 export const TAG_KEY_AUTOSCALE_ROLE = 'AutoscaleRole';
@@ -61,7 +47,7 @@ export const TAG_KEY_AUTOSCALE_ROLE = 'AutoscaleRole';
 export interface AwsDdbOperations {
     Expression: string;
     ExpressionAttributeValues?: { [key: string]: string | number | boolean };
-    type?: SaveCondition;
+    type?: DBDef.SaveCondition;
 }
 
 export enum LifecycleActionResult {
@@ -226,7 +212,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         editable?: boolean
     ): Promise<string> {
         const table = new AwsDBDef.AwsSettings(process.env.RESOURCE_TAG_PREFIX || '');
-        const item: SettingsDbItem = {
+        const item: DBDef.SettingsDbItem = {
             settingKey: key,
             settingValue: value,
             description: description,
@@ -235,9 +221,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: SaveCondition.Upsert
+            type: DBDef.SaveCondition.Upsert
         };
-        await this.adaptee.saveItemToDb<SettingsDbItem>(table, item, conditionExp);
+        await this.adaptee.saveItemToDb<DBDef.SettingsDbItem>(table, item, conditionExp);
         return item.settingKey;
     }
 
@@ -477,7 +463,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const table = new AwsDBDef.AwsAutoscale(
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
-        const dbItem = await this.adaptee.getItemFromDb<AutoscaleDbItem>(table, [
+        const dbItem = await this.adaptee.getItemFromDb<DBDef.AutoscaleDbItem>(table, [
             {
                 key: table.primaryKey.name,
                 value: vmId
@@ -528,7 +514,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called getHealthCheckRecord');
         return record;
     }
-    async getPrimaryRecord(filters?: KeyValue[]): Promise<PrimaryRecord> {
+    async getPrimaryRecord(filters?: DBDef.KeyValue[]): Promise<PrimaryRecord> {
         this.proxy.logAsInfo('calling getPrimaryRecord');
         const settings = await this.getSettings();
         const table = new AwsDBDef.AwsPrimaryElection(
@@ -541,7 +527,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             filterExp.Expression = filters.map(kv => `${kv.key} = :${kv.value}`).join(' AND ');
         }
         // ASSERT: there's only 1 matching primary record or no matching record.
-        const [record] = await this.adaptee.listItemFromDb<PrimaryElectionDbItem>(table, filterExp);
+        const [record] = await this.adaptee.listItemFromDb<DBDef.PrimaryElectionDbItem>(
+            table,
+            filterExp
+        );
         let primaryRecord: PrimaryRecord;
         if (record) {
             const [voteState] = Object.entries(PrimaryRecordVoteState)
@@ -585,7 +574,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 return rec.syncState === value;
             })
             .map(([, v]) => v);
-        const item: AutoscaleDbItem = {
+        const item: DBDef.AutoscaleDbItem = {
             vmId: rec.vmId,
             scalingGroupName: rec.scalingGroupName,
             ip: rec.ip,
@@ -598,9 +587,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: SaveCondition.Upsert
+            type: DBDef.SaveCondition.Upsert
         };
-        await this.adaptee.saveItemToDb<AutoscaleDbItem>(table, item, conditionExp);
+        await this.adaptee.saveItemToDb<DBDef.AutoscaleDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called createHealthCheckRecord');
     }
     async updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
@@ -614,7 +603,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 return rec.syncState === value;
             })
             .map(([, v]) => v);
-        const item: AutoscaleDbItem = {
+        const item: DBDef.AutoscaleDbItem = {
             vmId: rec.vmId,
             scalingGroupName: rec.scalingGroupName,
             ip: rec.ip,
@@ -627,9 +616,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: SaveCondition.UpdateOnly
+            type: DBDef.SaveCondition.UpdateOnly
         };
-        await this.adaptee.saveItemToDb<AutoscaleDbItem>(table, item, conditionExp);
+        await this.adaptee.saveItemToDb<DBDef.AutoscaleDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called updateHealthCheckRecord');
     }
     async createPrimaryRecord(rec: PrimaryRecord, oldRec: PrimaryRecord | null): Promise<void> {
@@ -639,7 +628,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             const table = new AwsDBDef.AwsPrimaryElection(
                 settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
             );
-            const item: PrimaryElectionDbItem = {
+            const item: DBDef.PrimaryElectionDbItem = {
                 id: rec.id,
                 scalingGroupName: rec.scalingGroupName,
                 ip: rec.ip,
@@ -653,7 +642,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             // if it exists but timeout
             const conditionExp: AwsDdbOperations = {
                 Expression: 'attribute_not_exists(scalingGroupName)',
-                type: SaveCondition.InsertOnly
+                type: DBDef.SaveCondition.InsertOnly
             };
             // if specified an old rec to purge, use a strict conditional expression to replace.
             if (oldRec) {
@@ -664,7 +653,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 };
             }
 
-            await this.adaptee.saveItemToDb<PrimaryElectionDbItem>(table, item, conditionExp);
+            await this.adaptee.saveItemToDb<DBDef.PrimaryElectionDbItem>(table, item, conditionExp);
             this.proxy.logAsInfo('called createPrimaryRecord.');
         } catch (error) {
             if (error.code && error.code === 'ConditionalCheckFailedException') {
@@ -681,7 +670,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             const table = new AwsDBDef.AwsPrimaryElection(
                 settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
             );
-            const item: PrimaryElectionDbItem = {
+            const item: DBDef.PrimaryElectionDbItem = {
                 id: rec.id,
                 scalingGroupName: rec.scalingGroupName,
                 ip: rec.ip,
@@ -703,7 +692,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     ':nowTime': Date.now()
                 }
             };
-            await this.adaptee.saveItemToDb<PrimaryElectionDbItem>(table, item, conditionExp);
+            await this.adaptee.saveItemToDb<DBDef.PrimaryElectionDbItem>(table, item, conditionExp);
             this.proxy.logAsInfo('called updatePrimaryRecord.');
         } catch (error) {
             this.proxy.logForError('called updatePrimaryRecord.', error);
@@ -798,7 +787,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const table = new AwsDBDef.AwsLicenseStock(
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
-        const dbItems = await this.adaptee.listItemFromDb<LicenseStockDbItem>(table);
+        const dbItems = await this.adaptee.listItemFromDb<DBDef.LicenseStockDbItem>(table);
         const mapItems = dbItems
             .filter(item => item.productName === productName)
             .map(item => {
@@ -818,7 +807,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const table = new AwsDBDef.AwsLicenseUsage(
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
-        const dbItems = await this.adaptee.listItemFromDb<LicenseUsageDbItem>(table);
+        const dbItems = await this.adaptee.listItemFromDb<DBDef.LicenseUsageDbItem>(table);
         const mapItems = dbItems
             .filter(item => item.productName === productName)
             .map(item => {
@@ -843,8 +832,8 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
         // load all license stock records in the db
-        const items = new Map<string, LicenseStockDbItem>(
-            (await this.adaptee.listItemFromDb<LicenseStockDbItem>(table)).map(item => {
+        const items = new Map<string, DBDef.LicenseStockDbItem>(
+            (await this.adaptee.listItemFromDb<DBDef.LicenseStockDbItem>(table)).map(item => {
                 return [item.checksum, item];
             })
         );
@@ -852,7 +841,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const stockRecordChecksums = Array.from(items.keys());
         await Promise.all(
             records.map(record => {
-                const item: LicenseStockDbItem = {
+                const item: DBDef.LicenseStockDbItem = {
                     checksum: record.checksum,
                     algorithm: record.algorithm,
                     fileName: record.fileName,
@@ -865,18 +854,18 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 // recrod exists, update it
                 if (items.has(record.checksum)) {
                     stockRecordChecksums.splice(stockRecordChecksums.indexOf(record.checksum), 1);
-                    conditionExp.type = SaveCondition.UpdateOnly;
+                    conditionExp.type = DBDef.SaveCondition.UpdateOnly;
                     typeText =
                         `update existing item (filename: ${record.fileName},` +
                         ` checksum: ${record.checksum})`;
                 } else {
-                    conditionExp.type = SaveCondition.Upsert;
+                    conditionExp.type = DBDef.SaveCondition.Upsert;
                     typeText =
                         `create new item (filename: ${record.fileName},` +
                         ` checksum: ${record.checksum})`;
                 }
                 return this.adaptee
-                    .saveItemToDb<LicenseStockDbItem>(table, item, conditionExp)
+                    .saveItemToDb<DBDef.LicenseStockDbItem>(table, item, conditionExp)
                     .catch(err => {
                         this.proxy.logForError(`Failed to ${typeText}.`, err);
                         errorCount++;
@@ -887,13 +876,15 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         await Promise.all(
             stockRecordChecksums.map(checksum => {
                 const item = items.get(checksum);
-                return this.adaptee.deleteItemFromDb<LicenseStockDbItem>(table, item).catch(err => {
-                    this.proxy.logForError(
-                        `Failed to delete item (filename: ${item.fileName}) from db.`,
-                        err
-                    );
-                    errorCount++;
-                });
+                return this.adaptee
+                    .deleteItemFromDb<DBDef.LicenseStockDbItem>(table, item)
+                    .catch(err => {
+                        this.proxy.logForError(
+                            `Failed to delete item (filename: ${item.fileName}) from db.`,
+                            err
+                        );
+                        errorCount++;
+                    });
             })
         );
         if (errorCount > 0) {
@@ -912,15 +903,15 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
         // get all records from the db as a snapshot
-        const items = new Map<string, LicenseUsageDbItem>(
-            (await this.adaptee.listItemFromDb<LicenseUsageDbItem>(table)).map(item => {
+        const items = new Map<string, DBDef.LicenseUsageDbItem>(
+            (await this.adaptee.listItemFromDb<DBDef.LicenseUsageDbItem>(table)).map(item => {
                 return [item.checksum, item];
             })
         );
         let errorCount = 0;
         await Promise.all(
             records.map(rec => {
-                const item: LicenseUsageDbItem = {
+                const item: DBDef.LicenseUsageDbItem = {
                     checksum: rec.item.checksum,
                     algorithm: rec.item.algorithm,
                     fileName: rec.item.fileName,
@@ -949,7 +940,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                         errorCount++;
                         return Promise.resolve();
                     }
-                    conditionExp.type = SaveCondition.UpdateOnly;
+                    conditionExp.type = DBDef.SaveCondition.UpdateOnly;
                     // the conditional expression ensures the consistency of the DB system (ACID)
                     conditionExp.Expression =
                         'attribute_exists(checksum) AND vmId = :vmId' +
@@ -976,7 +967,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                         `scalingGroupName: ${item.scalingGroupName}, ` +
                         `productName: ${item.productName}, algorithm: ${item.algorithm})`;
                     return this.adaptee
-                        .saveItemToDb<LicenseUsageDbItem>(table, item, conditionExp)
+                        .saveItemToDb<DBDef.LicenseUsageDbItem>(table, item, conditionExp)
                         .then(() => {
                             this.proxy.logAsInfo(typeText);
                         })
@@ -987,7 +978,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 }
                 // create if record not exists
                 else {
-                    conditionExp.type = SaveCondition.Upsert;
+                    conditionExp.type = DBDef.SaveCondition.Upsert;
                     // the conditional expression ensures the consistency of the DB system (ACID)
                     conditionExp.Expression = 'attribute_not_exists(checksum)';
                     typeText =
@@ -996,7 +987,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                         `scalingGroupName: ${item.scalingGroupName}, ` +
                         `productName: ${item.productName}, algorithm: ${item.algorithm})`;
                     return this.adaptee
-                        .saveItemToDb<LicenseUsageDbItem>(table, item, conditionExp)
+                        .saveItemToDb<DBDef.LicenseUsageDbItem>(table, item, conditionExp)
                         .then(() => {
                             this.proxy.logAsInfo(typeText);
                         })
@@ -1028,7 +1019,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const table = new AwsDBDef.AwsNicAttachment(
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
-        const records = await this.adaptee.listItemFromDb<NicAttachmentDbItem>(table);
+        const records = await this.adaptee.listItemFromDb<DBDef.NicAttachmentDbItem>(table);
         const nicRecords: NicAttachmentRecord[] =
             records.map(record => {
                 return {
@@ -1048,16 +1039,16 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             const table = new AwsDBDef.AwsNicAttachment(
                 settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
             );
-            const item: NicAttachmentDbItem = {
+            const item: DBDef.NicAttachmentDbItem = {
                 vmId: vmId,
                 nicId: nicId,
                 attachmentState: status
             };
             const conditionExp: AwsDdbOperations = {
                 Expression: '',
-                type: SaveCondition.Upsert
+                type: DBDef.SaveCondition.Upsert
             };
-            await this.adaptee.saveItemToDb<NicAttachmentDbItem>(table, item, conditionExp);
+            await this.adaptee.saveItemToDb<DBDef.NicAttachmentDbItem>(table, item, conditionExp);
         } catch (error) {
             this.proxy.logAsError('cannot update nic attachment record');
             throw error;
@@ -1072,12 +1063,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             const table = new AwsDBDef.AwsNicAttachment(
                 settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
             );
-            const item: NicAttachmentDbItem = {
+            const item: DBDef.NicAttachmentDbItem = {
                 vmId: vmId,
                 nicId: nicId,
                 attachmentState: undefined // non key attribute can set to undefined
             };
-            await this.adaptee.deleteItemFromDb<NicAttachmentDbItem>(table, item);
+            await this.adaptee.deleteItemFromDb<DBDef.NicAttachmentDbItem>(table, item);
         } catch (error) {
             this.proxy.logAsError('cannot delete nic attachment record');
             throw error;
@@ -1353,7 +1344,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: SaveCondition.Upsert
+            type: DBDef.SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<LifecycleItemDbItem>(table, dbItem, conditionExp);
         this.proxy.logAsInfo('called createLifecycleItem');
@@ -1376,7 +1367,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: SaveCondition.UpdateOnly
+            type: DBDef.SaveCondition.UpdateOnly
         };
         await this.adaptee.saveItemToDb<LifecycleItemDbItem>(table, dbItem, conditionExp);
         this.proxy.logAsInfo('called updateLifecycleItem');
@@ -1528,7 +1519,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const table = new AwsDBDef.AwsVpnAttachment(
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
-        let dbItems = await await await this.adaptee.listItemFromDb<VpnAttachmentDbItem>(table);
+        let dbItems = await await await this.adaptee.listItemFromDb<DBDef.VpnAttachmentDbItem>(
+            table
+        );
         if (filters.length > 0) {
             const m = filters.map(filter => `${filter.vmId}-${filter.ip}`);
             dbItems = dbItems.filter(item => m.includes(`${item.vmId}-${item.ip}`));
@@ -1577,16 +1570,16 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
         // ASSERT: item is vliad
-        const dbItem: VpnAttachmentDbItem = {
+        const dbItem: DBDef.VpnAttachmentDbItem = {
             vmId: vmId,
             ip: ip,
             vpnConnectionId: vpnConnectionId
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: SaveCondition.Upsert
+            type: DBDef.SaveCondition.Upsert
         };
-        await this.adaptee.saveItemToDb<VpnAttachmentDbItem>(table, dbItem, conditionExp);
+        await this.adaptee.saveItemToDb<DBDef.VpnAttachmentDbItem>(table, dbItem, conditionExp);
         this.proxy.logAsInfo('called saveTgwVpnAttachmentRecord');
     }
 
@@ -1596,12 +1589,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const table = new AwsDBDef.AwsVpnAttachment(
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
-        const item: VpnAttachmentDbItem = {
+        const item: DBDef.VpnAttachmentDbItem = {
             vmId: vmId,
             ip: ip,
             vpnConnectionId: undefined // non key attribute can set to undefined
         };
-        await this.adaptee.deleteItemFromDb<VpnAttachmentDbItem>(table, item);
+        await this.adaptee.deleteItemFromDb<DBDef.VpnAttachmentDbItem>(table, item);
 
         this.proxy.logAsInfo('called deleteTgwVpnAttachmentRecord');
     }
@@ -1893,7 +1886,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const table = new AwsDBDef.AwsFortiAnalyzer(
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
-        const item: FortiAnalyzerDbItem = {
+        const item: DBDef.FortiAnalyzerDbItem = {
             vmId: vmId,
             ip: privateIp,
             primary: primary,
@@ -1901,9 +1894,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
-            type: SaveCondition.Upsert
+            type: DBDef.SaveCondition.Upsert
         };
-        await this.adaptee.saveItemToDb<FortiAnalyzerDbItem>(table, item, conditionExp);
+        await this.adaptee.saveItemToDb<DBDef.FortiAnalyzerDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called registerFortiAnalyzer');
     }
 }

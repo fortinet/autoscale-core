@@ -6,16 +6,16 @@ import {
     ScheduledEvent
 } from 'aws-lambda';
 import {
+    AwsCfnResponse,
     CloudFunctionProxy,
     CloudFunctionResponseBody,
+    JSONable,
     LogLevel,
     mapHttpMethod,
     ReqBody,
     ReqHeaders,
     ReqMethod
-} from '../../cloud-function-proxy';
-import { JSONable } from '../../jsonable';
-import * as AwsCfnResponse from './aws-cfn-response';
+} from './index';
 
 export class AwsScheduledEventProxy extends CloudFunctionProxy<
     ScheduledEvent,

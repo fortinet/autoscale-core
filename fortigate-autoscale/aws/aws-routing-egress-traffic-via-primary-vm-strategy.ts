@@ -1,10 +1,13 @@
-import { AutoscaleEnvironment } from '../../autoscale-environment';
-import { SettingItem, Settings } from '../../autoscale-setting';
-import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
-import { RoutingEgressTrafficStrategy } from '../../context-strategy/autoscale-context';
-import { isIpV4 } from '../../helper-function';
-import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsPlatformAdapter } from './aws-platform-adapter';
+import {
+    AutoscaleEnvironment,
+    AwsFortiGateAutoscaleSetting,
+    AwsPlatformAdapter,
+    CloudFunctionProxyAdapter,
+    isIpV4,
+    RoutingEgressTrafficStrategy,
+    SettingItem,
+    Settings
+} from './index';
 
 /**
  * This strategy updates the route table associated with the private subnets which need outgoing

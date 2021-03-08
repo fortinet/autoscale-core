@@ -1,31 +1,14 @@
-import {
-    Attribute,
-    Autoscale,
-    CustomLog,
-    FortiAnalyzer,
-    LicenseStock,
-    LicenseUsage,
-    NicAttachment,
-    PrimaryElection,
-    Record,
-    Settings,
-    Table,
-    TypeConverter,
-    TypeRef,
-    TypeRefMap,
-    VmInfoCache,
-    VpnAttachment
-} from '../../db-definitions';
+import { DBDef } from './index';
 
-export const AwsTypeRefs: TypeRefMap = new Map<TypeRef, string>([
-    [TypeRef.StringType, 'S'],
-    [TypeRef.NumberType, 'N'],
-    [TypeRef.BooleanType, 'BOOL'],
-    [TypeRef.PrimaryKey, 'HASH'],
-    [TypeRef.SecondaryKey, 'RANGE']
+export const AwsTypeRefs: DBDef.TypeRefMap = new Map<DBDef.TypeRef, string>([
+    [DBDef.TypeRef.StringType, 'S'],
+    [DBDef.TypeRef.NumberType, 'N'],
+    [DBDef.TypeRef.BooleanType, 'BOOL'],
+    [DBDef.TypeRef.PrimaryKey, 'HASH'],
+    [DBDef.TypeRef.SecondaryKey, 'RANGE']
 ]);
 
-export class DynamoDBTypeConverter extends TypeConverter {
+export class DynamoDBTypeConverter extends DBDef.TypeConverter {
     valueToString(value: unknown): string {
         return value as string;
     }
@@ -36,70 +19,70 @@ export class DynamoDBTypeConverter extends TypeConverter {
         return !!value;
     }
 }
-export class AwsAutoscale extends Autoscale {
+export class AwsAutoscale extends DBDef.Autoscale {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
-export class AwsPrimaryElection extends PrimaryElection {
+export class AwsPrimaryElection extends DBDef.PrimaryElection {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
-export class AwsFortiAnalyzer extends FortiAnalyzer {
+export class AwsFortiAnalyzer extends DBDef.FortiAnalyzer {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
-export class AwsSettings extends Settings {
+export class AwsSettings extends DBDef.Settings {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
-export class AwsNicAttachment extends NicAttachment {
+export class AwsNicAttachment extends DBDef.NicAttachment {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
-export class AwsVmInfoCache extends VmInfoCache {
+export class AwsVmInfoCache extends DBDef.VmInfoCache {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
-export class AwsLicenseStock extends LicenseStock {
+export class AwsLicenseStock extends DBDef.LicenseStock {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
-export class AwsLicenseUsage extends LicenseUsage {
+export class AwsLicenseUsage extends DBDef.LicenseUsage {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
-export class AwsCustomLog extends CustomLog {
+export class AwsCustomLog extends DBDef.CustomLog {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 }
-export class AwsVpnAttachment extends VpnAttachment {
+export class AwsVpnAttachment extends DBDef.VpnAttachment {
     constructor(namePrefix = '', nameSuffix = '') {
         super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // NOTE: use AWS DynamoDB type refs
@@ -118,42 +101,42 @@ export interface LifecycleItemDbItem {
 }
 
 // additional tables
-export class AwsLifecycleItem extends Table<LifecycleItemDbItem> {
-    static __attributes: Attribute[] = [
+export class AwsLifecycleItem extends DBDef.Table<LifecycleItemDbItem> {
+    static __attributes: DBDef.Attribute[] = [
         {
             name: 'vmId',
-            attrType: TypeRef.StringType,
+            attrType: DBDef.TypeRef.StringType,
             isKey: true,
-            keyType: TypeRef.PrimaryKey
+            keyType: DBDef.TypeRef.PrimaryKey
         },
         {
             name: 'scalingGroupName',
-            attrType: TypeRef.StringType,
+            attrType: DBDef.TypeRef.StringType,
             isKey: false
         },
         {
             name: 'actionResult',
-            attrType: TypeRef.StringType,
+            attrType: DBDef.TypeRef.StringType,
             isKey: false
         },
         {
             name: 'actionToken',
-            attrType: TypeRef.StringType,
+            attrType: DBDef.TypeRef.StringType,
             isKey: false
         },
         {
             name: 'hookName',
-            attrType: TypeRef.StringType,
+            attrType: DBDef.TypeRef.StringType,
             isKey: false
         },
         {
             name: 'state',
-            attrType: TypeRef.StringType,
+            attrType: DBDef.TypeRef.StringType,
             isKey: false
         },
         {
             name: 'timestamp',
-            attrType: TypeRef.NumberType,
+            attrType: DBDef.TypeRef.NumberType,
             isKey: false
         }
     ];
@@ -168,7 +151,7 @@ export class AwsLifecycleItem extends Table<LifecycleItemDbItem> {
         this.alterAttributesUsingTypeReference(AwsTypeRefs);
     }
 
-    convertRecord(record: Record): LifecycleItemDbItem {
+    convertRecord(record: DBDef.Record): LifecycleItemDbItem {
         const item: LifecycleItemDbItem = {
             vmId: record.vmId as string,
             scalingGroupName: record.scalingGroupName as string,
