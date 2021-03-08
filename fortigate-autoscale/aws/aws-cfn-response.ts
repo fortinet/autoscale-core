@@ -1,8 +1,7 @@
 import { CloudFormationCustomResourceEvent, Context } from 'aws-lambda';
 import https from 'https';
 import url from 'url';
-
-import { JSONable } from '../../jsonable';
+import { JSONable } from './index';
 
 /*
    This file is a Fortinet-modified version of the original source file from AWS.

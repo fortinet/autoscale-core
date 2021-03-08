@@ -8,7 +8,7 @@
         "pre-push": "npm-run-all lint-check audit-production test build",
         "audit-production": "npm audit --production",
         "bundle": "webpack",
-        "compile": "tsc --traceResolution > out.log",
+        "compile": "tsc",
         "clear-dist": "rimraf dist",
         "build": "npm run clear-dist && npm run compile",
         "make-dist": "node dist/scripts/make-dist.js",

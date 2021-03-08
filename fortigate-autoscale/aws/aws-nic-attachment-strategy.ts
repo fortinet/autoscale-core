@@ -1,16 +1,19 @@
-import { SubnetPair, SubnetPairIndex } from '../../autoscale-setting';
-import { CloudFunctionProxyAdapter, DebugMode } from '../../cloud-function-proxy';
 import {
+    AwsFortiGateAutoscaleSetting,
+    AwsPlatformAdapter,
+    CloudFunctionProxyAdapter,
+    DebugMode,
+    JSONable,
+    NetworkInterface,
     NicAttachmentRecord,
     NicAttachmentStatus,
     NicAttachmentStrategy,
-    NicAttachmentStrategyResult
-} from '../../context-strategy/nic-attachment-context';
-import { JSONable } from '../../jsonable';
-import { ResourceFilter } from '../../platform-adapter';
-import { NetworkInterface, VirtualMachine } from '../../virtual-machine';
-import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsPlatformAdapter } from './aws-platform-adapter';
+    NicAttachmentStrategyResult,
+    ResourceFilter,
+    SubnetPair,
+    SubnetPairIndex,
+    VirtualMachine
+} from './index';
 
 export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
     vm: VirtualMachine;

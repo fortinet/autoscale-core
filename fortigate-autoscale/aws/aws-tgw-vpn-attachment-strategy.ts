@@ -1,25 +1,22 @@
-import { CloudFunctionInvocationTimeOutError } from '../../cloud-function-peer-invocation';
-import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
 import {
+    AwsFortiGateAutoscaleSetting,
+    AwsLambdaInvocable,
+    AwsPlatformAdapter,
+    AwsTgwVpnUpdateAttachmentRouteTableRequest,
+    AwsVpnAttachmentState,
+    AwsVpnConnection,
+    CloudFunctionInvocationTimeOutError,
+    CloudFunctionProxyAdapter,
+    ResourceFilter,
+    TgwVpnAttachmentRecord,
+    VirtualMachine,
     VpnAttachmentStrategy,
-    VpnAttachmentStrategyResult
-} from '../../context-strategy/vpn-attachment-context';
-import {
+    VpnAttachmentStrategyResult,
     waitFor,
     WaitForConditionChecker,
     WaitForMaxCount,
     WaitForPromiseEmitter
-} from '../../helper-function';
-import { ResourceFilter, TgwVpnAttachmentRecord } from '../../platform-adapter';
-import { VirtualMachine } from '../../virtual-machine';
-import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsLambdaInvocable } from './aws-lambda-invocable';
-import { AwsPlatformAdapter } from './aws-platform-adapter';
-import {
-    AwsTgwVpnUpdateAttachmentRouteTableRequest,
-    AwsVpnAttachmentState,
-    AwsVpnConnection
-} from './transit-gateway-context';
+} from './index';
 
 const TAG_KEY_AUTOSCALE_TGW_VPN_RESOURCE = 'AutoscaleTgwVpnResource';
 const TAG_KEY_RESOURCE_GROUP = 'ResourceGroup';

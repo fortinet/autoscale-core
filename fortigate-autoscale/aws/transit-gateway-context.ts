@@ -1,4 +1,4 @@
-import { VpnAttachmentContext } from '../../context-strategy/vpn-attachment-context';
+import { VpnAttachmentContext } from './index';
 
 /**
  * To provide AWS Transit Gateway integration related logics

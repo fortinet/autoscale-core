@@ -1,12 +1,13 @@
 import { parseStringPromise as xml2jsParserPromise } from 'xml2js';
-
-import { AutoscaleEnvironment } from '../../autoscale-environment';
-import { CloudFunctionProxyAdapter } from '../../cloud-function-proxy';
-import { JSONable } from '../../jsonable';
-import { VirtualMachine } from '../../virtual-machine';
-import { FortiGateBootstrapConfigStrategy } from '../fortigate-bootstrap-config-strategy';
-import { AwsFortiGateAutoscaleSetting } from './aws-fortigate-autoscale-settings';
-import { AwsPlatformAdapter } from './aws-platform-adapter';
+import {
+    AutoscaleEnvironment,
+    AwsFortiGateAutoscaleSetting,
+    AwsPlatformAdapter,
+    CloudFunctionProxyAdapter,
+    FortiGateBootstrapConfigStrategy,
+    JSONable,
+    VirtualMachine
+} from './index';
 
 export class AwsFortiGateBootstrapStrategy extends FortiGateBootstrapConfigStrategy {
     constructor(
