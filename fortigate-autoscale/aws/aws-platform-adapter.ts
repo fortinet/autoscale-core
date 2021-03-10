@@ -1,20 +1,9 @@
-import EC2 from 'aws-sdk/clients/ec2';
-import path from 'path';
-import * as AwsDBDef from './index';
+import * as DBDef from '@fortinet/autoscale-core/db-definitions';
 import {
-    AwsApiGatewayEventProxy,
-    AwsCloudFormationCustomResourceEventProxy,
-    AwsFortiGateAutoscaleSetting,
-    AwsLambdaInvocationProxy,
-    AwsPlatformAdaptee,
-    AwsScheduledEventProxy,
-    AwsVpnAttachmentState,
-    AwsVpnConnection,
     Blob,
     CloudFunctionInvocationPayload,
     CloudFunctionProxyAdapter,
     constructInvocationPayload,
-    DBDef,
     FortiGateAutoscaleServiceRequestSource,
     genChecksum,
     HealthCheckRecord,
@@ -23,7 +12,6 @@ import {
     LicenseFile,
     LicenseStockRecord,
     LicenseUsageRecord,
-    LifecycleItemDbItem,
     NetworkInterface,
     NicAttachmentRecord,
     PlatformAdapter,
@@ -39,7 +27,21 @@ import {
     waitFor,
     WaitForConditionChecker,
     WaitForPromiseEmitter
-} from './index';
+} from '@fortinet/fortigate-autoscale';
+import EC2 from 'aws-sdk/clients/ec2';
+import path from 'path';
+import {
+    AwsApiGatewayEventProxy,
+    AwsCloudFormationCustomResourceEventProxy,
+    AwsFortiGateAutoscaleSetting,
+    AwsLambdaInvocationProxy,
+    AwsPlatformAdaptee,
+    AwsScheduledEventProxy,
+    AwsVpnAttachmentState,
+    AwsVpnConnection,
+    LifecycleItemDbItem
+} from '.';
+import * as AwsDBDef from './index';
 
 export const TAG_KEY_RESOURCE_GROUP = 'ResourceGroup';
 export const TAG_KEY_AUTOSCALE_ROLE = 'AutoscaleRole';

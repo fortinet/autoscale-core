@@ -1,4 +1,3 @@
-import * as HttpStatusCodes from 'http-status-codes';
 import {
     Autoscale,
     AutoscaleEnvironment,
@@ -6,14 +5,15 @@ import {
     BootstrapConfigurationStrategy,
     BootstrapContext,
     CloudFunctionProxy,
-    FortiGateAutoscaleSetting,
     HttpError,
     LicensingModelContext,
     PlatformAdapter,
     ReqType,
     VirtualMachine,
     VmTagging
-} from './index';
+} from '@fortinet/autoscale-core';
+import * as HttpStatusCodes from 'http-status-codes';
+import { FortiGateAutoscaleSetting } from '.';
 
 export const PRODUCT_NAME_FORTIGATE = 'fortigate';
 

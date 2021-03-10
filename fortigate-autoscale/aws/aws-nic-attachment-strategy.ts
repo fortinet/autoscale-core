@@ -1,6 +1,4 @@
 import {
-    AwsFortiGateAutoscaleSetting,
-    AwsPlatformAdapter,
     CloudFunctionProxyAdapter,
     DebugMode,
     JSONable,
@@ -13,7 +11,8 @@ import {
     SubnetPair,
     SubnetPairIndex,
     VirtualMachine
-} from './index';
+} from '@fortinet/fortigate-autoscale';
+import { AwsFortiGateAutoscaleSetting, AwsPlatformAdapter } from '.';
 
 export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {
     vm: VirtualMachine;

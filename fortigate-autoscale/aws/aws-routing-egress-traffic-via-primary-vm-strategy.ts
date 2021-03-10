@@ -1,13 +1,12 @@
 import {
     AutoscaleEnvironment,
-    AwsFortiGateAutoscaleSetting,
-    AwsPlatformAdapter,
     CloudFunctionProxyAdapter,
     isIpV4,
     RoutingEgressTrafficStrategy,
     SettingItem,
     Settings
-} from './index';
+} from '@fortinet/fortigate-autoscale';
+import { AwsFortiGateAutoscaleSetting, AwsPlatformAdapter } from '.';
 
 /**
  * This strategy updates the route table associated with the private subnets which need outgoing

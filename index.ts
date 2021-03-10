@@ -1,8 +1,6 @@
 /**
  * export core modules
  */
-import * as DBDef from './db-definitions';
-
 export * from './autoscale-core';
 export * from './autoscale-environment';
 export * from './autoscale-service-provider';
@@ -17,4 +15,5 @@ export * from './platform-adaptee';
 export * from './platform-adapter';
 export * from './primary-election';
 export * from './virtual-machine';
-export { DBDef };
+// NOTE: the index will not export the db-definitions due to name conflicts.
+// Import them directly from the ./db-definitions.ts when needed.

@@ -1,12 +1,4 @@
 import {
-    APIGatewayProxyEvent,
-    APIGatewayProxyResult,
-    CloudFormationCustomResourceEvent,
-    Context,
-    ScheduledEvent
-} from 'aws-lambda';
-import {
-    AwsCfnResponse,
     CloudFunctionProxy,
     CloudFunctionResponseBody,
     JSONable,
@@ -15,7 +7,15 @@ import {
     ReqBody,
     ReqHeaders,
     ReqMethod
-} from './index';
+} from '@fortinet/fortigate-autoscale';
+import {
+    APIGatewayProxyEvent,
+    APIGatewayProxyResult,
+    CloudFormationCustomResourceEvent,
+    Context,
+    ScheduledEvent
+} from 'aws-lambda';
+import { AwsCfnResponse } from '.';
 
 export class AwsScheduledEventProxy extends CloudFunctionProxy<
     ScheduledEvent,

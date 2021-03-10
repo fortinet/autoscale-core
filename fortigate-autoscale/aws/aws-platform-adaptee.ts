@@ -1,3 +1,16 @@
+import {
+    Blob,
+    PlatformAdaptee,
+    ResourceFilter,
+    SettingItem,
+    Settings
+} from '@fortinet/fortigate-autoscale';
+import {
+    KeyValue,
+    SaveCondition,
+    SettingsDbItem,
+    Table
+} from '@fortinet/fortigate-autoscale/db-definitions';
 import AutoScaling, {
     LifecycleActionResult,
     UpdateAutoScalingGroupType
@@ -16,17 +29,7 @@ import { AWSError } from 'aws-sdk/lib/error';
 import fs from 'fs';
 import { isIPv4 } from 'net';
 import path from 'path';
-import {
-    AwsDdbOperations,
-    AwsFortiGateAutoscaleSetting,
-    AwsSettings,
-    Blob,
-    DBDef,
-    PlatformAdaptee,
-    ResourceFilter,
-    SettingItem,
-    Settings
-} from './index';
+import { AwsDdbOperations, AwsFortiGateAutoscaleSetting, AwsSettings } from '.';
 
 export class AwsPlatformAdaptee implements PlatformAdaptee {
     protected docClient: DocumentClient;
@@ -47,11 +50,8 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
     }
     async loadSettings(): Promise<Settings> {
         const table = new AwsSettings(process.env.RESOURCE_TAG_PREFIX || '');
-        const records: Map<string, DBDef.SettingsDbItem> = new Map(
-            (await this.listItemFromDb<DBDef.SettingsDbItem>(table)).map(rec => [
-                rec.settingKey,
-                rec
-            ])
+        const records: Map<string, SettingsDbItem> = new Map(
+            (await this.listItemFromDb<SettingsDbItem>(table)).map(rec => [rec.settingKey, rec])
         );
         const settings: Settings = new Map<string, SettingItem>();
         Object.values(AwsFortiGateAutoscaleSetting).forEach(value => {
@@ -80,17 +80,13 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
      * @see https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/DynamoDB/DocumentClient.html#put-property
      */
     async saveItemToDb<T>(
-        table: DBDef.Table<T>,
+        table: Table<T>,
         item: T,
         conditionExp?: AwsDdbOperations
     ): Promise<void> {
         // CAUTION: validate the db input
         table.validateInput<T>(item);
-        if (
-            conditionExp &&
-            conditionExp.type &&
-            conditionExp.type === DBDef.SaveCondition.UpdateOnly
-        ) {
+        if (conditionExp && conditionExp.type && conditionExp.type === SaveCondition.UpdateOnly) {
             const keys: DocumentClient.Key = {};
             // get the key names from table,
             // then assign the value of each key name of item to the key
@@ -138,10 +134,10 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
     /**
      * get an db table record from a given table
      * @param  {Table<T>} table the instance of Table to get the item.
-     * @param  {DBDef.KeyValue[]} keyValue an array of table key and a value to get the item
+     * @param  {KeyValue[]} keyValue an array of table key and a value to get the item
      * @returns {Promise} return Record or null
      */
-    async getItemFromDb<T>(table: DBDef.Table<T>, keyValue: DBDef.KeyValue[]): Promise<T | null> {
+    async getItemFromDb<T>(table: Table<T>, keyValue: KeyValue[]): Promise<T | null> {
         const keys = {};
         keyValue.forEach(kv => {
             keys[kv.key] = kv.value;
@@ -161,7 +157,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
      * @returns {Promise} void
      */
     async deleteItemFromDb<T>(
-        table: DBDef.Table<T>,
+        table: Table<T>,
         item: T,
         condition?: AwsDdbOperations
     ): Promise<void> {
@@ -188,7 +184,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
      * @returns {Promise} array of db record
      */
     async listItemFromDb<T>(
-        table: DBDef.Table<T>,
+        table: Table<T>,
         filterExp?: AwsDdbOperations,
         limit?: number
     ): Promise<T[]> {

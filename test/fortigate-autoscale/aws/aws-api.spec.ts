@@ -1,5 +1,15 @@
 /* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import {
+    CloudFunctionProxyAdapter,
+    CloudFunctionResponseBody,
+    compare,
+    LogLevel,
+    ReqHeaders,
+    ReqMethod,
+    ResourceFilter,
+    Settings
+} from '@fortinet/fortigate-autoscale';
 import AutoScaling from 'aws-sdk/clients/autoscaling';
 import { DocumentClient } from 'aws-sdk/clients/dynamodb';
 import EC2 from 'aws-sdk/clients/ec2';
@@ -13,15 +23,7 @@ import Sinon from 'sinon';
 import {
     AwsFortiGateAutoscaleSetting,
     AwsPlatformAdaptee,
-    AwsPlatformAdapter,
-    CloudFunctionProxyAdapter,
-    CloudFunctionResponseBody,
-    compare,
-    LogLevel,
-    ReqHeaders,
-    ReqMethod,
-    ResourceFilter,
-    Settings
+    AwsPlatformAdapter
 } from '../../../fortigate-autoscale/aws';
 import {
     AwsTestMan,

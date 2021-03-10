@@ -1,13 +1,12 @@
-import { parseStringPromise as xml2jsParserPromise } from 'xml2js';
 import {
     AutoscaleEnvironment,
-    AwsFortiGateAutoscaleSetting,
-    AwsPlatformAdapter,
     CloudFunctionProxyAdapter,
     FortiGateBootstrapConfigStrategy,
     JSONable,
     VirtualMachine
-} from './index';
+} from '@fortinet/fortigate-autoscale';
+import { parseStringPromise as xml2jsParserPromise } from 'xml2js';
+import { AwsFortiGateAutoscaleSetting, AwsPlatformAdapter } from '.';
 
 export class AwsFortiGateBootstrapStrategy extends FortiGateBootstrapConfigStrategy {
     constructor(

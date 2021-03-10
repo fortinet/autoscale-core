@@ -1,5 +1,31 @@
 import * as AzureComputeModels from '@azure/arm-compute/esm/models';
 import * as AzureNetworkModels from '@azure/arm-network/esm/models';
+import {
+    Blob,
+    CloudFunctionInvocationPayload,
+    constructInvocationPayload,
+    FortiGateAutoscaleServiceRequestSource,
+    genChecksum,
+    HealthCheckRecord,
+    HealthCheckSyncState,
+    JSONable,
+    LicenseFile,
+    LicenseStockRecord,
+    LicenseUsageRecord,
+    NetworkInterface,
+    NicAttachmentRecord,
+    PlatformAdapter,
+    PrimaryRecord,
+    PrimaryRecordVoteState,
+    ReqMethod,
+    ReqType,
+    ResourceFilter,
+    SettingItemDefinition,
+    Settings,
+    VirtualMachine,
+    VirtualMachineState
+} from '@fortinet/fortigate-autoscale';
+import * as DBDef from '@fortinet/fortigate-autoscale/db-definitions';
 import path from 'path';
 import {
     ApiCache,
@@ -22,33 +48,9 @@ import {
     AzurePrimaryElection,
     AzurePrimaryElectionDbItem,
     AzureSettings,
-    Blob,
-    CloudFunctionInvocationPayload,
-    constructInvocationPayload,
     CosmosDBQueryWhereClause,
-    DBDef,
-    FortiGateAutoscaleServiceRequestSource,
-    genChecksum,
-    HealthCheckRecord,
-    HealthCheckSyncState,
-    JSONable,
-    LicenseFile,
-    LicenseStockRecord,
-    LicenseUsageRecord,
-    LogItem,
-    NetworkInterface,
-    NicAttachmentRecord,
-    PlatformAdapter,
-    PrimaryRecord,
-    PrimaryRecordVoteState,
-    ReqMethod,
-    ReqType,
-    ResourceFilter,
-    SettingItemDefinition,
-    Settings,
-    VirtualMachine,
-    VirtualMachineState
-} from './index';
+    LogItem
+} from '.';
 
 export type ConsistenyCheckType<T> = { [key in keyof T]?: string | number | boolean | null };
 export class AzurePlatformAdapter implements PlatformAdapter {

@@ -164,6 +164,10 @@ export class SettingItem {
 
 export type Settings = Map<string, SettingItem>;
 
+export interface SettingItemReference {
+    [key: string]: string;
+}
+
 export interface SettingItemDictionary {
     [key: string]: SettingItemDefinition;
 }

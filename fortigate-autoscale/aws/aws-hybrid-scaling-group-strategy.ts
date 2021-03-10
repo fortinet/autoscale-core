@@ -1,12 +1,14 @@
 import {
-    AwsFortiGateAutoscaleSetting,
-    AwsPlatformAdapter,
     CloudFunctionProxyAdapter,
     JSONable,
-    LifecycleActionResult,
-    LifecycleState,
     ScalingGroupStrategy
-} from './index';
+} from '@fortinet/fortigate-autoscale';
+import {
+    AwsFortiGateAutoscaleSetting,
+    AwsPlatformAdapter,
+    LifecycleActionResult,
+    LifecycleState
+} from '.';
 
 export class AwsHybridScalingGroupStrategy implements ScalingGroupStrategy {
     platform: AwsPlatformAdapter;

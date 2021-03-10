@@ -15,6 +15,15 @@ import { ClientSecretCredential } from '@azure/identity';
 import { SecretClient } from '@azure/keyvault-secrets';
 import * as msRestNodeAuth from '@azure/ms-rest-nodeauth';
 import { BlobServiceClient, StorageSharedKeyCredential } from '@azure/storage-blob';
+import * as DBDef from '@fortinet/autoscale-core/db-definitions';
+import {
+    Blob,
+    jsonParseReviver,
+    jsonStringifyReplacer,
+    PlatformAdaptee,
+    SettingItem,
+    Settings
+} from '@fortinet/fortigate-autoscale';
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import fs from 'fs';
 import * as HttpStatusCodes from 'http-status-codes';
@@ -24,18 +33,11 @@ import {
     AzureFortiGateAutoscaleSetting,
     AzureSettings,
     AzureSettingsDbItem,
-    Blob,
-    ConsistenyCheckType as ConditionCheckType,
+    ConsistenyCheckType,
     CosmosDBQueryResult,
     CosmosDBQueryWhereClause,
-    CosmosDbTableMetaData,
-    DBDef,
-    jsonParseReviver,
-    jsonStringifyReplacer,
-    PlatformAdaptee,
-    SettingItem,
-    Settings
-} from './index';
+    CosmosDbTableMetaData
+} from '.';
 
 export enum requiredEnvVars {
     AUTOSCALE_DB_ACCOUNT = 'AUTOSCALE_DB_ACCOUNT',
@@ -330,12 +332,12 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         table: DBDef.Table<T>,
         item: T,
         condition: DBDef.SaveCondition,
-        consistencyCheck: boolean | ConditionCheckType<T> = true
+        consistencyCheck: boolean | ConsistenyCheckType<T> = true
     ): Promise<T> {
         // CAUTION: validate the db input (non meta data)
         table.validateInput<T>(item);
         // read the item
-        const itemSnapshot = await this.getItemFromDb(table, [
+        const itemSnapshot = await this.getItemFromDb<T>(table, [
             {
                 key: table.primaryKey.name,
                 value: item.id

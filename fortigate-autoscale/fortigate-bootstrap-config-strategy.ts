@@ -5,11 +5,11 @@ import {
     BootstrapConfigurationStrategy,
     CloudFunctionProxyAdapter,
     configSetResourceFinder,
-    FortiGateAutoscaleSetting,
     PlatformAdapter,
     Settings,
     VirtualMachine
-} from './index';
+} from '@fortinet/autoscale-core';
+import { FortiGateAutoscaleSetting } from '.';
 
 export abstract class FortiGateBootstrapConfigStrategy implements BootstrapConfigurationStrategy {
     static SUCCESS = 'SUCCESS';

@@ -1,12 +1,5 @@
+import { MockAutoScaling, MockDocClient, MockEC2, MockElbv2, MockLambda, MockS3 } from '.';
 import { AwsPlatformAdaptee } from '..';
-import {
-    MockAutoScaling,
-    MockDocClient,
-    MockEC2,
-    MockElbv2,
-    MockLambda,
-    MockS3
-} from './aws-testman';
 export class TestAwsPlatformAdaptee extends AwsPlatformAdaptee {
     stubAwsServices(
         mockDataDir: string

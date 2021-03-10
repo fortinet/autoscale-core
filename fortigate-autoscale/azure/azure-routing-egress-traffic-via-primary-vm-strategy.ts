@@ -1,9 +1,9 @@
 import {
     AutoscaleEnvironment,
-    AzurePlatformAdapter,
     CloudFunctionProxyAdapter,
     RoutingEgressTrafficStrategy
-} from './index';
+} from '@fortinet/fortigate-autoscale';
+import { AzurePlatformAdapter } from '.';
 
 /**
  * This strategy updates the route table associated with the private subnets which need outgoing

@@ -1,11 +1,12 @@
 import {
     FortiGateAutoscaleSetting,
     FortiGateAutoscaleSettingItemDictionary,
-    SettingItemDictionary
-} from './index';
+    SettingItemDictionary,
+    SettingItemReference
+} from '@fortinet/fortigate-autoscale';
 
 // NOTE: every key must start with 'Azure' prefix but the value do not need the prefix
-export const AzureFortiGateAutoscaleSetting = {
+export const AzureFortiGateAutoscaleSetting: SettingItemReference = {
     ...FortiGateAutoscaleSetting,
     AzureFortiGateAutoscaleSettingSaved: 'fortigate-autoscale-setting-saved'
 };

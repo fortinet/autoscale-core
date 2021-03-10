@@ -4,10 +4,10 @@ import {
     CloudFunctionPeerInvocation,
     CloudFunctionProxyAdapter,
     extractFromInvocationPayload,
-    FortiGateAutoscaleSetting,
     PlatformAdapter,
     ReqType
-} from './index';
+} from '@fortinet/autoscale-core';
+import { FortiGateAutoscaleSetting } from '.';
 
 export const FortiGateAutoscaleFunctionInvocable = {
     TriggerFazDeviceAuth: 'TriggerFazDeviceAuth'

@@ -1,4 +1,5 @@
-import { AwsScheduledEventProxy, LogLevel } from '..';
+import { LogLevel } from '@fortinet/fortigate-autoscale';
+import { AwsScheduledEventProxy } from '..';
 export class TestAwsScheduledEventProxy extends AwsScheduledEventProxy {
     log(message: string, level: LogLevel): void {
         if (process.env.DEBUG_SHOW_LOG === 'true') {

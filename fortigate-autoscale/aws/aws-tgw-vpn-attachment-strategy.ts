@@ -1,10 +1,4 @@
 import {
-    AwsFortiGateAutoscaleSetting,
-    AwsLambdaInvocable,
-    AwsPlatformAdapter,
-    AwsTgwVpnUpdateAttachmentRouteTableRequest,
-    AwsVpnAttachmentState,
-    AwsVpnConnection,
     CloudFunctionInvocationTimeOutError,
     CloudFunctionProxyAdapter,
     ResourceFilter,
@@ -16,7 +10,15 @@ import {
     WaitForConditionChecker,
     WaitForMaxCount,
     WaitForPromiseEmitter
-} from './index';
+} from '@fortinet/fortigate-autoscale';
+import {
+    AwsFortiGateAutoscaleSetting,
+    AwsLambdaInvocable,
+    AwsPlatformAdapter,
+    AwsTgwVpnUpdateAttachmentRouteTableRequest,
+    AwsVpnAttachmentState,
+    AwsVpnConnection
+} from '.';
 
 const TAG_KEY_AUTOSCALE_TGW_VPN_RESOURCE = 'AutoscaleTgwVpnResource';
 const TAG_KEY_RESOURCE_GROUP = 'ResourceGroup';

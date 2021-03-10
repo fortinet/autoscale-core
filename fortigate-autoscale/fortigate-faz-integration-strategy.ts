@@ -1,11 +1,13 @@
 import {
     CloudFunctionProxyAdapter,
-    FortiAnalyzerConnector,
-    FortiGateAutoscaleFunctionInvocable,
-    FortiGateAutoscaleSetting,
     PlatformAdapter,
     VirtualMachine
-} from './index';
+} from '@fortinet/autoscale-core';
+import {
+    FortiAnalyzerConnector,
+    FortiGateAutoscaleFunctionInvocable,
+    FortiGateAutoscaleSetting
+} from '.';
 
 export interface FazDeviceAuthorization {
     vmId: string;
