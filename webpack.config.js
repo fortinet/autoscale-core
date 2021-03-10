@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
 const path = require('path');
+const TsconfigPathsPlugin = require('tsconfig-paths-webpack-plugin');
 
 module.exports = {
     entry: {
@@ -27,7 +28,8 @@ module.exports = {
         ]
     },
     resolve: {
-        extensions: ['.js', '.tsx', '.ts']
+        extensions: ['.js', '.tsx', '.ts'],
+        plugins: [new TsconfigPathsPlugin()]
     },
     output: {
         filename: '[name]-bundle.js',
