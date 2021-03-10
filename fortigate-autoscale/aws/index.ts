@@ -1,5 +1,6 @@
-// export the aws CloudFormation response function
 import * as AwsCfnResponse from './aws-cfn-response';
+// export @fortinet/fortigate-autoscale
+export * from '@fortinet/fortigate-autoscale';
 // export aws-fortigate-autoscale module files
 export * from './aws-cloud-function-proxy';
 export * from './aws-db-definitions';
@@ -17,4 +18,5 @@ export * from './aws-routing-egress-traffic-via-primary-vm-strategy';
 export * from './aws-tagging-autoscale-vm-strategy';
 export * from './aws-tgw-vpn-attachment-strategy';
 export * from './transit-gateway-context';
+// export the aws CloudFormation response function
 export { AwsCfnResponse };
