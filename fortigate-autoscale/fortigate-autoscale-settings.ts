@@ -1,6 +1,14 @@
-import { AutoscaleSetting, AutoscaleSettingItemDictionary, SettingItemDictionary } from './index';
+import {
+    AutoscaleSetting,
+    AutoscaleSettingItemDictionary,
+    SettingItemDictionary,
+    SettingItemReference
+} from '@fortinet/autoscale-core/index';
 
-export const FortiGateAutoscaleSetting = {
+// re-export the following interfaces from autoscale-core because they are useful in all child modules.`
+export { SettingItemDictionary, SettingItemReference };
+
+export const FortiGateAutoscaleSetting: SettingItemReference = {
     ...AutoscaleSetting,
     EgressTrafficRouteTableList: 'egress-traffic-route-table',
     EnableFazIntegration: 'enable-fortianalyzer-integration',

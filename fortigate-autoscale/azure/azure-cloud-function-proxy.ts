@@ -9,7 +9,7 @@ import {
     mapHttpMethod,
     ReqHeaders,
     ReqMethod
-} from './index';
+} from '@fortinet/fortigate-autoscale';
 
 export interface AzureFunctionResponse {
     status: number;

@@ -1,14 +1,6 @@
 import { Context } from '@azure/functions';
 import {
     AutoscaleEnvironment,
-    AzureFortiGateAutoscaleSetting,
-    AzureFortiGateBootstrapStrategy,
-    AzureFunctionHttpTriggerProxy,
-    AzureFunctionInvocable,
-    AzureHybridScalingGroupStrategy,
-    AzurePlatformAdapter,
-    AzureRoutingEgressTrafficViaPrimaryVmStrategy,
-    AzureTaggingAutoscaleVmStrategy,
     CloudFunctionInvocationPayload,
     CloudFunctionInvocationTimeOutError,
     CloudFunctionProxyAdapter,
@@ -20,7 +12,17 @@ import {
     JSONable,
     PreferredGroupPrimaryElection,
     ReusableLicensingStrategy
-} from './index';
+} from '@fortinet/fortigate-autoscale';
+import {
+    AzureFortiGateAutoscaleSetting,
+    AzureFortiGateBootstrapStrategy,
+    AzureFunctionHttpTriggerProxy,
+    AzureFunctionInvocable,
+    AzureHybridScalingGroupStrategy,
+    AzurePlatformAdapter,
+    AzureRoutingEgressTrafficViaPrimaryVmStrategy,
+    AzureTaggingAutoscaleVmStrategy
+} from '.';
 
 export class AzureFortiGateAutoscale<TReq, TContext, TRes> extends FortiGateAutoscale<
     TReq,

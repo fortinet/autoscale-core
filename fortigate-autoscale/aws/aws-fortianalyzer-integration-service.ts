@@ -1,12 +1,10 @@
-import { Context, ScheduledEvent } from 'aws-lambda';
 import {
     AutoscaleServiceProvider,
-    AwsFortiGateAutoscale,
-    AwsPlatformAdapter,
-    AwsScheduledEventProxy,
     FortiGateAutoscaleServiceRequestSource,
     ReqType
-} from './index';
+} from '@fortinet/fortigate-autoscale';
+import { Context, ScheduledEvent } from 'aws-lambda';
+import { AwsFortiGateAutoscale, AwsPlatformAdapter, AwsScheduledEventProxy } from '.';
 
 export interface AwsFazAuthorizationServiceDetail {
     ServiceType: AwsFazAuthorizationServiceType;

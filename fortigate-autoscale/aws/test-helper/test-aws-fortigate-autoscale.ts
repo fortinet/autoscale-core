@@ -1,15 +1,18 @@
 import {
+    BootstrapConfigurationStrategy,
+    HeartbeatSyncStrategy,
+    LicensingStrategy,
+    PrimaryElectionStrategy
+} from '@fortinet/fortigate-autoscale';
+import {
     AwsFortiGateAutoscale,
     AwsFortiGateAutoscaleCfnServiceProvider,
     AwsFortiGateAutoscaleTgw,
     AwsFortiGateBootstrapTgwStrategy,
     AwsNicAttachmentStrategy,
-    AwsTgwVpnAttachmentStrategy,
-    BootstrapConfigurationStrategy,
-    HeartbeatSyncStrategy,
-    LicensingStrategy,
-    PrimaryElectionStrategy
+    AwsTgwVpnAttachmentStrategy
 } from '..';
+
 export class TestAwsFortiGateAutoscale<TReq, TContext, TRes> extends AwsFortiGateAutoscale<
     TReq,
     TContext,

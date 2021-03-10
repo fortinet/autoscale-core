@@ -1,3 +1,4 @@
+import { AutoscaleEnvironment } from '@fortinet/fortigate-autoscale';
 import {
     APIGatewayProxyEvent,
     APIGatewayProxyResult,
@@ -5,16 +6,18 @@ import {
     Context,
     ScheduledEvent
 } from 'aws-lambda';
-import { AutoscaleEnvironment, AwsPlatformAdapter } from '..';
-import { AwsCloudFormationCustomResourceEventProxy } from '../aws-cloud-function-proxy';
-import { AwsFortiGateAutoscaleCfnServiceProvider } from '../aws-fortigate-autoscale-service';
-import { TestAwsApiGatewayEventProxy } from './test-aws-api-gateway-event-proxy';
 import {
+    TestAwsApiGatewayEventProxy,
     TestAwsFortiGateAutoscale,
+    TestAwsPlatformAdaptee,
+    TestAwsScheduledEventProxy,
     TestAwsTgwFortiGateAutoscale
-} from './test-aws-fortigate-autoscale';
-import { TestAwsPlatformAdaptee } from './test-aws-platform-adaptee';
-import { TestAwsScheduledEventProxy } from './test-aws-scheduled-event-proxy';
+} from '.';
+import {
+    AwsCloudFormationCustomResourceEventProxy,
+    AwsFortiGateAutoscaleCfnServiceProvider,
+    AwsPlatformAdapter
+} from '..';
 
 export const createAwsApiGatewayEventHandler = (
     event: APIGatewayProxyEvent,

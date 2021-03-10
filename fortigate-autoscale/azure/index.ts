@@ -1,6 +1,4 @@
 import * as AzureFuncionDef from './azure-function-definitions';
-// export fortigate-autoscale module files.
-export * from '../index';
 // export azure-fortigate-autoscale module files.
 export * from './azure-cloud-function-proxy';
 export * from './azure-db-definitions';

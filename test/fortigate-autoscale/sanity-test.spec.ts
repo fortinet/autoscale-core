@@ -1,5 +1,3 @@
-import { describe, it } from 'mocha';
-import * as Sinon from 'sinon';
 import {
     Autoscale,
     AutoscaleEnvironment,
@@ -8,7 +6,6 @@ import {
     CloudFunctionResponseBody,
     compare,
     ConstantIntervalHeartbeatSyncStrategy,
-    FortiGateAutoscaleSetting,
     HealthCheckRecord,
     HealthCheckResult,
     HealthCheckSyncState,
@@ -19,7 +16,6 @@ import {
     LogLevel,
     NetworkInterface,
     NicAttachmentRecord,
-    NoopFazIntegrationStrategy,
     NoopScalingGroupStrategy,
     NoopTaggingVmStrategy,
     PlatformAdapter,
@@ -38,7 +34,10 @@ import {
     Settings,
     VirtualMachine,
     VirtualMachineState
-} from '../../fortigate-autoscale';
+} from '@fortinet/autoscale-core';
+import { describe, it } from 'mocha';
+import * as Sinon from 'sinon';
+import { FortiGateAutoscaleSetting, NoopFazIntegrationStrategy } from '../../fortigate-autoscale';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 

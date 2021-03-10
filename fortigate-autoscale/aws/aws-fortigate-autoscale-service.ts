@@ -1,16 +1,18 @@
-import { CloudFormationCustomResourceEvent, Context } from 'aws-lambda';
 import {
     AutoscaleServiceProvider,
-    AwsCloudFormationCustomResourceEventProxy,
-    AwsFortiGateAutoscale,
-    AwsFortiGateAutoscaleSetting,
-    AwsFortiGateAutoscaleSettingItemDictionary,
-    AwsPlatformAdapter,
     FortiGateAutoscaleServiceType,
     NicAttachmentStrategyResult,
     ReqType,
     VpnAttachmentStrategyResult
-} from './index';
+} from '@fortinet/fortigate-autoscale';
+import { CloudFormationCustomResourceEvent, Context } from 'aws-lambda';
+import {
+    AwsCloudFormationCustomResourceEventProxy,
+    AwsFortiGateAutoscale,
+    AwsFortiGateAutoscaleSetting,
+    AwsFortiGateAutoscaleSettingItemDictionary,
+    AwsPlatformAdapter
+} from '.';
 
 export const AwsFortiGateAutoscaleServiceType = {
     ...FortiGateAutoscaleServiceType,
@@ -104,7 +106,9 @@ export class AwsFortiGateAutoscaleCfnServiceProvider
                                 await this.startAutoscale();
                                 break;
                             case AwsFortiGateAutoscaleServiceType.SaveAutoscaleSettings:
-                                await this.saveAutoscaleSettings(serviceEvent);
+                                await this.saveAutoscaleSettings(
+                                    serviceEvent as AwsFortiGateAutoscaleServiceEventSaveSettings
+                                );
                                 break;
                             case AwsFortiGateAutoscaleServiceType.StopAutoscale:
                                 this.proxy.logAsWarning(

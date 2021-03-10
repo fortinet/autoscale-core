@@ -1,18 +1,5 @@
-import { Context } from 'aws-lambda';
 import {
     AutoscaleEnvironment,
-    AwsFortiGateAutoscaleSetting,
-    AwsFortiGateBootstrapStrategy,
-    AwsFortiGateBootstrapTgwStrategy,
-    AwsHybridScalingGroupStrategy,
-    AwsLambdaInvocable,
-    AwsLambdaInvocationProxy,
-    AwsNicAttachmentStrategy,
-    AwsPlatformAdapter,
-    AwsRoutingEgressTrafficViaPrimaryVmStrategy,
-    AwsTaggingAutoscaleVmStrategy,
-    AwsTgwVpnAttachmentStrategy,
-    AwsTgwVpnUpdateAttachmentRouteTableRequest,
     CloudFunctionInvocationPayload,
     CloudFunctionInvocationTimeOutError,
     CloudFunctionProxyAdapter,
@@ -30,15 +17,30 @@ import {
     NoopVpnAttachmentStrategy,
     PreferredGroupPrimaryElection,
     ReusableLicensingStrategy,
-    ScalingGroupState,
-    TransitGatewayContext,
     VirtualMachineState,
     VpnAttachmentStrategy,
     VpnAttachmentStrategyResult,
     waitFor,
     WaitForConditionChecker,
     WaitForPromiseEmitter
-} from './index';
+} from '@fortinet/fortigate-autoscale';
+import { Context } from 'aws-lambda';
+import {
+    AwsFortiGateAutoscaleSetting,
+    AwsFortiGateBootstrapStrategy,
+    AwsFortiGateBootstrapTgwStrategy,
+    AwsHybridScalingGroupStrategy,
+    AwsLambdaInvocable,
+    AwsLambdaInvocationProxy,
+    AwsNicAttachmentStrategy,
+    AwsPlatformAdapter,
+    AwsRoutingEgressTrafficViaPrimaryVmStrategy,
+    AwsTaggingAutoscaleVmStrategy,
+    AwsTgwVpnAttachmentStrategy,
+    AwsTgwVpnUpdateAttachmentRouteTableRequest,
+    ScalingGroupState,
+    TransitGatewayContext
+} from '.';
 
 /** ./aws-fortigate-autoscale-lambda-invocable
  * AWS FortiGate Autoscale - class, with capabilities:

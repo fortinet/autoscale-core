@@ -1,13 +1,15 @@
 import {
-    AwsFortiGateAutoscaleSetting,
-    AwsPlatformAdapter,
     CloudFunctionProxyAdapter,
     ResourceFilter,
     TaggingVmStrategy,
-    TAG_KEY_AUTOSCALE_ROLE,
-    TAG_KEY_RESOURCE_GROUP,
     VmTagging
-} from './index';
+} from '@fortinet/fortigate-autoscale';
+import {
+    AwsFortiGateAutoscaleSetting,
+    AwsPlatformAdapter,
+    TAG_KEY_AUTOSCALE_ROLE,
+    TAG_KEY_RESOURCE_GROUP
+} from '.';
 
 export class AwsTaggingAutoscaleVmStrategy implements TaggingVmStrategy {
     protected platform: AwsPlatformAdapter;

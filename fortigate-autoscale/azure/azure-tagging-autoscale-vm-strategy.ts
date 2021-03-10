@@ -1,9 +1,9 @@
 import {
-    AzurePlatformAdapter,
     CloudFunctionProxyAdapter,
     TaggingVmStrategy,
     VmTagging
-} from './index';
+} from '@fortinet/fortigate-autoscale';
+import { AzurePlatformAdapter } from '.';
 
 export class AzureTaggingAutoscaleVmStrategy implements TaggingVmStrategy {
     protected platform: AzurePlatformAdapter;

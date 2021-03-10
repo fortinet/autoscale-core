@@ -1,11 +1,12 @@
 import {
     FortiGateAutoscaleSetting,
     FortiGateAutoscaleSettingItemDictionary,
-    SettingItemDictionary
-} from './index';
+    SettingItemDictionary,
+    SettingItemReference
+} from '@fortinet/fortigate-autoscale';
 
 // NOTE: every key must start with 'Aws' prefix but the value do not need the prefix
-export const AwsFortiGateAutoscaleSetting = {
+export const AwsFortiGateAutoscaleSetting: SettingItemReference = {
     ...FortiGateAutoscaleSetting,
     AwsEnableTransitGatewayVpn: 'enable-transit-gateway-vpn',
     AwsLifecycleHookTimeout: 'lifecycle-hook-timeout',
