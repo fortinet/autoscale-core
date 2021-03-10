@@ -13,7 +13,7 @@
         "build": "npm run clear-dist && npm run compile",
         "make-dist": "node dist/scripts/make-dist.js",
         "build-artifacts": "npm-run-all build make-dist",
-        "test": "mocha --timeout 3600000 -r ts-node/register test/{*,**/**/*}.spec.ts",
+        "test": "mocha --timeout 3600000 -r ts-node/register -r tsconfig-paths/register test/{*,**/**/*}.spec.ts",
         "lint-check": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js c -fl  -F .eslintignore -L .eslintignore \"{*,**/*}{.js,.json,.ts}\"",
         "lint-fix": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js f -fl  -F .eslintignore -L .eslintignore \"**/*{.js,.json,.ts}\""
     },
@@ -49,6 +49,8 @@
         "sinon": "^9.0.1",
         "ts-loader": "^7.0.5",
         "ts-node": "^8.7.0",
+        "tsconfig-paths": "^3.9.0",
+        "tsconfig-paths-webpack-plugin": "^3.3.0",
         "typescript": "^3.9.9",
         "webpack": "^5.20.2",
         "webpack-cli": "^4.5.0"
