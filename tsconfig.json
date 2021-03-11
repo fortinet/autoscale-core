@@ -58,10 +58,10 @@
         "baseUrl": "./" /* Base directory to resolve non-absolute module names. */,
         "paths": {
             // @fortinet/autoscale-core should be normally referenced in ./fortigate-autoscale and ONLY
-            "@fortinet/autoscale-core": ["./index"],
+            "@fortinet/autoscale-core": ["./"],
             "@fortinet/autoscale-core/*": ["./*"],
             // @fortinet/fortigate-autoscale should be normally referenced in platform-specific libraries and ONLY
-            "@fortinet/fortigate-autoscale": ["./fortigate-autoscale/index"],
+            "@fortinet/fortigate-autoscale": ["./fortigate-autoscale/"],
             "@fortinet/fortigate-autoscale/*": ["./fortigate-autoscale/*"]
         } /* A series of entries which re-map imports to lookup locations relative to the 'baseUrl'. */,
         // "rootDirs": [],                        /* List of root folders whose combined content represents the structure of the project at runtime. */
