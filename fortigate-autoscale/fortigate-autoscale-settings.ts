@@ -5,9 +5,6 @@ import {
     SettingItemReference
 } from '@fortinet/autoscale-core/index';
 
-// re-export the following interfaces from autoscale-core because they are useful in all child modules.`
-export { SettingItemDictionary, SettingItemReference };
-
 export const FortiGateAutoscaleSetting: SettingItemReference = {
     ...AutoscaleSetting,
     EgressTrafficRouteTableList: 'egress-traffic-route-table',
