@@ -20,6 +20,9 @@
   },
   "homepage": "https://github.com/fortinet/autoscale-core#readme",
   "dependencies": {
-    "@fortinet/autoscale-core": "https://github.com/fortinet/autoscale-core/releases/download/3.2.0/fortinet-autoscale-core-3.2.0.tgz"
-  }
+    "@fortinet/autoscale-core": "file:../core"
+  },
+  "bundleDependencies": [
+    "@fortinet/autoscale-core"
+  ]
 }
