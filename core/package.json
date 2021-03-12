@@ -1,0 +1,21 @@
+{
+  "name": "@fortinet/autoscale-core",
+  "version": "3.2.0",
+  "description": "Fortinet Autoscale project(s), core module.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "../node_modules/.bin/tsc -b"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fortinet/autoscale-core.git"
+  },
+  "author": "Fortinet <github@fortinet.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/fortinet/autoscale-core/issues"
+  },
+  "homepage": "https://github.com/fortinet/autoscale-core#readme"
+}

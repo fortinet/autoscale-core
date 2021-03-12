@@ -1,0 +1,20 @@
+{
+    "extends": "../tsconfig-base.json",
+    "compilerOptions": {
+        "outDir": "dist",
+        "rootDir": ".",
+        "baseUrl": ".",
+        // Future packages
+        "paths": {
+            "@fortinet/fortigate-autoscale": ["./index"],
+            "@fortinet/fortigate-autoscale/*": ["./*"]
+        }
+    },
+    "exclude": ["node_modules/**"],
+    "references": [
+        // https://github.com/microsoft/TypeScript/issues/29549
+        // {
+        //     "path": "../core"
+        // }
+    ]
+}
