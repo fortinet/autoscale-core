@@ -1,5 +1,7 @@
 import {
     CloudFunctionProxyAdapter,
+    FazDeviceAuthorization,
+    FazIntegrationStrategy,
     PlatformAdapter,
     VirtualMachine
 } from '@fortinet/autoscale-core';
@@ -8,23 +10,6 @@ import {
     FortiGateAutoscaleFunctionInvocable,
     FortiGateAutoscaleSetting
 } from '.';
-
-export interface FazDeviceAuthorization {
-    vmId: string;
-    privateIp: string;
-    publicIp: string;
-}
-
-export interface FazIntegrationStrategy {
-    createAuthorizationRequest(vm: VirtualMachine): Promise<void>;
-    processAuthorizationRequest(
-        device: FazDeviceAuthorization,
-        host: string,
-        port: string,
-        username: string,
-        password: string
-    ): Promise<void>;
-}
 
 export class NoopFazIntegrationStrategy implements FazIntegrationStrategy {
     platform: PlatformAdapter;
