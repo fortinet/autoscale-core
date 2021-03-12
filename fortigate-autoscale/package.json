@@ -19,9 +19,7 @@
     "url": "https://github.com/fortinet/autoscale-core/issues"
   },
   "homepage": "https://github.com/fortinet/autoscale-core#readme",
-  "dependencies": {
-    "@fortinet/autoscale-core": "file:../core"
-  },
+  "dependencies": {},
   "bundleDependencies": [
     "@fortinet/autoscale-core"
   ]

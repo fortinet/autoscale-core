@@ -11,7 +11,7 @@
         "compile": "tsc --build",
         "clear-dist": "rimraf */dist",
         "build": "cd fortigate-autoscale && npm install && cd .. && npm run clear-dist && npm run compile",
-        "bundle": "npm pack ./core && npm pack ./fortigate-autoscale",
+        "bundle": "cd core && npm link && cd ../fortigate-autoscale && npm link @fortinet/autoscale-core && cd .. && npm pack ./fortigate-autoscale",
         "make-dist": "node dist/scripts/make-dist.js",
         "build-artifacts": "npm-run-all build make-dist",
         "test": "mocha --timeout 3600000 -r ts-node/register -r tsconfig-paths/register test/{*,**/**/*}.spec.ts",
@@ -96,9 +96,5 @@
     "bugs": {
         "url": "https://github.com/fortinet/autoscale-core/issues"
     },
-    "homepage": "https://github.com/fortinet/autoscale-core#readme",
-    "bundleDependencies": [
-        "@fortinet/autoscale-core",
-        "@fortinet/fortigate-autoscale"
-    ]
+    "homepage": "https://github.com/fortinet/autoscale-core#readme"
 }
