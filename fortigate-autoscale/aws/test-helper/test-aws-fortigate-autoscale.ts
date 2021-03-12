@@ -3,7 +3,7 @@ import {
     HeartbeatSyncStrategy,
     LicensingStrategy,
     PrimaryElectionStrategy
-} from '@fortinet/fortigate-autoscale';
+} from '..';
 import {
     AwsFortiGateAutoscale,
     AwsFortiGateAutoscaleCfnServiceProvider,

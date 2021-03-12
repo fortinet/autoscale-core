@@ -12,7 +12,7 @@ import {
     JSONable,
     PreferredGroupPrimaryElection,
     ReusableLicensingStrategy
-} from '@fortinet/fortigate-autoscale';
+} from '..';
 import {
     AzureFortiGateAutoscaleSetting,
     AzureFortiGateBootstrapStrategy,

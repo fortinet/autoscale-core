@@ -1,16 +1,5 @@
-import {
-    Blob,
-    PlatformAdaptee,
-    ResourceFilter,
-    SettingItem,
-    Settings
-} from '@fortinet/fortigate-autoscale';
-import {
-    KeyValue,
-    SaveCondition,
-    SettingsDbItem,
-    Table
-} from '@fortinet/fortigate-autoscale/db-definitions';
+import { Blob, PlatformAdaptee, ResourceFilter, SettingItem, Settings } from '..';
+import { KeyValue, SaveCondition, SettingsDbItem, Table } from '../db-definitions';
 import AutoScaling, {
     LifecycleActionResult,
     UpdateAutoScalingGroupType

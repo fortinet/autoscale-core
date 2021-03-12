@@ -3,12 +3,7 @@
     "compilerOptions": {
         "outDir": "dist",
         "rootDir": ".",
-        "baseUrl": ".",
-        // Future packages
-        "paths": {
-            "@fortinet/fortigate-autoscale": ["./index"],
-            "@fortinet/fortigate-autoscale/*": ["./*"]
-        }
+        "baseUrl": "."
     },
     "exclude": ["node_modules/**"],
     "references": [

@@ -4,7 +4,7 @@ import {
     NicAttachmentStrategyResult,
     ReqType,
     VpnAttachmentStrategyResult
-} from '@fortinet/fortigate-autoscale';
+} from '..';
 import { CloudFormationCustomResourceEvent, Context } from 'aws-lambda';
 import {
     AwsCloudFormationCustomResourceEventProxy,

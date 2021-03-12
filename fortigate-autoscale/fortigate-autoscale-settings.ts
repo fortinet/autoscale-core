@@ -3,7 +3,7 @@ import {
     AutoscaleSettingItemDictionary,
     SettingItemDictionary,
     SettingItemReference
-} from '@fortinet/autoscale-core/index';
+} from '@fortinet/autoscale-core';
 
 export const FortiGateAutoscaleSetting: SettingItemReference = {
     ...AutoscaleSetting,

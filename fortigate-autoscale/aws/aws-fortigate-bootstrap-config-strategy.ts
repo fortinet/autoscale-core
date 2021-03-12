@@ -4,7 +4,7 @@ import {
     FortiGateBootstrapConfigStrategy,
     JSONable,
     VirtualMachine
-} from '@fortinet/fortigate-autoscale';
+} from '..';
 import { parseStringPromise as xml2jsParserPromise } from 'xml2js';
 import { AwsFortiGateAutoscaleSetting, AwsPlatformAdapter } from '.';
 

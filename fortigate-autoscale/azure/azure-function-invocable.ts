@@ -2,7 +2,7 @@ import {
     CloudFunctionInvocationPayload,
     CloudFunctionInvocationTimeOutError,
     FortiGateAutoscaleFunctionInvocable
-} from '@fortinet/fortigate-autoscale';
+} from '..';
 
 export type AzureFunctionInvocationPayload = CloudFunctionInvocationPayload;
 

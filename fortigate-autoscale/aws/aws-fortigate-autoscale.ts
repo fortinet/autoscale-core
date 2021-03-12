@@ -23,7 +23,7 @@ import {
     waitFor,
     WaitForConditionChecker,
     WaitForPromiseEmitter
-} from '@fortinet/fortigate-autoscale';
+} from '..';
 import { Context } from 'aws-lambda';
 import {
     AwsFortiGateAutoscaleSetting,

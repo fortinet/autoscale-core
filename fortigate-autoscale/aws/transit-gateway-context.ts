@@ -1,4 +1,4 @@
-import { VpnAttachmentContext } from '@fortinet/fortigate-autoscale';
+import { VpnAttachmentContext } from '..';
 
 /**
  * To provide AWS Transit Gateway integration related logics

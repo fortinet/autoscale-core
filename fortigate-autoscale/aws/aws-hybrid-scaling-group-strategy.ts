@@ -1,8 +1,4 @@
-import {
-    CloudFunctionProxyAdapter,
-    JSONable,
-    ScalingGroupStrategy
-} from '@fortinet/fortigate-autoscale';
+import { CloudFunctionProxyAdapter, JSONable, ScalingGroupStrategy } from '..';
 import {
     AwsFortiGateAutoscaleSetting,
     AwsPlatformAdapter,

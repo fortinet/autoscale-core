@@ -23,7 +23,7 @@ import {
     PlatformAdaptee,
     SettingItem,
     Settings
-} from '@fortinet/fortigate-autoscale';
+} from '..';
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import fs from 'fs';
 import * as HttpStatusCodes from 'http-status-codes';
