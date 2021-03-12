@@ -1,5 +1,5 @@
 {
-    "name": "autoscale-core",
+    "name": "@fortinet/autoscale",
     "description": "Fortinet Autoscale project(s), core module.",
     "version": "3.2.0",
     "main": "fortigate-autoscale/dist/index.js",
@@ -61,6 +61,8 @@
         "@azure/ms-rest-js": "^2.2.1",
         "@azure/ms-rest-nodeauth": "^3.0.6",
         "@azure/storage-blob": "^12.4.1",
+        "@fortinet/autoscale-core": "file:core",
+        "@fortinet/fortigate-autoscale": "file:fortigate-autoscale",
         "@types/archiver": "^3.1.0",
         "@types/aws-lambda": "^8.10.46",
         "@types/comment-json": "^1.1.1",
@@ -94,5 +96,9 @@
     "bugs": {
         "url": "https://github.com/fortinet/autoscale-core/issues"
     },
-    "homepage": "https://github.com/fortinet/autoscale-core#readme"
+    "homepage": "https://github.com/fortinet/autoscale-core#readme",
+    "bundleDependencies": [
+        "@fortinet/autoscale-core",
+        "@fortinet/fortigate-autoscale"
+    ]
 }
