@@ -2,7 +2,7 @@ import {
     AutoscaleEnvironment,
     CloudFunctionProxyAdapter,
     FortiGateBootstrapConfigStrategy
-} from '@fortinet/fortigate-autoscale';
+} from '..';
 import { AzurePlatformAdapter } from '.';
 
 export class AzureFortiGateBootstrapStrategy extends FortiGateBootstrapConfigStrategy {

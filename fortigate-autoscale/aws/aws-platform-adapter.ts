@@ -27,7 +27,7 @@ import {
     waitFor,
     WaitForConditionChecker,
     WaitForPromiseEmitter
-} from '@fortinet/fortigate-autoscale';
+} from '..';
 import EC2 from 'aws-sdk/clients/ec2';
 import path from 'path';
 import {

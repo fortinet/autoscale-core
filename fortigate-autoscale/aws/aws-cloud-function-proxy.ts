@@ -7,7 +7,7 @@ import {
     ReqBody,
     ReqHeaders,
     ReqMethod
-} from '@fortinet/fortigate-autoscale';
+} from '..';
 import {
     APIGatewayProxyEvent,
     APIGatewayProxyResult,

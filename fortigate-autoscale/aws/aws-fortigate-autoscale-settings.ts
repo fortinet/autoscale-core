@@ -3,7 +3,7 @@ import {
     FortiGateAutoscaleSettingItemDictionary,
     SettingItemDictionary,
     SettingItemReference
-} from '@fortinet/fortigate-autoscale';
+} from '..';
 
 // NOTE: every key must start with 'Aws' prefix but the value do not need the prefix
 export const AwsFortiGateAutoscaleSetting: SettingItemReference = {

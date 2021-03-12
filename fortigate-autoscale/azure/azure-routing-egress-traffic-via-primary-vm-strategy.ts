@@ -1,8 +1,4 @@
-import {
-    AutoscaleEnvironment,
-    CloudFunctionProxyAdapter,
-    RoutingEgressTrafficStrategy
-} from '@fortinet/fortigate-autoscale';
+import { AutoscaleEnvironment, CloudFunctionProxyAdapter, RoutingEgressTrafficStrategy } from '..';
 import { AzurePlatformAdapter } from '.';
 
 /**

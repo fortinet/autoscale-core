@@ -10,7 +10,7 @@ import {
     WaitForConditionChecker,
     WaitForMaxCount,
     WaitForPromiseEmitter
-} from '@fortinet/fortigate-autoscale';
+} from '..';
 import {
     AwsFortiGateAutoscaleSetting,
     AwsLambdaInvocable,

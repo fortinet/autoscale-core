@@ -1,9 +1,4 @@
-import {
-    CloudFunctionProxyAdapter,
-    ResourceFilter,
-    TaggingVmStrategy,
-    VmTagging
-} from '@fortinet/fortigate-autoscale';
+import { CloudFunctionProxyAdapter, ResourceFilter, TaggingVmStrategy, VmTagging } from '..';
 import {
     AwsFortiGateAutoscaleSetting,
     AwsPlatformAdapter,
