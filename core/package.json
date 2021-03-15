@@ -8,7 +8,6 @@
     "./db-definitions": "./dist/db-definitions.js"
   },
   "types": "./dist/index.d.ts",
-  "type": "module",
   "files": [
     "/dist"
   ],

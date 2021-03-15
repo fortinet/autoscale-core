@@ -4,7 +4,6 @@
     "version": "3.2.0",
     "main": "fortigate-autoscale/dist/index.js",
     "types": "fortigate-autoscale/dist/types/index.d.ts",
-    "type": "module",
     "scripts": {
         "postinstall": "cd core && npm install && cd ../fortigate-autoscale && npm install",
         "pre-push": "npm-run-all lint-check audit-production test build",
