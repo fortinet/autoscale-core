@@ -8,7 +8,6 @@
     "./azure": "./dist/azure/index.js"
   },
   "types": "./dist/index.d.ts",
-  "type": "module",
   "files": [
     "/dist",
     "/assets"
