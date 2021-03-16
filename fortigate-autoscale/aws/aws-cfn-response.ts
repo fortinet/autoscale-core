@@ -1,4 +1,4 @@
-import { JSONable } from '@fortinet/fortigate-autoscale';
+import { JSONable } from '..';
 import { CloudFormationCustomResourceEvent, Context } from 'aws-lambda';
 import https from 'https';
 import url from 'url';

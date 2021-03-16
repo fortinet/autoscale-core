@@ -3,10 +3,7 @@ import {
     AutoscaleSettingItemDictionary,
     SettingItemDictionary,
     SettingItemReference
-} from '@fortinet/autoscale-core/index';
-
-// re-export the following interfaces from autoscale-core because they are useful in all child modules.`
-export { SettingItemDictionary, SettingItemReference };
+} from '@fortinet/autoscale-core';
 
 export const FortiGateAutoscaleSetting: SettingItemReference = {
     ...AutoscaleSetting,

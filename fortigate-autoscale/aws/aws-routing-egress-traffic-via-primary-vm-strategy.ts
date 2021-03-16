@@ -5,7 +5,7 @@ import {
     RoutingEgressTrafficStrategy,
     SettingItem,
     Settings
-} from '@fortinet/fortigate-autoscale';
+} from '..';
 import { AwsFortiGateAutoscaleSetting, AwsPlatformAdapter } from '.';
 
 /**

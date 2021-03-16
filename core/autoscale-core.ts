@@ -19,7 +19,7 @@ import {
     ScalingGroupContext,
     ScalingGroupStrategy
 } from './context-strategy/scaling-group-context';
-import { FazIntegrationStrategy } from './fortigate-autoscale/fortigate-faz-integration-strategy';
+import { FazIntegrationStrategy } from './faz-integration-strategy';
 import { PlatformAdapter } from './platform-adapter';
 import {
     HealthCheckResult,

@@ -24,8 +24,8 @@ import {
     Settings,
     VirtualMachine,
     VirtualMachineState
-} from '@fortinet/fortigate-autoscale';
-import * as DBDef from '@fortinet/fortigate-autoscale/db-definitions';
+} from '..';
+import * as DBDef from '../db-definitions';
 import path from 'path';
 import {
     ApiCache,
@@ -36,7 +36,7 @@ import {
     AzureFortiAnalyzer,
     AzureFortiGateAutoscaleSetting,
     AzureFortiGateAutoscaleSettingItemDictionary,
-    AzureFuncionDef,
+    AzureFunctionDef,
     AzureFunctionHttpTriggerProxy,
     AzureFunctionInvocationProxy,
     AzureFunctionServiceProviderProxy,
@@ -173,7 +173,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         const body = await this.proxy.getReqBody();
         const functionName = this.proxy.context.executionContext.functionName;
         if (this.proxy instanceof AzureFunctionHttpTriggerProxy) {
-            if (functionName === AzureFuncionDef.ByolLicense.name) {
+            if (functionName === AzureFunctionDef.ByolLicense.name) {
                 if (reqMethod === ReqMethod.GET) {
                     if (headers['fos-instance-id'] === null) {
                         throw new Error(
@@ -185,7 +185,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                 } else {
                     throw new Error(`Invalid request. Method [${reqMethod}] not allowd`);
                 }
-            } else if (functionName === AzureFuncionDef.FortiGateAutoscaleHandler.name) {
+            } else if (functionName === AzureFunctionDef.FortiGateAutoscaleHandler.name) {
                 if (reqMethod === ReqMethod.GET) {
                     if (headers['fos-instance-id'] === null) {
                         throw new Error(
@@ -208,9 +208,9 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                 } else {
                     throw new Error(`Unsupported request method: ${reqMethod}`);
                 }
-            } else if (functionName === AzureFuncionDef.FazAuthHandler.name) {
+            } else if (functionName === AzureFunctionDef.FazAuthHandler.name) {
                 return Promise.resolve(ReqType.CloudFunctionPeerInvocation);
-            } else if (functionName === AzureFuncionDef.CustomLog.name) {
+            } else if (functionName === AzureFunctionDef.CustomLog.name) {
                 return Promise.resolve(ReqType.CustomLog);
             } else {
                 throw new Error('Unknown request type.');

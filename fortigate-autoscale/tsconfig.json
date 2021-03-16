@@ -1,0 +1,15 @@
+{
+    "extends": "../tsconfig-base.json",
+    "compilerOptions": {
+        "outDir": "dist",
+        "rootDir": ".",
+        "baseUrl": "."
+    },
+    "exclude": ["node_modules/**"],
+    "references": [
+        // https://github.com/microsoft/TypeScript/issues/29549
+        // {
+        //     "path": "../core"
+        // }
+    ]
+}

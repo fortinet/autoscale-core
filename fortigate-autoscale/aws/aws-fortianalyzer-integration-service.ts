@@ -1,8 +1,4 @@
-import {
-    AutoscaleServiceProvider,
-    FortiGateAutoscaleServiceRequestSource,
-    ReqType
-} from '@fortinet/fortigate-autoscale';
+import { AutoscaleServiceProvider, FortiGateAutoscaleServiceRequestSource, ReqType } from '..';
 import { Context, ScheduledEvent } from 'aws-lambda';
 import { AwsFortiGateAutoscale, AwsPlatformAdapter, AwsScheduledEventProxy } from '.';
 

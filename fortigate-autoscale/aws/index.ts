@@ -1,6 +1,6 @@
 import * as AwsCfnResponse from './aws-cfn-response';
 // export @fortinet/fortigate-autoscale
-export * from '@fortinet/fortigate-autoscale';
+export * from '..';
 // export aws-fortigate-autoscale module files
 export * from './aws-cloud-function-proxy';
 export * from './aws-db-definitions';

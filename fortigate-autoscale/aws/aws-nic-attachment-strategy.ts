@@ -11,7 +11,7 @@ import {
     SubnetPair,
     SubnetPairIndex,
     VirtualMachine
-} from '@fortinet/fortigate-autoscale';
+} from '..';
 import { AwsFortiGateAutoscaleSetting, AwsPlatformAdapter } from '.';
 
 export class AwsNicAttachmentStrategy implements NicAttachmentStrategy {

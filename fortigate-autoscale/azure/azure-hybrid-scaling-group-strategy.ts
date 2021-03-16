@@ -1,4 +1,4 @@
-import { CloudFunctionProxyAdapter, ScalingGroupStrategy } from '@fortinet/fortigate-autoscale';
+import { CloudFunctionProxyAdapter, ScalingGroupStrategy } from '..';
 import { AzurePlatformAdapter } from '.';
 
 export class AzureHybridScalingGroupStrategy implements ScalingGroupStrategy {

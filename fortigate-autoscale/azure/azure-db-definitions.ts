@@ -1,4 +1,4 @@
-import * as DBDef from '@fortinet/fortigate-autoscale/db-definitions';
+import * as DBDef from '../db-definitions';
 
 // NOTE: Azure Cosmos DB Data modeling concepts
 // see: https://docs.microsoft.com/en-us/azure/cosmos-db/modeling-data

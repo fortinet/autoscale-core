@@ -1,6 +1,6 @@
-import * as AzureFuncionDef from './azure-function-definitions';
+import * as AzureFunctionDef from './azure-function-definitions';
 // export @fortinet/fortigate-autoscale
-export * from '@fortinet/fortigate-autoscale';
+export * from '..';
 // export fortigate-autoscale-azure module files.
 export * from './azure-cloud-function-proxy';
 export * from './azure-db-definitions';
@@ -14,4 +14,4 @@ export * from './azure-platform-adaptee';
 export * from './azure-platform-adapter';
 export * from './azure-routing-egress-traffic-via-primary-vm-strategy';
 export * from './azure-tagging-autoscale-vm-strategy';
-export { AzureFuncionDef };
+export { AzureFunctionDef };

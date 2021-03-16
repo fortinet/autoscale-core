@@ -1,4 +1,4 @@
-import { FortiGateAutoscaleFunctionInvocable } from '@fortinet/fortigate-autoscale';
+import { FortiGateAutoscaleFunctionInvocable } from '..';
 
 export const AwsLambdaInvocable = {
     ...FortiGateAutoscaleFunctionInvocable,

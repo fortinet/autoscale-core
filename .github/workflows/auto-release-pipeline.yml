@@ -267,6 +267,6 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ needs.versioning.outputs.tag_name }}
           prerelease: ${{ needs.versioning.outputs.prerelease == 'true' }}
-          file: ./autoscale-core-${{ needs.versioning.outputs.tag_name }}.tgz
+          file: ./fortinet-fortigate-autoscale-${{ needs.versioning.outputs.tag_name }}.tgz
           file_glob: true
           overwrite: true

@@ -6,10 +6,10 @@ import {
     FortiGateAutoscaleServiceType,
     JSONable,
     ReqType
-} from '@fortinet/fortigate-autoscale';
+} from '..';
 import {
     AzureFortiGateAutoscale,
-    AzureFuncionDef,
+    AzureFunctionDef,
     AzureFunctionServiceProviderProxy,
     AzurePlatformAdapter
 } from '.';
@@ -43,7 +43,7 @@ export class AzureFortiGateAutoscaleServiceProvider
         try {
             // Verify the incoming request.
             // request url must be contained in the defined function name array: serviceFuncUrl
-            const allowedServiceEndpointsList: string[] = [AzureFuncionDef.FazAuthScheduler.name];
+            const allowedServiceEndpointsList: string[] = [AzureFunctionDef.FazAuthScheduler.name];
             const functionName = this.proxy.context.executionContext.functionName;
             if (!allowedServiceEndpointsList.includes(functionName)) {
                 this.proxy.logAsWarning(

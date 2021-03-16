@@ -1,4 +1,4 @@
-import * as DBDef from '@fortinet/fortigate-autoscale/db-definitions';
+import * as DBDef from '../db-definitions';
 
 export const AwsTypeRefs: DBDef.TypeRefMap = new Map<DBDef.TypeRef, string>([
     [DBDef.TypeRef.StringType, 'S'],

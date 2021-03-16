@@ -1,4 +1,4 @@
-import { AutoscaleEnvironment } from '@fortinet/fortigate-autoscale';
+import { AutoscaleEnvironment } from '..';
 import {
     APIGatewayProxyEvent,
     APIGatewayProxyResult,
