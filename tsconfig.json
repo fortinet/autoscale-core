@@ -1,4 +1,12 @@
 {
+    "extends": "./tsconfig-base.json",
     "files": [],
-    "references": [{ "path": "./core" }, { "path": "./fortigate-autoscale" }]
+    "references": [
+        {
+            "path": "./core"
+        },
+        {
+            "path": "./fortigate-autoscale"
+        }
+    ]
 }

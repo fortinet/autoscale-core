@@ -1,11 +1,15 @@
+import { describe, it } from 'mocha';
+import Sinon from 'sinon';
 import {
     Autoscale,
     AutoscaleEnvironment,
     AutoscaleSetting,
+    Blob,
     CloudFunctionProxyAdapter,
     CloudFunctionResponseBody,
     compare,
     ConstantIntervalHeartbeatSyncStrategy,
+    FortiGateAutoscaleSetting,
     HealthCheckRecord,
     HealthCheckResult,
     HealthCheckSyncState,
@@ -16,6 +20,7 @@ import {
     LogLevel,
     NetworkInterface,
     NicAttachmentRecord,
+    NoopFazIntegrationStrategy,
     NoopScalingGroupStrategy,
     NoopTaggingVmStrategy,
     PlatformAdapter,
@@ -34,10 +39,7 @@ import {
     Settings,
     VirtualMachine,
     VirtualMachineState
-} from '@fortinet/autoscale-core';
-import { describe, it } from 'mocha';
-import * as Sinon from 'sinon';
-import { FortiGateAutoscaleSetting, NoopFazIntegrationStrategy } from '../../fortigate-autoscale';
+} from '../../fortigate-autoscale';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 
@@ -120,7 +122,7 @@ class TestPlatformAdapter implements PlatformAdapter {
     ): Promise<string> {
         throw new Error('Method not implemented.');
     }
-    listConfigSet(subDirectory?: string, custom?: boolean): Promise<import('../../blob').Blob[]> {
+    listConfigSet(subDirectory?: string, custom?: boolean): Promise<Blob[]> {
         return Promise.resolve([]);
     }
     listAutoscaleVm(identifyScalingGroup?: boolean, listNic?: boolean): Promise<VirtualMachine[]> {
