@@ -9,7 +9,7 @@ import {
     ReqMethod,
     ResourceFilter,
     Settings
-} from '..';
+} from '../../../fortigate-autoscale';
 import AutoScaling from 'aws-sdk/clients/autoscaling';
 import { DocumentClient } from 'aws-sdk/clients/dynamodb';
 import EC2 from 'aws-sdk/clients/ec2';

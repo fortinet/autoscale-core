@@ -10,7 +10,7 @@
         "audit-production": "npm audit --production",
         "compile": "tsc --build",
         "clear-dist": "rimraf */dist",
-        "build": "cd fortigate-autoscale && npm install && cd .. && npm run clear-dist && npm run compile",
+        "build": "npm run clear-dist && npm run compile",
         "bundle": "cd fortigate-autoscale && npm unlink --no-save @fortinet/autoscale-core && cd .. && npm pack ./fortigate-autoscale",
         "make-dist": "node dist/scripts/make-dist.js",
         "build-artifacts": "npm-run-all build make-dist",
