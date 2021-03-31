@@ -1,5 +1,30 @@
 import * as AzureComputeModels from '@azure/arm-compute/esm/models';
 import * as AzureNetworkModels from '@azure/arm-network/esm/models';
+import path from 'path';
+import {
+    ApiCache,
+    ApiCacheOption,
+    AzureAutoscale,
+    AzureAutoscaleDbItem,
+    AzureCustomLog,
+    AzureFortiAnalyzer,
+    AzureFortiGateAutoscaleSetting,
+    AzureFortiGateAutoscaleSettingItemDictionary,
+    AzureFunctionDef,
+    AzureFunctionHttpTriggerProxy,
+    AzureFunctionInvocationProxy,
+    AzureFunctionServiceProviderProxy,
+    AzureLicenseStock,
+    AzureLicenseStockDbItem,
+    AzureLicenseUsage,
+    AzureLicenseUsageDbItem,
+    AzurePlatformAdaptee,
+    AzurePrimaryElection,
+    AzurePrimaryElectionDbItem,
+    AzureSettings,
+    CosmosDBQueryWhereClause,
+    LogItem
+} from '.';
 import {
     Blob,
     CloudFunctionInvocationPayload,
@@ -26,31 +51,6 @@ import {
     VirtualMachineState
 } from '..';
 import * as DBDef from '../db-definitions';
-import path from 'path';
-import {
-    ApiCache,
-    ApiCacheOption,
-    AzureAutoscale,
-    AzureAutoscaleDbItem,
-    AzureCustomLog,
-    AzureFortiAnalyzer,
-    AzureFortiGateAutoscaleSetting,
-    AzureFortiGateAutoscaleSettingItemDictionary,
-    AzureFunctionDef,
-    AzureFunctionHttpTriggerProxy,
-    AzureFunctionInvocationProxy,
-    AzureFunctionServiceProviderProxy,
-    AzureLicenseStock,
-    AzureLicenseStockDbItem,
-    AzureLicenseUsage,
-    AzureLicenseUsageDbItem,
-    AzurePlatformAdaptee,
-    AzurePrimaryElection,
-    AzurePrimaryElectionDbItem,
-    AzureSettings,
-    CosmosDBQueryWhereClause,
-    LogItem
-} from '.';
 
 export type ConsistenyCheckType<T> = { [key in keyof T]?: string | number | boolean | null };
 export class AzurePlatformAdapter implements PlatformAdapter {
@@ -1346,7 +1346,16 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         // see: https://docs.microsoft.com/en-us/azure/azure-functions/functions-bindings-http-webhook-trigger?tabs=csharp#authorization-keys
         const reqHeaders = await this.proxy.getReqHeaders();
         const reqQueryParams = await this.proxy.getReqQueryParameters();
-        const functionAccessKey = reqHeaders['x-functions-key'] || reqQueryParams.code || null;
+        const functionAccessKey =
+            reqHeaders['x-functions-key'] ||
+            reqQueryParams.code ||
+            process.env.FORTIANALYZER_HANDLER_ACCESS_KEY ||
+            null;
+        if (functionAccessKey) {
+            this.proxy.logAsInfo('function access key found. will invoke with access key.');
+        } else {
+            this.proxy.logAsInfo('function access key not found. will invoke as anonymous.');
+        }
         const response = await this.adaptee.invokeAzureFunction(
             functionEndpoint,
             JSON.stringify(p),
