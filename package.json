@@ -12,7 +12,7 @@
         "pre-build": "cd fortigate-autoscale && npm install && cd ..",
         "build": "npm-run-all pre-build clear-dist compile",
         "bundle": "cd fortigate-autoscale && npm unlink --no-save @fortinet/autoscale-core && cd .. && npm pack ./fortigate-autoscale",
-        "make-dist": "node dist/scripts/make-dist.js",
+        "make-dist": "npm-run-all build bundle",
         "build-artifacts": "npm-run-all build make-dist",
         "test": "mocha --timeout 3600000 -r ts-node/register -r tsconfig-paths/register test/{*,**/**/*}.spec.ts",
         "lint-check": "node node_modules/ftnt-devops-ci/bin/ftnt-devops-ci.js c -fl  -F .eslintignore -L .eslintignore \"{*,**/*}{.js,.json,.ts}\"",
