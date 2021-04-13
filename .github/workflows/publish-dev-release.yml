@@ -73,9 +73,9 @@ jobs:
           git push
           echo "::set-output name=tag-commit::$(git rev-parse HEAD)"
       # prepare release assets
-      - name: bundle & npm pack
+      - name: make dist
         if: ${{ github.event.inputs['no-publish'] != 'true'  }}
-        run: npm run bundle
+        run: npm run make-dist
       # create a release
       - id: create-release
         name: create release
