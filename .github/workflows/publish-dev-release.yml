@@ -97,6 +97,6 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ steps['create-branch'].outputs['head-version'] }} # Use the output from the `create-branch` step
           prerelease: ${{ steps['create-branch'].outputs['is-prerelease'] == 'true' }} # Use the output from the `create-branch` step
-          file: ./release/*
+          file: ./fortinet-fortigate-autoscale*.tgz
           file_glob: true
           overwrite: true
