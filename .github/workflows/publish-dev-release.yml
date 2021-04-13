@@ -60,6 +60,9 @@ jobs:
         run: |
           npm config set sign-git-tag false
           npm config set sign-git-commit false
+          cd fortigate-autoscale
+          npm version ${{ steps['create-branch'].outputs['head-version'] }} --no-git-tag-version
+          cd ..
           npm version ${{ steps['create-branch'].outputs['head-version'] }} --no-git-tag-version
           git add -u
           git commit -m "dev release: ${{ steps['create-branch'].outputs['head-version'] }}" --no-gpg-sign
@@ -94,6 +97,6 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ steps['create-branch'].outputs['head-version'] }} # Use the output from the `create-branch` step
           prerelease: ${{ steps['create-branch'].outputs['is-prerelease'] == 'true' }} # Use the output from the `create-branch` step
-          file: ./release/*
+          file: ./fortinet-fortigate-autoscale*.tgz
           file_glob: true
           overwrite: true
