@@ -52,9 +52,6 @@ jobs:
       # install all dependencies
       - name: install project dependencies
         run: npm ci
-      # build to compile the source code
-      - name: build project
-        run: npm run build
       # bump version by running `npm version`
       - name: bump version
         id: bump-version
@@ -73,9 +70,9 @@ jobs:
           git push
           echo "::set-output name=tag-commit::$(git rev-parse HEAD)"
       # prepare release assets
-      - name: make dist
+      - name: bundle & npm pack
         if: ${{ github.event.inputs['no-publish'] != 'true'  }}
-        run: npm run make-dist
+        run: npm run bundle
       # create a release
       - id: create-release
         name: create release
@@ -97,6 +94,6 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ steps['create-branch'].outputs['head-version'] }} # Use the output from the `create-branch` step
           prerelease: ${{ steps['create-branch'].outputs['is-prerelease'] == 'true' }} # Use the output from the `create-branch` step
-          file: ./fortigate-autoscale-azure*.zip
+          file: ./release/*
           file_glob: true
           overwrite: true
