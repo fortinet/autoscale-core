@@ -772,6 +772,14 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                         `scalingGroup: ${oldRec.scalingGroupName}, vmId: ${oldRec.vmId})`
                 );
                 const itemToDelete = table.downcast({ ...oldRec });
+                // NOTE: the voteState in the db record will be either 'pending' or 'done'.
+                // As soon as the voteState is still 'pending', and voteEndTime has expired,
+                // the primary record is deemed timeout. Therefore, the 'timeout' state will
+                // not need to be updated on the db record. Should alter it to 'pending' when
+                // deleting.
+                if (itemToDelete.voteState === PrimaryRecordVoteState.Timeout) {
+                    itemToDelete.voteState = PrimaryRecordVoteState.Pending;
+                }
                 // NOTE: if the new and old records are for the same primary vm, and the
                 // old record indicates that it has timed out, do not need
                 // to check data consistency.
