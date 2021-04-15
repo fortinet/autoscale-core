@@ -16,10 +16,9 @@ jobs:
         uses: actions/checkout@v2
       - name: 'prep: install dependencies'
         run: npm ci
-      - name: build project
-        run: npm run build
-      - name: make release assets
-        run: npm run make-release
+        # prepare release assets
+      - name: make dist
+        run: npm run make-dist
       - id: fetch-versioning-info
         name: fetch versioning info
         uses: fortinet/github-action-version-branch@1.0.0
@@ -44,6 +43,6 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ steps['fetch-versioning-info'].outputs['head-version'] }} # Use the output from the `fetch-versioning-info` step
           prerelease: ${{ steps['fetch-versioning-info'].outputs['is-prerelease'] == 'true' }} # Use the output from the `fetch-versioning-info` step
-          file: ./release/*
+          file: ./fortinet-fortigate-autoscale*.tgz
           file_glob: true
           overwrite: true
