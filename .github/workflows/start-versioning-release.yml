@@ -35,14 +35,6 @@ on:
           If specified, it will be used instead of the other versioning parameters.
           It must be a valid semver format.
         required: false
-      author-name:
-        description: >-
-          The author' user name used for creating the versioning commit.
-        required: true
-      author-email:
-        description: >-
-          The author' email address used for creating the versioning commit.
-        required: true
       pr-template-uri:
         description: >-
           The uri of the pull request template to be used. It is a relative path to where you use this
