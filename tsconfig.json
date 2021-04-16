@@ -7,6 +7,9 @@
         },
         {
             "path": "./fortigate-autoscale"
+        },
+        {
+            "path": "./scripts"
         }
     ]
 }

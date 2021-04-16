@@ -119,6 +119,7 @@ dist
 local
 dist
 out
+scripts/compiled
 
 # npm package.json and package-lock.json
 package.json
