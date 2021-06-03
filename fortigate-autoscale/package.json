@@ -4,9 +4,9 @@
     "description": "Fortinet Autoscale project(s), fortigate autoscale module.",
     "main": "./dist/index.js",
     "exports": {
-        ".": "./dist/index.js",
-        "./azure/": "./dist/azure/",
-        "./aws/": "./dist/aws/"
+        ".": "./dist",
+        "./azure": "./dist/azure",
+        "./aws": "./dist/aws"
     },
     "types": "./dist/index.d.ts",
     "files": [
