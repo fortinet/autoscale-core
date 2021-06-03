@@ -10,12 +10,6 @@ on:
           The base branch that a versioning branch will be based.
         required: true
         default: main
-      name-prefix:
-        description: >-
-          The name prefix to include in the new branch name.
-          The new branch name format is: <prefix><version>. Example: Rel_branchv1.0.0-rc.1
-        required: true
-        default: rel_
       version-level:
         description: >-
           The level of the semver version.
@@ -35,11 +29,6 @@ on:
           If specified, it will be used instead of the other versioning parameters.
           It must be a valid semver format.
         required: false
-      pr-template-uri:
-        description: >-
-          The uri of the pull request template to be used. It is a relative path to where you use this
-          GitHub action.
-        required: false
 jobs:
   main_job:
     runs-on: ubuntu-latest
@@ -47,11 +36,11 @@ jobs:
     steps:
       - name: create version branch
         id: create-branch
-        uses: fortinet/github-action-version-branch@1.0.0
+        uses: fortinet/github-action-version-branch@1.1.2
         with:
           base-branch: ${{ github.event.inputs.base-branch }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          name-prefix: ${{ github.event.inputs.name-prefix }}
+          name-prefix: rel_
           version-level: ${{ github.event.inputs.version-level }}
           pre-id: ${{ github.event.inputs.pre-id }}
           custom-version: ${{ github.event.inputs.custom-version }}
@@ -61,9 +50,7 @@ jobs:
         with:
           # set ref to the head branch (newly created) from the output of step: create-branch
           ref: ${{ steps['create-branch'].outputs['head-branch'] }}
-      # configure the commit author for the version bump commit
-      # use the github-bot account
-      - name: config commit author identity (bot)
+      - name: config git author identity
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -91,11 +78,11 @@ jobs:
       # open a versioning pull request for review
       - name: versioning pr
         id: versioning-pr
-        uses: fortinet/github-action-version-pr@1.0.0
+        uses: fortinet/github-action-version-pr@1.0.3
         with:
           base-branch: ${{ github.event.inputs.base-branch }}
           head-branch: ${{ steps['create-branch'].outputs['head-branch'] }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          pr-template-uri: ${{ github.event.inputs.pr-template-uri }}
+          pr-template-uri: .github/workflows/templates/version-pr.yml
           pr-create-draft: true
           pr-fail-if-exist: false

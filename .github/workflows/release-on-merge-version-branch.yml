@@ -1,33 +1,45 @@
 name: >-
-  Run the post-merged actions for merging the commits from the version branch to the base branch.
+  Automatically create a release if there's a pull request merged from a version branch.
 on:
   pull_request:
     branches:
       - main
     types: [closed]
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: >-
+          The pull request id that triggers the release (for manual trigger only)
+        required: false
 jobs:
   main_job:
     runs-on: ubuntu-latest
     name: process pull request merge event
     # conditionally run only when the pull request is merged.
-    if: github.event.pull_request.merged == true
+    if: github.event.pull_request.merged == true || github.event.inputs.pr-number != ''
     steps:
+      # check if this pull request coming from a version-branch
+      # if yes then proceed to create a release
+      # if no then skip the following steps
+      - id: fetch-versioning-info
+        name: fetch versioning info
+        uses: fortinet/github-action-version-branch@1.1.2
+        with:
+          pr-number: ${{ github.event.number || github.event.inputs.pr-number}}
+          github-token: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+      # create a release
       - name: 'prep: git checkout'
         uses: actions/checkout@v2
       - name: 'prep: install dependencies'
         run: npm ci
-        # prepare release assets
-      - name: make dist
+      - name: make release assets
+        # the make release command may vary
         run: npm run make-dist
-      - id: fetch-versioning-info
-        name: fetch versioning info
-        uses: fortinet/github-action-version-branch@1.0.0
-        with:
-          pr-number: ${{ github.event.number }}
-          github-token: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
       # create a release
       - id: create-release
         name: create release
+        # run only if the merged pull request is from a version branch
+        if: ${{ steps['fetch-versioning-info'].outputs['is-version-branch'] == 'true' }}
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
@@ -38,6 +50,8 @@ jobs:
           prerelease: ${{ steps['fetch-versioning-info'].outputs['is-prerelease'] == 'true' }} # Use the output from the `fetch-versioning-info` step
       - id: upload-release-asset
         name: upload release assets
+        # run only if the merged pull request is from a version branch
+        if: ${{ steps['fetch-versioning-info'].outputs['is-version-branch'] == 'true' }}
         uses: svenstaro/upload-release-action@2.2.0
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
