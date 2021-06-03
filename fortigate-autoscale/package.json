@@ -5,7 +5,8 @@
     "main": "./dist/index.js",
     "exports": {
         ".": "./dist/index.js",
-        "./azure": "./dist/azure/index.js"
+        "./azure/": "./dist/azure/",
+        "./aws/": "./dist/aws/"
     },
     "types": "./dist/index.d.ts",
     "files": [
