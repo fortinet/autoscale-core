@@ -32,6 +32,8 @@ jobs:
         uses: actions/checkout@v2
       - name: 'prep: install dependencies'
         run: npm ci
+      - name: build project
+        run: npm run build
       - name: make release assets
         # the make release command may vary
         run: npm run make-dist

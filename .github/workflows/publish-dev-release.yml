@@ -17,6 +17,7 @@ on:
         description: >-
           The branch name prefix. Default: devrel_
         required: false
+        default: devrel_
       no-publish:
         description: >-
           Boolean indicator to skip the publication steps.
@@ -52,6 +53,9 @@ jobs:
       # install all dependencies
       - name: install project dependencies
         run: npm ci
+      # build to compile the source code
+      - name: build project
+        run: npm run build
       # bump version by running `npm version`
       - name: bump version
         id: bump-version
@@ -100,3 +104,7 @@ jobs:
           file: ./fortinet-fortigate-autoscale*.tgz
           file_glob: true
           overwrite: true
+      - id: delete-devrel-branch
+        name: delete devrel branch
+        if: ${{ github.event.inputs['no-publish'] != 'true'  }}
+        run: git push -d origin $(git branch --show-current)
