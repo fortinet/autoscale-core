@@ -99,7 +99,26 @@ export interface PlatformAdapter {
      * @param rec primary record to be updated.
      */
     updatePrimaryRecord(rec: PrimaryRecord): Promise<void>;
+    /**
+     * Load a configset file from blob storage
+     * The blob container will use the AssetStorageContainer or CustomAssetContainer,
+     * and the location prefix will use AssetStorageDirectory or CustomAssetDirectory.
+     * The full file path will be: \<container\>/\<location prefix\>/configset/\<file-name\>
+     * @param  {string} name the configset name
+     * @param  {boolean} custom (optional) whether load it from a custom location or not
+     * @returns {Promise} the configset content as a string
+     */
     loadConfigSet(name: string, custom?: boolean): Promise<string>;
+    /**
+     * List all configset files in a specified blob container location
+     * The blob container will use the AssetStorageContainer or CustomAssetContainer,
+     * and the location prefix will use AssetStorageDirectory or CustomAssetDirectory.
+     * There will be an optional subDirectory provided as parameter.
+     * The full file path will be: \<container\>/\<location prefix\>[/\<subDirectory\>]/configset
+     * @param  {string} subDirectory additional subdirectory
+     * @param  {boolean} custom (optional) whether load it from a custom location or not
+     * @returns {Promise} the configset content as a string
+     */
     listConfigSet(subDirectory?: string, custom?: boolean): Promise<Blob[]>;
     deleteVmFromScalingGroup(vmId: string): Promise<void>;
     listLicenseFiles(

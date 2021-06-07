@@ -1,4 +1,17 @@
 import * as DBDef from '@fortinet/autoscale-core/db-definitions';
+import EC2 from 'aws-sdk/clients/ec2';
+import path from 'path';
+import {
+    AwsApiGatewayEventProxy,
+    AwsCloudFormationCustomResourceEventProxy,
+    AwsFortiGateAutoscaleSetting,
+    AwsLambdaInvocationProxy,
+    AwsPlatformAdaptee,
+    AwsScheduledEventProxy,
+    AwsVpnAttachmentState,
+    AwsVpnConnection,
+    LifecycleItemDbItem
+} from '.';
 import {
     Blob,
     CloudFunctionInvocationPayload,
@@ -28,19 +41,6 @@ import {
     WaitForConditionChecker,
     WaitForPromiseEmitter
 } from '..';
-import EC2 from 'aws-sdk/clients/ec2';
-import path from 'path';
-import {
-    AwsApiGatewayEventProxy,
-    AwsCloudFormationCustomResourceEventProxy,
-    AwsFortiGateAutoscaleSetting,
-    AwsLambdaInvocationProxy,
-    AwsPlatformAdaptee,
-    AwsScheduledEventProxy,
-    AwsVpnAttachmentState,
-    AwsVpnConnection,
-    LifecycleItemDbItem
-} from '.';
 import * as AwsDBDef from './index';
 
 export const TAG_KEY_RESOURCE_GROUP = 'ResourceGroup';
@@ -701,55 +701,70 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             throw error;
         }
     }
+    /**
+     * Load a configset file from blob storage
+     * The blob container will use the AssetStorageContainer or CustomAssetContainer,
+     * and the location prefix will use AssetStorageDirectory or CustomAssetDirectory.
+     * The full file path will be: \<container\>/\<location prefix\>/configset/\<file-name\>
+     * @param  {string} name the configset name
+     * @param  {boolean} custom (optional) whether load it from a custom location or not
+     * @returns {Promise} the configset content as a string
+     */
     async loadConfigSet(name: string, custom?: boolean): Promise<string> {
         this.proxy.logAsInfo(`loading${custom ? ' (custom)' : ''} configset: ${name}`);
         const bucket = custom
-            ? this.settings.get(AwsFortiGateAutoscaleSetting.CustomAssetContainer).value
-            : this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageContainer).value;
-        const keyPrefix = [
-            custom
-                ? this.settings.get(AwsFortiGateAutoscaleSetting.CustomAssetDirectory).value
-                : this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageDirectory).value,
-            'configset'
-        ];
-        keyPrefix.push(name);
-        const filePath = path.posix.join(...keyPrefix.filter(k => !!k));
-        this.proxy.logAsDebug(`load blob in: container [${bucket}], path:` + `[${filePath}]`);
-        const content = await this.adaptee.getS3ObjectContent(bucket, filePath);
+            ? this.settings.get(AwsFortiGateAutoscaleSetting.CustomAssetContainer)
+            : this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageContainer);
+        const keyPrefix = custom
+            ? this.settings.get(AwsFortiGateAutoscaleSetting.CustomAssetDirectory)
+            : this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageDirectory);
+        if (!(bucket && bucket.value)) {
+            throw new Error('Missing setting item: S3 bucket for configset.');
+        }
+
+        const filePath = path.posix.join(...[keyPrefix.value, 'configset', name].filter(k => !!k));
+        this.proxy.logAsDebug(`Load blob in: S3 bucket [${bucket.value}], path:` + `[${filePath}]`);
+        const content = await this.adaptee.getS3ObjectContent(bucket.value, filePath);
         this.proxy.logAsInfo('configset loaded.');
         return content;
     }
+    /**
+     * List all configset files in a specified blob container location
+     * The blob container will use the AssetStorageContainer or CustomAssetContainer,
+     * and the location prefix will use AssetStorageDirectory or CustomAssetDirectory.
+     * There will be an optional subDirectory provided as parameter.
+     * The full file path will be: \<container\>/\<location prefix\>[/\<subDirectory\>]/configset
+     * @param  {string} subDirectory additional subdirectory
+     * @param  {boolean} custom (optional) whether load it from a custom location or not
+     * @returns {Promise} the configset content as a string
+     */
     async listConfigSet(subDirectory?: string, custom?: boolean): Promise<Blob[]> {
         this.proxy.logAsInfo('calling listConfigSet');
-        let bucket: string;
-        let keyPrefix: string;
+        // it will load configsets from the location:
+        // in custom mode: CustomAssetContainer/CustomAssetDirectory[/subDirectory]/configset/<configset-name>
+        // in normal mode: AssetStorageContainer/AssetStorageDirectory[/subDirectory]/configset/<configset-name>
+        const bucket = custom
+            ? this.settings.get(AwsFortiGateAutoscaleSetting.CustomAssetContainer)
+            : this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageContainer);
+
+        const keyPrefix = custom
+            ? this.settings.get(AwsFortiGateAutoscaleSetting.CustomAssetDirectory)
+            : this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageDirectory);
         let blobs: Blob[] = [];
-        if (custom) {
-            bucket = this.settings.get(AwsFortiGateAutoscaleSetting.CustomAssetContainer).value;
-            keyPrefix = this.settings.get(AwsFortiGateAutoscaleSetting.CustomAssetDirectory).value;
-            // if custom asset container or directory isn't set, do not load.
-            if (!(bucket && keyPrefix)) {
-                this.proxy.logAsInfo(
-                    'Custom config set location not specified. No configset loaded.'
-                );
-                return [];
-            }
-        } else {
-            bucket = this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageContainer).value;
-            keyPrefix = this.settings.get(AwsFortiGateAutoscaleSetting.AssetStorageDirectory).value;
-        }
-        if (!bucket) {
-            this.proxy.logAsInfo('Config set location not specified. No configset loaded.');
+        if (!bucket.value) {
+            this.proxy.logAsInfo('No S3 bucket is specified. No configset loaded.');
             return [];
         }
 
         const location = path.posix.join(
-            ...[keyPrefix, 'configset', subDirectory || null].filter(r => !!r)
+            ...[keyPrefix.value, subDirectory || null, 'configset'].filter(r => !!r)
         );
 
         try {
-            this.proxy.logAsInfo(`container: ${bucket}, list configset in directory: ${location}`);
-            blobs = await this.adaptee.listS3Object(bucket, location);
+            this.proxy.logAsInfo(
+                `List configet in S3 bucket: ${bucket.value}, directory: ${location}`
+            );
+            blobs = await this.adaptee.listS3Object(bucket.value, location);
         } catch (error) {
             this.proxy.logAsWarning(error);
         }

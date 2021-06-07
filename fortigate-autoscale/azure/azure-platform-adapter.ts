@@ -890,54 +890,70 @@ export class AzurePlatformAdapter implements PlatformAdapter {
     }
     /**
      * Load a configset file from blob storage
+     * The blob container will use the AssetStorageContainer or CustomAssetContainer,
+     * and the location prefix will use AssetStorageDirectory or CustomAssetDirectory.
+     * The full file path will be: \<container\>/\<location prefix\>/configset/\<file-name\>
      * @param  {string} name the configset name
      * @param  {boolean} custom (optional) whether load it from a custom location or not
      * @returns {Promise} the configset content as a string
      */
     async loadConfigSet(name: string, custom?: boolean): Promise<string> {
         this.proxy.logAsInfo(`loading${custom ? ' (custom)' : ''} configset: ${name}`);
-        const containerName = custom
+        const container = custom
             ? this.settings.get(AzureFortiGateAutoscaleSetting.CustomAssetContainer)
             : this.settings.get(AzureFortiGateAutoscaleSetting.AssetStorageContainer);
-        const keyPrefixSetting = custom
+        const keyPrefix = custom
             ? this.settings.get(AzureFortiGateAutoscaleSetting.CustomAssetDirectory)
             : this.settings.get(AzureFortiGateAutoscaleSetting.AssetStorageDirectory);
-        if (!keyPrefixSetting) {
-            throw new Error('Missing storage container or directory setting.');
+        if (!(container && container.value)) {
+            throw new Error('Missing setting item for: storage container for configset.');
         }
 
-        const keyPrefix = [keyPrefixSetting.value, 'configset'];
-        keyPrefix.push(name);
-        const blobFilePath = path.posix.join(...keyPrefix.filter(k => !!k));
+        const filePath = path.posix.join(...[keyPrefix.value, 'configset', name].filter(k => !!k));
         this.proxy.logAsDebug(
-            `load blob in: container [${containerName.value}], path:` + `[${blobFilePath}]`
+            `Load blob in container [${container.value}], path:` + `[${filePath}]`
         );
-        const content = await this.adaptee.getBlobContent(containerName.value, blobFilePath);
+        const content = await this.adaptee.getBlobContent(container.value, filePath);
         this.proxy.logAsInfo('configset loaded.');
         return content;
     }
+    /**
+     * List all configset files in a specified blob container location
+     * The blob container will use the AssetStorageContainer or CustomAssetContainer,
+     * and the location prefix will use AssetStorageDirectory or CustomAssetDirectory.
+     * There will be an optional subDirectory provided as parameter.
+     * The full file path will be: \<container\>/\<location prefix\>[/\<subDirectory\>]/configset
+     * @param  {string} subDirectory additional subdirectory
+     * @param  {boolean} custom (optional) whether load it from a custom location or not
+     * @returns {Promise} the configset content as a string
+     */
     async listConfigSet(subDirectory?: string, custom?: boolean): Promise<Blob[]> {
         this.proxy.logAsInfo('calling listConfigSet');
-        const keyPrefixSetting = custom
+        // it will load configsets from the location:
+        // in custom mode: <storage-account>/CustomAssetContainer/CustomAssetDirectory[/subDirectory]/configset/<configset-name>
+        // in normal mode: <storage-account>/AssetStorageContainer/AssetStorageDirectory[/subDirectory]/configset/<configset-name>
+        const container = custom
+            ? this.settings.get(AzureFortiGateAutoscaleSetting.CustomAssetContainer)
+            : this.settings.get(AzureFortiGateAutoscaleSetting.AssetStorageContainer);
+
+        const directory = custom
             ? this.settings.get(AzureFortiGateAutoscaleSetting.CustomAssetDirectory)
             : this.settings.get(AzureFortiGateAutoscaleSetting.AssetStorageDirectory);
         let blobs: Blob[] = [];
-        if (custom && !keyPrefixSetting.value) {
-            this.proxy.logAsInfo('Custom config set location not specified. No configset loaded.');
+        if (!container.value) {
+            this.proxy.logAsInfo('No container is specified. No configset loaded.');
             return [];
         }
 
-        const container = 'configset';
-
         const location = path.posix.join(
-            ...[keyPrefixSetting.value, subDirectory || null].filter(r => !!r)
+            ...[directory.value, subDirectory || null, 'configset'].filter(r => !!r)
         );
 
         try {
             this.proxy.logAsInfo(
-                `container: ${container}, list configset in directory: ${location}`
+                `List configset in container: ${container.value}, directory: ${location}`
             );
-            blobs = await this.adaptee.listBlob(container, location);
+            blobs = await this.adaptee.listBlob(container.value, location);
         } catch (error) {
             this.proxy.logAsWarning(error);
         }
