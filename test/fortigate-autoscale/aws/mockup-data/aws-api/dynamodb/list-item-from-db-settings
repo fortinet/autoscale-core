@@ -54,7 +54,7 @@
         },
         {
             "settingValue": {
-                "S": ""
+                "S": "test-bucket"
             },
             "settingKey": {
                 "S": "asset-storage-name"
@@ -989,7 +989,7 @@
         },
         {
             "settingValue": {
-                "S": ""
+                "S": "test-custom-bucket"
             },
             "settingKey": {
                 "S": "custom-asset-container"

@@ -1,15 +1,5 @@
 /* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import {
-    CloudFunctionProxyAdapter,
-    CloudFunctionResponseBody,
-    compare,
-    LogLevel,
-    ReqHeaders,
-    ReqMethod,
-    ResourceFilter,
-    Settings
-} from '../../../fortigate-autoscale';
 import AutoScaling from 'aws-sdk/clients/autoscaling';
 import { DocumentClient } from 'aws-sdk/clients/dynamodb';
 import EC2 from 'aws-sdk/clients/ec2';
@@ -20,6 +10,16 @@ import fs from 'fs';
 import { describe, it } from 'mocha';
 import path from 'path';
 import Sinon from 'sinon';
+import {
+    CloudFunctionProxyAdapter,
+    CloudFunctionResponseBody,
+    compare,
+    LogLevel,
+    ReqHeaders,
+    ReqMethod,
+    ResourceFilter,
+    Settings
+} from '../../../fortigate-autoscale';
 import {
     AwsFortiGateAutoscaleSetting,
     AwsPlatformAdaptee,
@@ -360,11 +360,12 @@ describe('AWS api test', () => {
         let files;
         let content;
         let result;
-        let bucketName = 'assets';
-        let prefix = 'configset';
+        let bucketName = 'test-bucket';
+        let prefix = 'assets';
+        let subDir = `${prefix}/configset`;
         // NOTE: test
-        files = fs.readdirSync(path.resolve(mockAwsApiDir, 's3', bucketName, prefix));
-        result = await awsPlatformAdaptee.listS3Object(bucketName, prefix);
+        files = fs.readdirSync(path.resolve(mockAwsApiDir, 's3', bucketName, subDir));
+        result = await awsPlatformAdaptee.listS3Object(bucketName, subDir);
         let missing = result.filter(f => {
             return !files.includes(f.fileName);
         });
@@ -374,7 +375,7 @@ describe('AWS api test', () => {
         // NOTE: test
         fileName = 'baseconfig';
         content = fs
-            .readFileSync(path.resolve(mockAwsApiDir, 's3', bucketName, prefix, fileName))
+            .readFileSync(path.resolve(mockAwsApiDir, 's3', bucketName, subDir, fileName))
             .toString();
         result = await awsPlatformAdapter.loadConfigSet(fileName);
 
