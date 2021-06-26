@@ -3,11 +3,6 @@
     "version": "3.2.7",
     "description": "Fortinet Autoscale project(s), fortigate autoscale module.",
     "main": "./dist/index.js",
-    "exports": {
-        ".": "./dist",
-        "./azure": "./dist/azure",
-        "./aws": "./dist/aws"
-    },
     "types": "./dist/index.d.ts",
     "files": [
         "/dist",
