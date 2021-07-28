@@ -700,6 +700,23 @@
         },
         {
             "settingValue": {
+                "S": "true"
+            },
+            "settingKey": {
+                "S": "terminate-unhealthy-vm"
+            },
+            "editable": {
+                "S": "true"
+            },
+            "description": {
+                "S": "The vm info cache time in seconds."
+            },
+            "jsonEncoded": {
+                "S": "false"
+            }
+        },
+        {
+            "settingValue": {
                 "S": "3600"
             },
             "settingKey": {

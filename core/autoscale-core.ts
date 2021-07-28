@@ -456,17 +456,36 @@ export abstract class Autoscale implements AutoscaleCore {
     async handleUnhealthyVm(vms: VirtualMachine[]): Promise<void> {
         this.proxy.logAsInfo('calling handleUnhealthyVm.');
         // call the platform scaling group to terminate the vm in the list
+        const settings = await this.platform.getSettings();
+        const terminateUnhealthyVm = settings.get(AutoscaleSetting.TerminateUnhealthyVm);
         await Promise.all(
             vms.map(vm => {
                 this.proxy.logAsInfo(`handling unhealthy vm(id: ${vm.id})...`);
-                return this.platform
-                    .deleteVmFromScalingGroup(vm.id)
-                    .then(() => {
-                        this.proxy.logAsInfo(`handling vm (id: ${vm.id}) completed.`);
-                    })
-                    .catch(err => {
-                        this.proxy.logForError('handling unhealthy vm failed.', err);
-                    });
+                // if termination on unhealthy vm is set to true, terminate it
+                if (terminateUnhealthyVm.truthValue) {
+                    return this.platform
+                        .deleteVmFromScalingGroup(vm.id)
+                        .then(() => {
+                            this.proxy.logAsInfo(`handling vm (id: ${vm.id}) completed.`);
+                        })
+                        .catch(err => {
+                            this.proxy.logForError('handling unhealthy vm failed.', err);
+                        });
+                }
+                // otherwise, send a warning for this unhealthy vm and keep it
+                else {
+                    this.proxy.logAsWarning(
+                        'Termination on unhealthy vm is set to false.' +
+                            ` vm (id: ${vm.id}) will not be deleted.`
+                    );
+                    return this.sendVmUnhealthyEvent(vm.id)
+                        .then(() => {
+                            this.proxy.logAsInfo(`handling vm (id: ${vm.id}) completed.`);
+                        })
+                        .catch(err => {
+                            this.proxy.logForError('handling unhealthy vm failed.', err);
+                        });
+                }
             })
         );
         this.proxy.logAsInfo('called handleUnhealthyVm.');
@@ -598,6 +617,11 @@ export abstract class Autoscale implements AutoscaleCore {
         this.proxy.logAsInfo('calling handleEgressTrafficRoute.');
         await this.routingEgressTrafficStrategy.apply();
         this.proxy.logAsInfo('called handleEgressTrafficRoute.');
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async sendVmUnhealthyEvent(vmId: string): Promise<void> {
+        // TODO: implementation for handling the custom event is needed
     }
 }
 
