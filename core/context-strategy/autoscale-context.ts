@@ -294,6 +294,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             // update health check record
             try {
                 targetHealthCheckRecord.seq += 1;
+                targetHealthCheckRecord.heartbeatInterval = newInterval;
                 targetHealthCheckRecord.nextHeartbeatTime += newInterval;
                 await this.platform.updateHealthCheckRecord(targetHealthCheckRecord);
             } catch (error) {
