@@ -1,5 +1,3 @@
-import { Blob, PlatformAdaptee, ResourceFilter, SettingItem, Settings } from '..';
-import { KeyValue, SaveCondition, SettingsDbItem, Table } from '../db-definitions';
 import AutoScaling, {
     LifecycleActionResult,
     UpdateAutoScalingGroupType
@@ -19,6 +17,32 @@ import fs from 'fs';
 import { isIPv4 } from 'net';
 import path from 'path';
 import { AwsDdbOperations, AwsFortiGateAutoscaleSetting, AwsSettings } from '.';
+import { Blob, PlatformAdaptee, ResourceFilter, SettingItem, Settings } from '..';
+import { KeyValue, SaveCondition, SettingsDbItem, Table } from '../db-definitions';
+
+let seq = 1;
+interface TimeLog {
+    seq: number;
+    message: string;
+    time: number;
+}
+
+function getTimeLogger(message: string): TimeLog {
+    return {
+        seq: seq++,
+        message: message,
+        time: Date.now()
+    };
+}
+
+function printTimerLog(logger: TimeLog): void {
+    const msg: string = logger.message
+        ? `${logger.message}(seq: ${logger.seq}) `
+        : `log seq: ${logger.seq}`;
+    if (process.env.NO_LOG_SERVICE_PROCESSING_TIME !== 'true') {
+        console.log(`${msg}, Time used: ${Date.now() - logger.time} ms.`);
+    }
+}
 
 export class AwsPlatformAdaptee implements PlatformAdaptee {
     protected docClient: DocumentClient;
@@ -108,7 +132,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 ExpressionAttributeValues: attributeValues,
                 ExpressionAttributeNames: attributeNames
             };
+            const logger = getTimeLogger('saveItemToDb: docClient.update');
             await this.docClient.update(updateItemInput).promise();
+            printTimerLog(logger);
         } else {
             const putItemInput: DocumentClient.PutItemInput = {
                 TableName: table.name,
@@ -117,7 +143,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 ExpressionAttributeValues:
                     (conditionExp && conditionExp.ExpressionAttributeValues) || undefined
             };
+            const logger1 = getTimeLogger('saveItemToDb: docClient.put');
             await this.docClient.put(putItemInput).promise();
+            printTimerLog(logger1);
         }
     }
     /**
@@ -135,7 +163,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             TableName: table.name,
             Key: keys
         };
+        const logger = getTimeLogger('saveItemToDb: docClient.get');
         const result = await this.docClient.get(getItemInput).promise();
+        printTimerLog(logger);
         return (result.Item && table.convertRecord(result.Item)) || null;
     }
     /**
@@ -163,7 +193,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             ExpressionAttributeValues:
                 (condition && condition.ExpressionAttributeValues) || undefined
         };
+        const logger = getTimeLogger('deleteItemFromDb: docClient.delete');
         await this.docClient.delete(deleteItemInput).promise();
+        printTimerLog(logger);
     }
     /**
      * Scan and list all or some record from a given db table
@@ -188,11 +220,14 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             Limit: (limit > 0 && limit) || undefined
         };
 
+        const logger = getTimeLogger('listItemFromDb: docClient.scan');
         const response = await this.docClient.scan(scanInput).promise();
+        printTimerLog(logger);
         let records: T[] = [];
         if (response && response.Items) {
             records = response.Items.map(item => table.convertRecord(item));
         }
+
         return records;
     }
 
@@ -227,6 +262,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                     } as Blob;
                 });
         } else {
+            const logger = getTimeLogger('listS3Object: s3.listObjectsV2');
             const data = await this.s3
                 .listObjectsV2({
                     Bucket: s3Bucket,
@@ -234,6 +270,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                     StartAfter: prefix
                 })
                 .promise();
+            printTimerLog(logger);
             return data.Contents.map(content => {
                 return {
                     fileName: content.Key.substr(prefix.length),
@@ -262,7 +299,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             const buffer = fs.readFileSync(filePath);
             return buffer.toString();
         } else {
+            const logger = getTimeLogger('getS3ObjectContent: s3.getObject');
             const data = await this.s3.getObject({ Bucket: s3Bucket, Key: s3KeyPrefix }).promise();
+            printTimerLog(logger);
             return (data && data.Body && data.Body.toString()) || '';
         }
     }
@@ -276,7 +315,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 };
             })
         };
+        const logger = getTimeLogger('listInstances: ec2.describeInstances');
         const result = await this.ec2.describeInstances(request).promise();
+        printTimerLog(logger);
         const instances: Map<string, EC2.Instance> = new Map();
         result.Reservations.forEach(reservation => {
             reservation.Instances.forEach(instance => {
@@ -292,7 +333,11 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         const request: AutoScaling.DescribeAutoScalingInstancesType = {
             InstanceIds: instanceIds
         };
+        const logger = getTimeLogger(
+            'identifyInstanceScalingGroup: autoscaling.describeAutoScalingInstances'
+        );
         const result = await this.autoscaling.describeAutoScalingInstances(request).promise();
+        printTimerLog(logger);
         const map: Map<string, string> = new Map();
         result.AutoScalingInstances.forEach(detail => {
             map.set(detail.InstanceId, detail.AutoScalingGroupName);
@@ -315,7 +360,11 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         const request: AutoScaling.AutoScalingGroupNamesType = {
             AutoScalingGroupNames: scalingGroupNames
         };
+        const logger = getTimeLogger(
+            'describeAutoScalingGroups: autoscaling.describeAutoScalingGroups'
+        );
         const result = await this.autoscaling.describeAutoScalingGroups(request).promise();
+        printTimerLog(logger);
         const scalingGroups = result.AutoScalingGroups.filter(group =>
             scalingGroupNames.includes(group.AutoScalingGroupName)
         );
@@ -333,14 +382,18 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             Groups: securtyGroupIds || undefined,
             PrivateIpAddress: privateIpAddress || undefined
         };
+        const logger = getTimeLogger('createNetworkInterface: ec2.createNetworkInterface');
         const result = await this.ec2.createNetworkInterface(request).promise();
+        printTimerLog(logger);
         return result.NetworkInterface;
     }
     async deleteNetworkInterface(nicId: string): Promise<void> {
         const request: EC2.DeleteNetworkInterfaceRequest = {
             NetworkInterfaceId: nicId
         };
+        const logger = getTimeLogger('deleteNetworkInterface: ec2.deleteNetworkInterface');
         await this.ec2.deleteNetworkInterface(request).promise();
+        printTimerLog(logger);
     }
 
     async listNetworkInterfaces(filters: ResourceFilter[]): Promise<EC2.NetworkInterface[]> {
@@ -352,7 +405,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 };
             })
         };
+        const logger = getTimeLogger('listNetworkInterfaces: ec2.describeNetworkInterfaces');
         const result = await this.ec2.describeNetworkInterfaces(request).promise();
+        printTimerLog(logger);
         return result.NetworkInterfaces;
     }
 
@@ -368,7 +423,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         const request: EC2.DescribeNetworkInterfacesRequest = {
             NetworkInterfaceIds: nicIds
         };
+        const logger = getTimeLogger('listNetworkInterfacesById: ec2.describeNetworkInterfaces');
         const result = await this.ec2.describeNetworkInterfaces(request).promise();
+        printTimerLog(logger);
         return result.NetworkInterfaces.filter(nic => nicIds.includes(nic.NetworkInterfaceId));
     }
 
@@ -390,7 +447,10 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             InstanceId: instanceId,
             NetworkInterfaceId: nicId
         };
-        return await this.ec2.attachNetworkInterface(request).promise();
+        const logger = getTimeLogger('attachNetworkInterface: ec2.attachNetworkInterface');
+        const result = await this.ec2.attachNetworkInterface(request).promise();
+        printTimerLog(logger);
+        return result;
     }
     async detachNetworkInterface(instanceId: string, nicId: string): Promise<void> {
         const eni = await this.describeNetworkInterface(nicId);
@@ -411,7 +471,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         const request: EC2.DetachNetworkInterfaceRequest = {
             AttachmentId: eni.Attachment.AttachmentId
         };
+        const logger = getTimeLogger('attachNetworkInterface: ec2.detachNetworkInterface');
         await this.ec2.detachNetworkInterface(request).promise();
+        printTimerLog(logger);
     }
 
     async tagResource(resIds: string[], tags: ResourceFilter[]): Promise<void> {
@@ -421,7 +483,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 return { Key: tag.key, Value: tag.value };
             })
         };
+        const logger = getTimeLogger('tagResource: ec2.createTags');
         await this.ec2.createTags(request).promise();
+        printTimerLog(logger);
     }
     async untagResource(resIds: string[], tags: ResourceFilter[]): Promise<void> {
         const request: EC2.DeleteTagsRequest = {
@@ -430,7 +494,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 return { Key: tag.key, Value: tag.value };
             })
         };
+        const logger = getTimeLogger('untagResource: ec2.deleteTags');
         await this.ec2.deleteTags(request).promise();
+        printTimerLog(logger);
     }
     async completeLifecycleAction(
         autoScalingGroupName: string,
@@ -444,7 +510,11 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             LifecycleActionToken: actionToken,
             LifecycleActionResult: actionResult
         };
+        const logger = getTimeLogger(
+            'completeLifecycleAction: autoscaling.completeLifecycleAction'
+        );
         await this.autoscaling.completeLifecycleAction(actionType).promise();
+        printTimerLog(logger);
     }
 
     async updateInstanceSrcDestChecking(instanceId: string, enable?: boolean): Promise<void> {
@@ -454,7 +524,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             },
             InstanceId: instanceId
         };
+        const logger = getTimeLogger('updateInstanceSrcDestChecking: ec2.modifyInstanceAttribute');
         await this.ec2.modifyInstanceAttribute(request).promise();
+        printTimerLog(logger);
     }
 
     async updateNetworkInterfaceSrcDestChecking(nicId: string, enable?: boolean): Promise<void> {
@@ -464,7 +536,11 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             },
             NetworkInterfaceId: nicId
         };
+        const logger = getTimeLogger(
+            'updateNetworkInterfaceSrcDestChecking: ec2.modifyNetworkInterfaceAttribute'
+        );
         await this.ec2.modifyNetworkInterfaceAttribute(request).promise();
+        printTimerLog(logger);
     }
 
     async elbRegisterTargets(targetGroupArn: string, instanceIds: string[]): Promise<void> {
@@ -474,7 +550,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 return { Id: id };
             })
         };
+        const logger = getTimeLogger('elbRegisterTargets: elbv2.registerTargets');
         await this.elbv2.registerTargets(input).promise();
+        printTimerLog(logger);
     }
 
     async elbDeregisterTargets(targetGroupArn: string, instanceIds: string[]): Promise<void> {
@@ -484,7 +562,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 return { Id: id };
             })
         };
+        const logger = getTimeLogger('elbDeregisterTargets: elbv2.deregisterTargets');
         await this.elbv2.deregisterTargets(input).promise();
+        printTimerLog(logger);
     }
 
     async terminateInstanceInAutoScalingGroup(
@@ -495,7 +575,11 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             InstanceId: instanceId,
             ShouldDecrementDesiredCapacity: descCapacity
         };
+        const logger = getTimeLogger(
+            'getTimeLogger: autoscaling.terminateInstanceInAutoScalingGroup'
+        );
         await this.autoscaling.terminateInstanceInAutoScalingGroup(params).promise();
+        printTimerLog(logger);
     }
 
     /**
@@ -537,7 +621,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             DeviceName: deviceName || undefined,
             CertificateArn: certArn || undefined
         };
+        const logger = getTimeLogger('createCustomerGateway: ec2.createCustomerGateway');
         const result = await this.ec2.createCustomerGateway(request).promise();
+        printTimerLog(logger);
         return result.CustomerGateway;
     }
 
@@ -545,7 +631,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         const request: EC2.DeleteCustomerGatewayRequest = {
             CustomerGatewayId: customerGatewayId
         };
+        const logger = getTimeLogger('deleteCustomerGateway: ec2.deleteCustomerGateway');
         await this.ec2.deleteCustomerGateway(request).promise();
+        printTimerLog(logger);
     }
 
     async listCustomerGateways(filters: ResourceFilter[]): Promise<EC2.CustomerGateway[]> {
@@ -557,7 +645,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 };
             })
         };
+        const logger = getTimeLogger('listCustomerGateways: ec2.describeCustomerGateways');
         const result = await this.ec2.describeCustomerGateways(request).promise();
+        printTimerLog(logger);
         return result.CustomerGateways || [];
     }
 
@@ -586,7 +676,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             VpnGatewayId: vpnGatewayId,
             TransitGatewayId: transitGatewayId
         };
+        const logger = getTimeLogger('createVpnConnection: ec2.createVpnConnection');
         const result = await this.ec2.createVpnConnection(request).promise();
+        printTimerLog(logger);
         return result.VpnConnection;
     }
 
@@ -594,14 +686,18 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         const request: EC2.DeleteVpnConnectionRequest = {
             VpnConnectionId: vpnConnectionId
         };
+        const logger = getTimeLogger('deleteVpnConnection: ec2.createVpnConnection');
         await this.ec2.deleteVpnConnection(request).promise();
+        printTimerLog(logger);
     }
 
     async describeVpnConnection(vpnConnectionId: string): Promise<EC2.VpnConnection> {
         const request: EC2.DescribeVpnConnectionsRequest = {
             VpnConnectionIds: [vpnConnectionId]
         };
+        const logger = getTimeLogger('describeVpnConnection: ec2.describeVpnConnections');
         const result = await this.ec2.describeVpnConnections(request).promise();
+        printTimerLog(logger);
         const [connection] = result.VpnConnections;
         return connection;
     }
@@ -615,7 +711,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 };
             })
         };
+        const logger = getTimeLogger('listVpnConnections: ec2.describeVpnConnections');
         const result = await this.ec2.describeVpnConnections(request).promise();
+        printTimerLog(logger);
         return result.VpnConnections || [];
     }
 
@@ -635,7 +733,11 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 }
             ]
         };
+        const logger = getTimeLogger(
+            'describeTransitGatewayAttachment: ec2.describeTransitGatewayAttachments'
+        );
         const result = await this.ec2.describeTransitGatewayAttachments(request).promise();
+        printTimerLog(logger);
         // NOTE: by the time April 26, 2019. the AWS JavascriptSDK
         // ec2.describeTransitGatewayAttachments cannot properly filter resource
         // by resource-id. instead, it always return all resources so we must
@@ -662,9 +764,13 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         // TransitGatewayRouteTablePropagation.Duplicate
         // this error will be caught and ignored.
         try {
+            const logger = getTimeLogger(
+                'updateTgwRouteTablePropagation: ec2.enableTransitGatewayRouteTablePropagation'
+            );
             const result = await this.ec2
                 .enableTransitGatewayRouteTablePropagation(request)
                 .promise();
+            printTimerLog(logger);
             return result.Propagation.State;
         } catch (error) {
             if (
@@ -691,7 +797,11 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         // Resource.AlreadyAssociated
         // this error will be caught and ignored.
         try {
+            const logger = getTimeLogger(
+                'updateTgwRouteTableAssociation: ec2.associateTransitGatewayRouteTable'
+            );
             const result = await this.ec2.associateTransitGatewayRouteTable(request).promise();
+            printTimerLog(logger);
             return result.Association.State;
         } catch (error) {
             if ((error as AWSError).message.includes('Resource.AlreadyAssociated')) {
@@ -718,7 +828,11 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         // eslint-disable-next-line max-len
         // ref link: https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/EC2.html#describeTransitGatewayAttachments-property
 
+        const logger = getTimeLogger(
+            'describeTgwAttachment: ec2.describeTransitGatewayAttachments'
+        );
         const result = await this.ec2.describeTransitGatewayAttachments(request).promise();
+        printTimerLog(logger);
         return result.TransitGatewayAttachments.find(attachment => {
             return attachment.TransitGatewayAttachmentId === attachmentId;
         });
@@ -729,13 +843,16 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         type: Lambda.Types.InvocationType,
         payload: string
     ): Promise<Lambda.InvocationResponse> {
-        return this.lambda
+        const logger = getTimeLogger('invokeLambda: lambda.invoke');
+        const result = this.lambda
             .invoke({
                 FunctionName: functionName,
                 InvocationType: type,
                 Payload: JSON.stringify(payload)
             })
             .promise();
+        printTimerLog(logger);
+        return result;
     }
 
     async updateScalingGroupSize(
@@ -754,7 +871,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         if (maxSize !== undefined) {
             request.MaxSize = maxSize;
         }
+        const logger = getTimeLogger('updateScalingGroupSize: autoscaling.updateAutoScalingGroup');
         await this.autoscaling.updateAutoScalingGroup(request).promise();
+        printTimerLog(logger);
     }
 
     async createVpcRouteTableRoute(
@@ -767,7 +886,10 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             RouteTableId: routeTableId,
             NetworkInterfaceId: nicId
         };
-        return await this.ec2.createRoute(request).promise();
+        const logger = getTimeLogger('createVpcRouteTableRoute: ec2.createRoute');
+        const result = await this.ec2.createRoute(request).promise();
+        printTimerLog(logger);
+        return result;
     }
 
     async replaceVpcRouteTableRoute(
@@ -780,14 +902,18 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             RouteTableId: routeTableId,
             NetworkInterfaceId: nicId
         };
+        const logger = getTimeLogger('replaceVpcRouteTableRoute: ec2.replaceRoute');
         const result = await this.ec2.replaceRoute(request).promise();
+        printTimerLog(logger);
         return JSON.stringify(result) === '{}';
     }
 
     async kmsDecrypt(encryptedValue: string): Promise<string> {
+        const logger = getTimeLogger('kmsDecrypt: kms.decrypt');
         const data = await this.kms
             .decrypt({ CiphertextBlob: Buffer.from(encryptedValue, 'base64') })
             .promise();
+        printTimerLog(logger);
         return data.Plaintext.toString('ascii');
     }
 
@@ -802,7 +928,11 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         const request: Lambda.Types.GetFunctionEventInvokeConfigRequest = {
             FunctionName: functionName
         };
+        const logger = getTimeLogger(
+            'getFunctionEnvironmentVariables: lambda.getFunctionConfiguration'
+        );
         const data = await this.lambda.getFunctionConfiguration(request).promise();
+        printTimerLog(logger);
         return data.Environment.Variables;
     }
 }
