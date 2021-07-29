@@ -214,6 +214,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         let oldLossCount = 0;
         let newLossCount = 0;
         let oldInterval = 0;
+        let oldNextHeartbeatTime: number;
         const newInterval = (await this.platform.getReqHeartbeatInterval()) * 1000;
         const heartbeatArriveTime: number = this.platform.createTime;
         let delay = 0;
@@ -227,11 +228,14 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         // get health check record for target vm
         // ASSERT: this.targetVm is valid
         let targetHealthCheckRecord = await this.platform.getHealthCheckRecord(this.targetVm.id);
+        const nextHeartbeatTime = heartbeatArriveTime + newInterval;
         // if there's no health check record for this vm,
         // can deem it the first time for health check
         if (!targetHealthCheckRecord) {
             this.firstHeartbeat = true;
             this.result = HealthCheckResult.OnTime;
+            // no old next heartbeat time for the first heartbeat, use the current arrival time.
+            oldNextHeartbeatTime = heartbeatArriveTime;
             targetHealthCheckRecord = {
                 vmId: this.targetVm.id,
                 scalingGroupName: this.targetVm.scalingGroupName,
@@ -239,7 +243,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 primaryIp: '', // primary ip is unknown to this strategy
                 heartbeatInterval: newInterval,
                 heartbeatLossCount: 0, // set to 0 because it is the first heartbeat
-                nextHeartbeatTime: heartbeatArriveTime + newInterval,
+                nextHeartbeatTime: nextHeartbeatTime,
                 syncState: HeartbeatSyncState.InSync,
                 seq: 1, // set to 1 because it is the first heartbeat
                 healthy: true,
@@ -260,8 +264,15 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             oldLossCount = targetHealthCheckRecord.heartbeatLossCount;
             oldInterval = targetHealthCheckRecord.heartbeatInterval;
             oldSeq = targetHealthCheckRecord.seq;
-            delay =
-                heartbeatArriveTime - targetHealthCheckRecord.nextHeartbeatTime - delayAllowance;
+            oldNextHeartbeatTime = targetHealthCheckRecord.nextHeartbeatTime;
+            // NOTE:
+            // heartbeatArriveTime: the starting time of the function execution, considerred as
+            // the heartbeat arrived at the function
+            // oldNextHeartbeatTime: the expected arrival time for the current heartbeat, recorded
+            // in the db, updated in the previous heartbeat calculation
+            // delayAllowance: the time used in the calcualtion to offest any foreseeable latency
+            // outside of the function execution.
+            delay = heartbeatArriveTime - oldNextHeartbeatTime - delayAllowance;
             // if vm health check shows that it's already out of sync, drop this
             if (targetHealthCheckRecord.syncState === HeartbeatSyncState.OutOfSync) {
                 oldLossCount = targetHealthCheckRecord.heartbeatLossCount;
@@ -295,7 +306,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             try {
                 targetHealthCheckRecord.seq += 1;
                 targetHealthCheckRecord.heartbeatInterval = newInterval;
-                targetHealthCheckRecord.nextHeartbeatTime += newInterval;
+                targetHealthCheckRecord.nextHeartbeatTime = heartbeatArriveTime + newInterval;
                 await this.platform.updateHealthCheckRecord(targetHealthCheckRecord);
             } catch (error) {
                 this.proxy.logForError('updateHealthCheckRecord() error.', error);
@@ -308,7 +319,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         this.proxy.logAsInfo(
             `Heartbeat sync result: ${this.result},` +
                 ` heartbeat sequence: ${oldSeq}->${targetHealthCheckRecord.seq},` +
-                ` heartbeat expected arrive time: ${targetHealthCheckRecord.nextHeartbeatTime} ms,` +
+                ` heartbeat expected arrive time: ${oldNextHeartbeatTime} ms,` +
                 ` heartbeat actual arrive time: ${heartbeatArriveTime} ms,` +
                 ` heartbeat delay allowance: ${delayAllowance} ms,` +
                 ` heartbeat calculated delay: ${delay} ms,` +
