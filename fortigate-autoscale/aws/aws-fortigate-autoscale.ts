@@ -1,3 +1,20 @@
+import { Context } from 'aws-lambda';
+import {
+    AwsFortiGateAutoscaleSetting,
+    AwsFortiGateBootstrapStrategy,
+    AwsFortiGateBootstrapTgwStrategy,
+    AwsHybridScalingGroupStrategy,
+    AwsLambdaInvocable,
+    AwsLambdaInvocationProxy,
+    AwsNicAttachmentStrategy,
+    AwsPlatformAdapter,
+    AwsRoutingEgressTrafficViaPrimaryVmStrategy,
+    AwsTaggingAutoscaleVmStrategy,
+    AwsTgwVpnAttachmentStrategy,
+    AwsTgwVpnUpdateAttachmentRouteTableRequest,
+    ScalingGroupState,
+    TransitGatewayContext
+} from '.';
 import {
     AutoscaleEnvironment,
     CloudFunctionInvocationPayload,
@@ -17,6 +34,7 @@ import {
     NoopVpnAttachmentStrategy,
     PreferredGroupPrimaryElection,
     ReusableLicensingStrategy,
+    VirtualMachine,
     VirtualMachineState,
     VpnAttachmentStrategy,
     VpnAttachmentStrategyResult,
@@ -24,23 +42,6 @@ import {
     WaitForConditionChecker,
     WaitForPromiseEmitter
 } from '..';
-import { Context } from 'aws-lambda';
-import {
-    AwsFortiGateAutoscaleSetting,
-    AwsFortiGateBootstrapStrategy,
-    AwsFortiGateBootstrapTgwStrategy,
-    AwsHybridScalingGroupStrategy,
-    AwsLambdaInvocable,
-    AwsLambdaInvocationProxy,
-    AwsNicAttachmentStrategy,
-    AwsPlatformAdapter,
-    AwsRoutingEgressTrafficViaPrimaryVmStrategy,
-    AwsTaggingAutoscaleVmStrategy,
-    AwsTgwVpnAttachmentStrategy,
-    AwsTgwVpnUpdateAttachmentRouteTableRequest,
-    ScalingGroupState,
-    TransitGatewayContext
-} from '.';
 
 /** ./aws-fortigate-autoscale-lambda-invocable
  * AWS FortiGate Autoscale - class, with capabilities:
@@ -296,6 +297,24 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         // complete the scaling group launching strategy
         await this.scalingGroupStrategy.completeLaunching(true);
         await super.onVmFullyConfigured();
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async sendVmUnhealthyEvent(vm: VirtualMachine): Promise<void> {
+        this.proxy.logAsInfo('calling sendVmUnhealthyEvent');
+        const subject = 'Autoscale unhealthy FortiGate vm is detected';
+        const message =
+            `FortiGate (id: ${vm.id}, ip: ${vm.primaryPrivateIpAddress}) has` +
+            ' been deemed unhealthy and marked as out-of-sync by the Autoscale. This FortiGate' +
+            ' is excluded from being a candidate of primary device. Manually deleting its Autoscale' +
+            ' record can include it to the primary election again.' +
+            ' Further investigation may be necessary.';
+        try {
+            await this.platform.sendNotification(message, subject);
+        } catch (error) {
+            this.proxy.logForError('error in sendVmUnhealthyEvent.', error);
+        }
+        this.proxy.logAsInfo('called sendVmUnhealthyEvent');
     }
 }
 

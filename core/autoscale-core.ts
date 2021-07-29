@@ -478,7 +478,7 @@ export abstract class Autoscale implements AutoscaleCore {
                         'Termination on unhealthy vm is set to false.' +
                             ` vm (id: ${vm.id}) will not be deleted.`
                     );
-                    return this.sendVmUnhealthyEvent(vm.id)
+                    return this.sendVmUnhealthyEvent(vm)
                         .then(() => {
                             this.proxy.logAsInfo(`handling vm (id: ${vm.id}) completed.`);
                         })
@@ -620,8 +620,9 @@ export abstract class Autoscale implements AutoscaleCore {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async sendVmUnhealthyEvent(vmId: string): Promise<void> {
-        // TODO: implementation for handling the custom event is needed
+    sendVmUnhealthyEvent(vm: VirtualMachine): Promise<void> {
+        this.proxy.logAsWarning('sendVmUnhealthyEvent not implemented.');
+        return Promise.resolve();
     }
 }
 
