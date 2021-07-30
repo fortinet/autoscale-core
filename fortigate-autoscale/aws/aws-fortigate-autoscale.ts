@@ -300,15 +300,12 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async sendVmUnhealthyEvent(vm: VirtualMachine): Promise<void> {
+    async sendVmUnhealthyEvent(
+        vm: VirtualMachine,
+        message: string,
+        subject: string
+    ): Promise<void> {
         this.proxy.logAsInfo('calling sendVmUnhealthyEvent');
-        const subject = 'Autoscale unhealthy FortiGate vm is detected';
-        const message =
-            `FortiGate (id: ${vm.id}, ip: ${vm.primaryPrivateIpAddress}) has` +
-            ' been deemed unhealthy and marked as out-of-sync by the Autoscale. This FortiGate' +
-            ' is excluded from being a candidate of primary device. Manually deleting its Autoscale' +
-            ' record can include it to the primary election again.' +
-            ' Further investigation may be necessary.';
         try {
             await this.platform.sendNotification(message, subject);
         } catch (error) {

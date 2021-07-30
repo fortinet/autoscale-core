@@ -220,11 +220,36 @@ export abstract class Autoscale implements AutoscaleCore {
             await this.onVmFullyConfigured();
         }
 
-        const heartbeatTiming = await this.heartbeatSyncStrategy.healthCheckResult;
+        const heartbeatResult = await this.heartbeatSyncStrategy.healthCheckResultDetail;
+        const heartbeatTiming = heartbeatResult.result;
         // If the timing indicates that it should be dropped,
         // don't update. Respond immediately. return.
         if (heartbeatTiming === HealthCheckResult.Dropped) {
             return '';
+        }
+
+        // If the timing indicates that it is a late heartbeat,
+        // send notification for late heartbeat
+        if (heartbeatTiming === HealthCheckResult.Late) {
+            const notificationSubject = 'FortiGate Autoscale late heartbeat occurred';
+            const notificationMessage =
+                `One late heartbeat occurred on FortiGate (id: ${this.env.targetVm.id}` +
+                `, ip: ${this.env.targetVm.primaryPrivateIpAddress}).\n\nDetails:\n` +
+                ` heartbeat sequence: ${heartbeatResult.sequence},\n` +
+                ` expected arrive time: ${heartbeatResult.expectedArriveTime} ms,\n` +
+                ` actual arrive time: ${heartbeatResult.actualArriveTime} ms,\n` +
+                ` actual delay: ${heartbeatResult.actualDelay} ms,\n` +
+                ` delay allowance: ${heartbeatResult.delayAllowance} ms,\n` +
+                ` adjusted delay: ${heartbeatResult.calculatedDelay} ms,\n` +
+                ' heartbeat interval:' +
+                ` ${heartbeatResult.oldHeartbeatInerval}->${heartbeatResult.heartbeatInterval} ms,\n` +
+                ' heartbeat loss count:' +
+                ` ${heartbeatResult.heartbeatLossCount}/${heartbeatResult.maxHeartbeatLossCount}.`;
+            await this.sendVmUnhealthyEvent(
+                this.env.targetVm,
+                notificationMessage,
+                notificationSubject
+            );
         }
 
         // if primary exists?
@@ -478,7 +503,14 @@ export abstract class Autoscale implements AutoscaleCore {
                         'Termination on unhealthy vm is set to false.' +
                             ` vm (id: ${vm.id}) will not be deleted.`
                     );
-                    return this.sendVmUnhealthyEvent(vm)
+                    const subject = 'FortiGate Autoscale unhealthy vm is detected';
+                    const message =
+                        `FortiGate (id: ${vm.id}, ip: ${vm.primaryPrivateIpAddress}) has` +
+                        ' been deemed unhealthy and marked as out-of-sync by the Autoscale.' +
+                        ' This FortiGate is excluded from being a candidate of primary device.' +
+                        ' Manually deleting its Autoscale record can include it to the' +
+                        ' primary election again. Further investigation may be necessary.';
+                    return this.sendVmUnhealthyEvent(vm, message, subject)
                         .then(() => {
                             this.proxy.logAsInfo(`handling vm (id: ${vm.id}) completed.`);
                         })
@@ -620,7 +652,7 @@ export abstract class Autoscale implements AutoscaleCore {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    sendVmUnhealthyEvent(vm: VirtualMachine): Promise<void> {
+    sendVmUnhealthyEvent(vm: VirtualMachine, message?: string, subject?: string): Promise<void> {
         this.proxy.logAsWarning('sendVmUnhealthyEvent not implemented.');
         return Promise.resolve();
     }
