@@ -300,18 +300,26 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    async sendVmUnhealthyEvent(
+    async sendAutoscaleNotifications(
         vm: VirtualMachine,
         message: string,
         subject: string
     ): Promise<void> {
-        this.proxy.logAsInfo('calling sendVmUnhealthyEvent');
-        try {
-            await this.platform.sendNotification(message, subject);
-        } catch (error) {
-            this.proxy.logForError('error in sendVmUnhealthyEvent.', error);
+        this.proxy.logAsInfo('calling sendAutoscaleNotifications');
+        const settings = await this.platform.getSettings();
+        const snsTopicArn = settings.get(AwsFortiGateAutoscaleSetting.AwsSNSTopicArn);
+        if (!(snsTopicArn && snsTopicArn.value)) {
+            this.proxy.logAsWarning(
+                'SNS Topic not specified, skip publishing Autoscale notification messages.'
+            );
+        } else {
+            try {
+                await this.platform.sendNotification(message, subject);
+            } catch (error) {
+                this.proxy.logAsWarning('error in sendAutoscaleNotifications.', error);
+            }
         }
-        this.proxy.logAsInfo('called sendVmUnhealthyEvent');
+        this.proxy.logAsInfo('called sendAutoscaleNotifications');
     }
 }
 
