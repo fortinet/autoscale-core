@@ -482,12 +482,15 @@ export abstract class Autoscale implements AutoscaleCore {
         this.proxy.logAsInfo('calling handleUnhealthyVm.');
         // call the platform scaling group to terminate the vm in the list
         const settings = await this.platform.getSettings();
-        const terminateUnhealthyVm = settings.get(AutoscaleSetting.TerminateUnhealthyVm);
+        const terminateUnhealthyVmSettingItem = settings.get(AutoscaleSetting.TerminateUnhealthyVm);
+        const terminateUnhealthyVm =
+            terminateUnhealthyVmSettingItem && terminateUnhealthyVmSettingItem.truthValue;
+
         await Promise.all(
             vms.map(vm => {
                 this.proxy.logAsInfo(`handling unhealthy vm(id: ${vm.id})...`);
                 // if termination on unhealthy vm is set to true, terminate it
-                if (terminateUnhealthyVm.truthValue) {
+                if (terminateUnhealthyVm) {
                     return this.platform
                         .deleteVmFromScalingGroup(vm.id)
                         .then(() => {
