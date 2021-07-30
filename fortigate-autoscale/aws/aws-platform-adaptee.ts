@@ -12,6 +12,7 @@ import ELBv2 from 'aws-sdk/clients/elbv2';
 import KMS from 'aws-sdk/clients/kms';
 import Lambda from 'aws-sdk/clients/lambda';
 import S3 from 'aws-sdk/clients/s3';
+import SNS, { PublishInput } from 'aws-sdk/clients/sns';
 import { AWSError } from 'aws-sdk/lib/error';
 import fs from 'fs';
 import { isIPv4 } from 'net';
@@ -52,6 +53,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
     protected elbv2: ELBv2;
     protected lambda: Lambda;
     protected kms: KMS;
+    protected sns: SNS;
     constructor() {
         this.docClient = new DocumentClient({ apiVersion: '2012-08-10' });
         this.s3 = new S3({ apiVersion: '2006-03-01' });
@@ -60,6 +62,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         this.elbv2 = new ELBv2({ apiVersion: '2015-12-01' });
         this.lambda = new Lambda({ apiVersion: '2015-03-31' });
         this.kms = new KMS({ apiVersion: '2014-11-01' });
+        this.sns = new SNS({ apiVersion: '2010-03-31' });
     }
     async loadSettings(): Promise<Settings> {
         const table = new AwsSettings(process.env.RESOURCE_TAG_PREFIX || '');
@@ -934,5 +937,14 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         const data = await this.lambda.getFunctionConfiguration(request).promise();
         printTimerLog(logger);
         return data.Environment.Variables;
+    }
+
+    async publishSNSMessage(topicArn: string, message: string, subject?: string): Promise<void> {
+        const input: PublishInput = {
+            TopicArn: topicArn,
+            Message: message,
+            Subject: subject || undefined
+        };
+        await this.sns.publish(input).promise();
     }
 }

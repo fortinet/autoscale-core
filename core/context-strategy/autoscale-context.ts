@@ -6,6 +6,7 @@ import { PlatformAdapter } from '../platform-adapter';
 import {
     HealthCheckRecord,
     HealthCheckResult,
+    HealthCheckResultDetail,
     HealthCheckSyncState as HeartbeatSyncState,
     PrimaryElection,
     PrimaryRecord,
@@ -184,6 +185,7 @@ export interface HeartbeatSyncStrategy {
     forceOutOfSync(): Promise<boolean>;
     readonly targetHealthCheckRecord: HealthCheckRecord | null;
     readonly healthCheckResult: HealthCheckResult;
+    readonly healthCheckResultDetail: HealthCheckResultDetail;
     readonly targetVmFirstHeartbeat: boolean;
 }
 
@@ -199,6 +201,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
     protected targetVm: VirtualMachine;
     protected firstHeartbeat = false;
     protected result: HealthCheckResult;
+    protected resultDetail: HealthCheckResultDetail;
     protected _targetHealthCheckRecord: HealthCheckRecord;
     constructor(platform: PlatformAdapter, proxy: CloudFunctionProxyAdapter) {
         this.platform = platform;
@@ -316,6 +319,19 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             }
         }
         this._targetHealthCheckRecord = targetHealthCheckRecord;
+        this.resultDetail = {
+            sequence: targetHealthCheckRecord.seq,
+            result: this.result,
+            expectedArriveTime: oldNextHeartbeatTime,
+            actualArriveTime: heartbeatArriveTime,
+            heartbeatInterval: newInterval,
+            oldHeartbeatInerval: oldInterval,
+            delayAllowance: delayAllowance,
+            calculatedDelay: delay,
+            actualDelay: delay + delayAllowance,
+            heartbeatLossCount: newLossCount,
+            maxHeartbeatLossCount: maxLossCount
+        };
         this.proxy.logAsInfo(
             `Heartbeat sync result: ${this.result},` +
                 ` heartbeat sequence: ${oldSeq}->${targetHealthCheckRecord.seq},` +
@@ -324,7 +340,8 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 ` heartbeat delay allowance: ${delayAllowance} ms,` +
                 ` heartbeat calculated delay: ${delay} ms,` +
                 ` heartbeat interval: ${oldInterval}->${newInterval} ms,` +
-                ` heartbeat loss count: ${oldLossCount}->${newLossCount}.`
+                ` heartbeat loss count: ${oldLossCount}->${newLossCount},` +
+                ` max loss count allowed: ${maxLossCount}.`
         );
         this.proxy.logAsInfo('applied ConstantIntervalHeartbeatSyncStrategy strategy.');
         return this.result;
@@ -335,6 +352,9 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
     primaryHealthCheckRecord: HealthCheckRecord;
     get healthCheckResult(): HealthCheckResult {
         return this.result;
+    }
+    get healthCheckResultDetail(): HealthCheckResultDetail {
+        return this.resultDetail;
     }
     get targetVmFirstHeartbeat(): boolean {
         return this.firstHeartbeat;

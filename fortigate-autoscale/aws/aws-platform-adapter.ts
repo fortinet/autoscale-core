@@ -1916,4 +1916,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         await this.adaptee.saveItemToDb<DBDef.FortiAnalyzerDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called registerFortiAnalyzer');
     }
+
+    async sendNotification(message: string, subject?: string): Promise<void> {
+        const snsTopicArn = this.settings.get(AwsFortiGateAutoscaleSetting.AwsSNSTopicArn);
+        if (!snsTopicArn && snsTopicArn.value) {
+            throw new Error('SNS Topic ARN not specified.');
+        }
+        await this.adaptee.publishSNSMessage(snsTopicArn.value, message, subject);
+    }
 }

@@ -346,6 +346,19 @@ describe('sanity test', () => {
             },
             targetHealthCheckRecord: TEST_HCR,
             healthCheckResult: HealthCheckResult.OnTime,
+            healthCheckResultDetail: {
+                sequence: 1,
+                result: HealthCheckResult.OnTime,
+                expectedArriveTime: 6,
+                actualArriveTime: 6,
+                heartbeatInterval: 30000,
+                oldHeartbeatInerval: 50000,
+                delayAllowance: 10000,
+                calculatedDelay: -10000,
+                actualDelay: 0,
+                heartbeatLossCount: 0,
+                maxHeartbeatLossCount: 999
+            },
             targetVmFirstHeartbeat: true,
             forceOutOfSync() {
                 return Promise.resolve(true);
@@ -476,7 +489,7 @@ describe('sanity test', () => {
             Sinon.assert.match(stub10.called, true);
             Sinon.assert.match(stub11.called, true);
             Sinon.assert.match(stub12.called, true);
-            Sinon.assert.match(stub13.called, false);
+            Sinon.assert.match(stub13.called, true);
             Sinon.assert.match(result, '');
         } catch (error) {
             console.log(error);
