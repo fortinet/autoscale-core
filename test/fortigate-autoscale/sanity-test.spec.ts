@@ -470,7 +470,7 @@ describe('sanity test', () => {
         const stub12 = Sinon.stub(p, 'deleteVmFromScalingGroup').callsFake(() => {
             return Promise.resolve();
         });
-        const stub13 = Sinon.stub(autoscale, 'sendVmUnhealthyEvent').callsFake(() => {
+        const stub13 = Sinon.stub(autoscale, 'sendAutoscaleNotifications').callsFake(() => {
             return Promise.resolve();
         });
 
