@@ -54,6 +54,7 @@ const TEST_HCR: HealthCheckRecord = {
     heartbeatLossCount: 5,
     nextHeartbeatTime: 6,
     syncState: HealthCheckSyncState.InSync,
+    syncRecoveryCount: 0,
     seq: 7,
     healthy: true,
     upToDate: true

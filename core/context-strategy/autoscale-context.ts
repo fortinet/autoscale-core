@@ -192,8 +192,11 @@ export interface HeartbeatSyncStrategy {
 /**
  * The constant interval heartbeat sync strategy will handle heartbeats being fired with a
  * constant interval and not being interrupted by other events.
- * In this strategy, those heartbeats the Autoscale taking too long (over one heartbeat interval)
- * to process will be dropped.
+ * In this strategy, those heartbeats the Autoscale takes much longer time
+ * to process will be dropped. It will be done by comparing the heartbeat seq before processing
+ * and the seq of the healthcheck record saved in the DB at the time of record updating. If the
+ * seq in both objects don't match, that means another hb has updated the record while this hb
+ * is still processing. The current hb will be discarded.
  */
 export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrategy {
     protected platform: PlatformAdapter;
@@ -248,6 +251,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 heartbeatLossCount: 0, // set to 0 because it is the first heartbeat
                 nextHeartbeatTime: nextHeartbeatTime,
                 syncState: HeartbeatSyncState.InSync,
+                syncRecoveryCount: 0, // sync recovery count = 0 means no recovery needed
                 seq: 1, // set to 1 because it is the first heartbeat
                 healthy: true,
                 upToDate: true
@@ -330,7 +334,8 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             calculatedDelay: delay,
             actualDelay: delay + delayAllowance,
             heartbeatLossCount: newLossCount,
-            maxHeartbeatLossCount: maxLossCount
+            maxHeartbeatLossCount: maxLossCount,
+            syncRecoveryCount: targetHealthCheckRecord.syncRecoveryCount
         };
         this.proxy.logAsInfo(
             `Heartbeat sync result: ${this.result},` +
