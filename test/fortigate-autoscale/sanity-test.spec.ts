@@ -45,7 +45,22 @@ import {
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-const TEST_HCR: HealthCheckRecord = {
+const TEST_HCR_ON_TIME: HealthCheckRecord = {
+    vmId: 'fake-test-vm-id',
+    scalingGroupName: 'fake-test-vm-scaling-group-name',
+    ip: '2',
+    primaryIp: '3',
+    heartbeatInterval: 4,
+    heartbeatLossCount: 0,
+    nextHeartbeatTime: 6,
+    syncState: HealthCheckSyncState.InSync,
+    syncRecoveryCount: 0,
+    seq: 7,
+    healthy: true,
+    upToDate: true
+};
+
+const TEST_HCR_LATE: HealthCheckRecord = {
     vmId: 'fake-test-vm-id',
     scalingGroupName: 'fake-test-vm-scaling-group-name',
     ip: '2',
@@ -56,7 +71,7 @@ const TEST_HCR: HealthCheckRecord = {
     syncState: HealthCheckSyncState.InSync,
     syncRecoveryCount: 0,
     seq: 7,
-    healthy: true,
+    healthy: false,
     upToDate: true
 };
 
@@ -133,6 +148,13 @@ class TestPlatformAdapter implements PlatformAdapter {
         throw new Error('Method not implemented.');
     }
     deleteVmFromScalingGroup(vmId: string): Promise<void> {
+        throw new Error('Method not implemented.');
+    }
+    sendAutoscaleNotifications(
+        vm: VirtualMachine,
+        message?: string,
+        subject?: string
+    ): Promise<void> {
         throw new Error('Method not implemented.');
     }
     listLicenseFiles(
@@ -226,7 +248,7 @@ class TestPlatformAdapter implements PlatformAdapter {
         throw new Error('Method not implemented.');
     }
     getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord> {
-        return Promise.resolve(TEST_HCR);
+        return Promise.resolve(TEST_HCR_ON_TIME);
     }
     getPrimaryRecord(): Promise<PrimaryRecord> {
         throw new Error('Method not implemented.');
@@ -241,7 +263,7 @@ class TestPlatformAdapter implements PlatformAdapter {
         throw new Error('Method not implemented.');
     }
     updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
-        throw new Error('Method not implemented.');
+        return Promise.resolve();
     }
     createPrimaryRecord(rec: PrimaryRecord, oldRec: PrimaryRecord): Promise<void> {
         throw new Error('Method not implemented.');
@@ -345,7 +367,7 @@ describe('sanity test', () => {
             apply() {
                 return Promise.resolve(HealthCheckResult.OnTime);
             },
-            targetHealthCheckRecord: TEST_HCR,
+            targetHealthCheckRecord: TEST_HCR_ON_TIME,
             healthCheckResult: HealthCheckResult.OnTime,
             healthCheckResultDetail: {
                 sequence: 1,
@@ -358,7 +380,8 @@ describe('sanity test', () => {
                 calculatedDelay: -10000,
                 actualDelay: 0,
                 heartbeatLossCount: 0,
-                maxHeartbeatLossCount: 999
+                maxHeartbeatLossCount: 999,
+                syncRecoveryCount: 0
             },
             targetVmFirstHeartbeat: true,
             forceOutOfSync() {
@@ -433,7 +456,7 @@ describe('sanity test', () => {
     it('handleHeartbeatSync', async () => {
         const stub1 = Sinon.stub(p, 'getHealthCheckRecord').callsFake(input => {
             Sinon.assert.match(Object.is(input, TEST_VM.id), true);
-            return Promise.resolve(TEST_HCR);
+            return Promise.resolve(TEST_HCR_ON_TIME);
         });
         const stub2 = Sinon.stub(p, 'getTargetVm');
         const stub3 = Sinon.stub(autoscale, 'handleLaunchingVm').callsFake(() => {
@@ -460,9 +483,9 @@ describe('sanity test', () => {
             return true;
         });
         const stub10 = Sinon.stub(p, 'updateHealthCheckRecord').callsFake(hcr => {
-            Sinon.assert.match(compare(hcr).isEqualTo(TEST_HCR), true);
-            Sinon.assert.match(hcr.vmId, TEST_HCR.vmId);
-            Sinon.assert.match(hcr.scalingGroupName, TEST_HCR.scalingGroupName);
+            Sinon.assert.match(compare(hcr).isEqualTo(TEST_HCR_ON_TIME), true);
+            Sinon.assert.match(hcr.vmId, TEST_HCR_ON_TIME.vmId);
+            Sinon.assert.match(hcr.scalingGroupName, TEST_HCR_ON_TIME.scalingGroupName);
             return Promise.resolve();
         });
         const stub11 = Sinon.stub(p, 'getSettings').callsFake(() => {
@@ -477,7 +500,10 @@ describe('sanity test', () => {
 
         try {
             const result = await autoscale.handleHeartbeatSync();
-            Sinon.assert.match(compare(await stub1.returnValues[0]).isEqualTo(TEST_HCR), true);
+            Sinon.assert.match(
+                compare(await stub1.returnValues[0]).isEqualTo(TEST_HCR_ON_TIME),
+                true
+            );
             Sinon.assert.match(stub2.called, false);
             Sinon.assert.match(stub3.called, false);
             Sinon.assert.match(stub4.called, false);
@@ -510,5 +536,151 @@ describe('sanity test', () => {
             stub12.restore();
             stub13.restore();
         }
+    });
+});
+
+describe('handle unhealthy vm.', () => {
+    let p: TestPlatformAdapter;
+    let e: AutoscaleEnvironment;
+    let x: TestCloudFunctionProxyAdapter;
+    let s: Settings;
+    let ms: PrimaryElectionStrategy;
+    let hs: HeartbeatSyncStrategy;
+    let ss: ScalingGroupStrategy;
+    let autoscale: Autoscale;
+    before(function() {
+        p = new TestPlatformAdapter();
+        e = {
+            targetVm: TEST_VM,
+            primaryVm: TEST_VM,
+            primaryRecord: TEST_PRIMARY_RECORD
+        };
+        x = new TestCloudFunctionProxyAdapter();
+        s = new Map<string, SettingItem>();
+        s.set(AutoscaleSetting.PrimaryElectionTimeout, new SettingItem('1', '2', '3', true, true));
+        s.set(AutoscaleSetting.HeartbeatDelayAllowance, new SettingItem('1', '2', '3', true, true));
+        s.set(AutoscaleSetting.HeartbeatLossCount, new SettingItem('1', '0', '3', true, true));
+        // Set termination of unhealthy vm to 'true'
+        s.set(AutoscaleSetting.TerminateUnhealthyVm, new SettingItem('1', 'true', '3', true, true));
+        ms = {
+            prepare() {
+                return Promise.resolve();
+            },
+            apply() {
+                return Promise.resolve(PrimaryElectionStrategyResult.ShouldContinue);
+            },
+            result() {
+                return Promise.resolve(TEST_PRIMARY_ELECTION);
+            },
+            applied: false
+        };
+        hs = {
+            prepare() {
+                return Promise.resolve();
+            },
+            apply() {
+                return Promise.resolve(HealthCheckResult.OnTime);
+            },
+            targetHealthCheckRecord: TEST_HCR_LATE, // use the late health check record
+            healthCheckResult: HealthCheckResult.OnTime,
+            healthCheckResultDetail: {
+                sequence: 1,
+                result: HealthCheckResult.OnTime,
+                expectedArriveTime: 6,
+                actualArriveTime: 6,
+                heartbeatInterval: 30000,
+                oldHeartbeatInerval: 50000,
+                delayAllowance: 10000,
+                calculatedDelay: -10000,
+                actualDelay: 0,
+                heartbeatLossCount: 0,
+                maxHeartbeatLossCount: 999,
+                syncRecoveryCount: 0
+            },
+            targetVmFirstHeartbeat: true,
+            forceOutOfSync() {
+                return Promise.resolve(true);
+            }
+        };
+        ms = new PreferredGroupPrimaryElection(p, x);
+        hs = new ConstantIntervalHeartbeatSyncStrategy(p, x);
+        ss = new NoopScalingGroupStrategy(p, x);
+        autoscale = new TestAutoscale(p, e, x);
+        autoscale.setPrimaryElectionStrategy(ms);
+        autoscale.setHeartbeatSyncStrategy(hs);
+        autoscale.setScalingGroupStrategy(ss);
+        autoscale.setTaggingAutoscaleVmStrategy(new NoopTaggingVmStrategy(p, x));
+        autoscale.setFazIntegrationStrategy(new NoopFazIntegrationStrategy(p, x));
+    });
+    it('When termination is [on], termination of unhealthy vm is triggered.', async () => {
+        // turn on the termination toggle
+        // Set termination of unhealthy vm to 'true'
+        s.set(AutoscaleSetting.TerminateUnhealthyVm, new SettingItem('1', 'true', '3', true, true));
+        const stub1 = Sinon.stub(p, 'getSettings').callsFake(() => {
+            return Promise.resolve(s);
+        });
+        const stub2 = Sinon.stub(p, 'vmEquals').callsFake(() => {
+            return true;
+        });
+        const stub3 = Sinon.stub(p, 'deleteVmFromScalingGroup').callsFake(() => {
+            return Promise.resolve();
+        });
+        const stub4 = Sinon.stub(autoscale, 'sendAutoscaleNotifications').callsFake(() => {
+            return Promise.resolve();
+        });
+        const stub5 = Sinon.stub(p, 'getHealthCheckRecord').callsFake(() => {
+            const hcr = Object.assign({}, TEST_HCR_LATE);
+            return Promise.resolve(hcr);
+        });
+        await autoscale.handleHeartbeatSync();
+
+        // assertions
+        // deleteVmFromScalingGroup should be called
+        Sinon.assert.match(stub3.called, true);
+        // sent notification should be called
+        Sinon.assert.match(stub4.called, true);
+
+        stub1.restore();
+        stub2.restore();
+        stub3.restore();
+        stub4.restore();
+        stub5.restore();
+    });
+    it('When termination is [off], termination of unhealthy vm  is not triggered.', async () => {
+        // turn on the termination toggle
+        // Set termination of unhealthy vm to 'false'
+        s.set(
+            AutoscaleSetting.TerminateUnhealthyVm,
+            new SettingItem('1', 'false', '3', true, true)
+        );
+        const stub1 = Sinon.stub(p, 'getSettings').callsFake(() => {
+            return Promise.resolve(s);
+        });
+        const stub2 = Sinon.stub(p, 'vmEquals').callsFake(() => {
+            return true;
+        });
+        const stub3 = Sinon.stub(p, 'deleteVmFromScalingGroup').callsFake(() => {
+            return Promise.resolve();
+        });
+        const stub4 = Sinon.stub(autoscale, 'sendAutoscaleNotifications').callsFake(() => {
+            return Promise.resolve();
+        });
+        const stub5 = Sinon.stub(p, 'getHealthCheckRecord').callsFake(() => {
+            const hcr = Object.assign({}, TEST_HCR_LATE);
+            return Promise.resolve(hcr);
+        });
+        await autoscale.handleHeartbeatSync();
+
+        // assertions
+        // deleteVmFromScalingGroup should not be called
+        Sinon.assert.match(stub3.called, false);
+        // sent notification should be called
+        Sinon.assert.match(stub4.called, true);
+
+        stub1.restore();
+        stub2.restore();
+        stub3.restore();
+        stub4.restore();
+        stub5.restore();
     });
 });

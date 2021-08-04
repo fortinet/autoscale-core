@@ -10,7 +10,7 @@
     ],
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1",
-        "build": "../node_modules/.bin/tsc -b"
+        "build": "npx tsc -b"
     },
     "repository": {
         "type": "git",
