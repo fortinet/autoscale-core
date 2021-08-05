@@ -75,6 +75,21 @@ const TEST_HCR_LATE: HealthCheckRecord = {
     upToDate: true
 };
 
+const TEST_HCR_OUT_OF_SYNC: HealthCheckRecord = {
+    vmId: 'fake-test-vm-id',
+    scalingGroupName: 'fake-test-vm-scaling-group-name',
+    ip: '2',
+    primaryIp: '3',
+    heartbeatInterval: 4,
+    heartbeatLossCount: 5,
+    nextHeartbeatTime: 6,
+    syncState: HealthCheckSyncState.OutOfSync,
+    syncRecoveryCount: 3,
+    seq: 7,
+    healthy: false,
+    upToDate: true
+};
+
 const TEST_VM: VirtualMachine = {
     id: 'fake-test-vm-id',
     scalingGroupName: 'fake-test-vm-scaling-group-name',
@@ -148,14 +163,14 @@ class TestPlatformAdapter implements PlatformAdapter {
         throw new Error('Method not implemented.');
     }
     deleteVmFromScalingGroup(vmId: string): Promise<void> {
-        throw new Error('Method not implemented.');
+        return Promise.resolve();
     }
     sendAutoscaleNotifications(
         vm: VirtualMachine,
         message?: string,
         subject?: string
     ): Promise<void> {
-        throw new Error('Method not implemented.');
+        return Promise.resolve();
     }
     listLicenseFiles(
         storageContainerName: string,
@@ -612,7 +627,7 @@ describe('handle unhealthy vm.', () => {
         autoscale.setTaggingAutoscaleVmStrategy(new NoopTaggingVmStrategy(p, x));
         autoscale.setFazIntegrationStrategy(new NoopFazIntegrationStrategy(p, x));
     });
-    it('When termination is [on], termination of unhealthy vm is triggered.', async () => {
+    it('When termination is enabled termination of unhealthy vm is triggered.', async () => {
         // turn on the termination toggle
         // Set termination of unhealthy vm to 'true'
         s.set(AutoscaleSetting.TerminateUnhealthyVm, new SettingItem('1', 'true', '3', true, true));
@@ -646,7 +661,7 @@ describe('handle unhealthy vm.', () => {
         stub4.restore();
         stub5.restore();
     });
-    it('When termination is [off], termination of unhealthy vm  is not triggered.', async () => {
+    it('When termination is disabled, termination of unhealthy vm  is not triggered.', async () => {
         // turn on the termination toggle
         // Set termination of unhealthy vm to 'false'
         s.set(
@@ -683,4 +698,275 @@ describe('handle unhealthy vm.', () => {
         stub4.restore();
         stub5.restore();
     });
+});
+
+describe('sync recovery of unhealthy vm.', () => {
+    let p: TestPlatformAdapter;
+    let e: AutoscaleEnvironment;
+    let x: TestCloudFunctionProxyAdapter;
+    let s: Settings;
+    let ms: PrimaryElectionStrategy;
+    let hs: HeartbeatSyncStrategy;
+    let ss: ScalingGroupStrategy;
+    let autoscale: Autoscale;
+    before(function() {
+        p = new TestPlatformAdapter();
+        e = {
+            targetVm: TEST_VM,
+            primaryVm: TEST_VM,
+            primaryRecord: TEST_PRIMARY_RECORD
+        };
+        x = new TestCloudFunctionProxyAdapter();
+        s = new Map<string, SettingItem>();
+        s.set(AutoscaleSetting.PrimaryElectionTimeout, new SettingItem('1', '2', '3', true, true));
+        s.set(AutoscaleSetting.HeartbeatDelayAllowance, new SettingItem('1', '2', '3', true, true));
+        s.set(AutoscaleSetting.HeartbeatLossCount, new SettingItem('1', '0', '3', true, true));
+        // Set termination of unhealthy vm to 'true'
+        s.set(AutoscaleSetting.TerminateUnhealthyVm, new SettingItem('1', 'true', '3', true, true));
+        s.set(AutoscaleSetting.SyncRecoveryCount, new SettingItem('1', '3', '3', true, true));
+        ms = {
+            prepare() {
+                return Promise.resolve();
+            },
+            apply() {
+                return Promise.resolve(PrimaryElectionStrategyResult.ShouldContinue);
+            },
+            result() {
+                return Promise.resolve(TEST_PRIMARY_ELECTION);
+            },
+            applied: false
+        };
+        hs = {
+            prepare() {
+                return Promise.resolve();
+            },
+            apply() {
+                return Promise.resolve(HealthCheckResult.OnTime);
+            },
+            targetHealthCheckRecord: TEST_HCR_LATE, // use the late health check record
+            healthCheckResult: HealthCheckResult.OnTime,
+            healthCheckResultDetail: {
+                sequence: 1,
+                result: HealthCheckResult.OnTime,
+                expectedArriveTime: 6,
+                actualArriveTime: 6,
+                heartbeatInterval: 30000,
+                oldHeartbeatInerval: 50000,
+                delayAllowance: 10000,
+                calculatedDelay: -10000,
+                actualDelay: 0,
+                heartbeatLossCount: 0,
+                maxHeartbeatLossCount: 999,
+                syncRecoveryCount: 0
+            },
+            targetVmFirstHeartbeat: true,
+            forceOutOfSync() {
+                return Promise.resolve(true);
+            }
+        };
+        ms = new PreferredGroupPrimaryElection(p, x);
+        hs = new ConstantIntervalHeartbeatSyncStrategy(p, x);
+        ss = new NoopScalingGroupStrategy(p, x);
+        autoscale = new TestAutoscale(p, e, x);
+        autoscale.setPrimaryElectionStrategy(ms);
+        autoscale.setHeartbeatSyncStrategy(hs);
+        autoscale.setScalingGroupStrategy(ss);
+        autoscale.setTaggingAutoscaleVmStrategy(new NoopTaggingVmStrategy(p, x));
+        autoscale.setFazIntegrationStrategy(new NoopFazIntegrationStrategy(p, x));
+    });
+    it('Sync recovery count should be set.', async () => {
+        const syncRecoveryCount = 3;
+        s.set(
+            AutoscaleSetting.SyncRecoveryCount,
+            new SettingItem('1', String(syncRecoveryCount), '3', true, true)
+        );
+        const stub1 = Sinon.stub(p, 'getSettings').callsFake(() => {
+            return Promise.resolve(s);
+        });
+        const stub2 = Sinon.stub(p, 'vmEquals').callsFake(() => {
+            return true;
+        });
+        const stub3 = Sinon.stub(p, 'getHealthCheckRecord').callsFake(() => {
+            const hcr = Object.assign({}, TEST_HCR_LATE);
+            return Promise.resolve(hcr);
+        });
+        const stub4 = Sinon.stub(p, 'updateHealthCheckRecord').callsFake(rec => {
+            Sinon.assert.match(rec.syncRecoveryCount, syncRecoveryCount);
+            return Promise.resolve();
+        });
+
+        await autoscale.handleHeartbeatSync();
+
+        stub1.restore();
+        stub2.restore();
+        stub3.restore();
+        stub4.restore();
+    });
+    it('When termination of unhealthy vm is enabled, sync recovery count should not change.', async () => {
+        // turn on the termination toggle
+        // Set termination of unhealthy vm to 'true'
+        s.set(AutoscaleSetting.TerminateUnhealthyVm, new SettingItem('1', 'true', '3', true, true));
+        // set the sync recovery count to 3
+        const syncRecoveryCount = 3;
+        s.set(
+            AutoscaleSetting.SyncRecoveryCount,
+            new SettingItem('1', String(syncRecoveryCount), '3', true, true)
+        );
+        const stub1 = Sinon.stub(p, 'getSettings').callsFake(() => {
+            return Promise.resolve(s);
+        });
+        const stub2 = Sinon.stub(p, 'vmEquals').callsFake(() => {
+            return true;
+        });
+        const stub3 = Sinon.stub(p, 'getHealthCheckRecord').callsFake(() => {
+            const hcr = Object.assign({}, TEST_HCR_OUT_OF_SYNC);
+            return Promise.resolve(hcr);
+        });
+        const stub4 = Sinon.stub(p, 'updateHealthCheckRecord').callsFake(rec => {
+            Sinon.assert.match(rec.syncRecoveryCount, syncRecoveryCount);
+            return Promise.resolve();
+        });
+
+        await autoscale.handleHeartbeatSync();
+
+        stub1.restore();
+        stub2.restore();
+        stub3.restore();
+        stub4.restore();
+    });
+    it('When termination of unhealthy vm is disabled and heartbeat arrives on-time, sync recovery count should decrease by 1.', async () => {
+        // turn off the termination toggle
+        // Set termination of unhealthy vm to 'false'
+        s.set(
+            AutoscaleSetting.TerminateUnhealthyVm,
+            new SettingItem('1', 'false', '3', true, true)
+        );
+        // set the sync recovery count to 3
+        const syncRecoveryCount = 3;
+        s.set(
+            AutoscaleSetting.SyncRecoveryCount,
+            new SettingItem('1', String(syncRecoveryCount), '3', true, true)
+        );
+        const stub1 = Sinon.stub(p, 'getSettings').callsFake(() => {
+            return Promise.resolve(s);
+        });
+        const stub2 = Sinon.stub(p, 'vmEquals').callsFake(() => {
+            return true;
+        });
+        const stub3 = Sinon.stub(p, 'getHealthCheckRecord').callsFake(() => {
+            const hcr = Object.assign({}, TEST_HCR_OUT_OF_SYNC);
+            // set the hb on-time
+            hcr.nextHeartbeatTime = Date.now() + 9999999;
+            return Promise.resolve(hcr);
+        });
+        const stub4 = Sinon.stub(p, 'updateHealthCheckRecord').callsFake(rec => {
+            // sync recovery count decreased by 1
+            Sinon.assert.match(rec.syncRecoveryCount, syncRecoveryCount - 1);
+            // health check sync state is still out-of-sync
+            Sinon.assert.match(rec.syncState, HealthCheckSyncState.OutOfSync);
+            // healthy is false
+            Sinon.assert.match(rec.healthy, false);
+            return Promise.resolve();
+        });
+
+        await autoscale.handleHeartbeatSync();
+
+        stub1.restore();
+        stub2.restore();
+        stub3.restore();
+        stub4.restore();
+    });
+    it('When termination of unhealthy vm is disabled and heartbeat arrives late, sync recovery count should reset.', async () => {
+        // turn off the termination toggle
+        // Set termination of unhealthy vm to 'false'
+        s.set(
+            AutoscaleSetting.TerminateUnhealthyVm,
+            new SettingItem('1', 'false', '3', true, true)
+        );
+        // set the sync recovery count to 3
+        const syncRecoveryCount = 3;
+        s.set(
+            AutoscaleSetting.SyncRecoveryCount,
+            new SettingItem('1', String(syncRecoveryCount), '3', true, true)
+        );
+        const stub1 = Sinon.stub(p, 'getSettings').callsFake(() => {
+            return Promise.resolve(s);
+        });
+        const stub2 = Sinon.stub(p, 'vmEquals').callsFake(() => {
+            return true;
+        });
+        const stub3 = Sinon.stub(p, 'getHealthCheckRecord').callsFake(() => {
+            const hcr = Object.assign({}, TEST_HCR_OUT_OF_SYNC);
+            // set the sync recovery count to 1
+            hcr.syncRecoveryCount = 1;
+            return Promise.resolve(hcr);
+        });
+        const stub4 = Sinon.stub(p, 'updateHealthCheckRecord').callsFake(rec => {
+            // sync recovery count reset
+            Sinon.assert.match(rec.syncRecoveryCount, syncRecoveryCount);
+            // health check sync state is still out-of-sync
+            Sinon.assert.match(rec.syncState, HealthCheckSyncState.OutOfSync);
+            // healthy is false
+            Sinon.assert.match(rec.healthy, false);
+            return Promise.resolve();
+        });
+
+        await autoscale.handleHeartbeatSync();
+
+        stub1.restore();
+        stub2.restore();
+        stub3.restore();
+        stub4.restore();
+    });
+    it(
+        'When termination of unhealthy vm is disabled and heartbeat arrives on-time and ' +
+            'the number reaches the recovery threshold, sync recovery should be completed.',
+        async () => {
+            // turn off the termination toggle
+            // Set termination of unhealthy vm to 'false'
+            s.set(
+                AutoscaleSetting.TerminateUnhealthyVm,
+                new SettingItem('1', 'false', '3', true, true)
+            );
+            // set the sync recovery count to 3
+            const syncRecoveryCount = 3;
+            s.set(
+                AutoscaleSetting.SyncRecoveryCount,
+                new SettingItem('1', String(syncRecoveryCount), '3', true, true)
+            );
+            const stub1 = Sinon.stub(p, 'getSettings').callsFake(() => {
+                return Promise.resolve(s);
+            });
+            const stub2 = Sinon.stub(p, 'vmEquals').callsFake(() => {
+                return true;
+            });
+            const stub3 = Sinon.stub(p, 'getHealthCheckRecord').callsFake(() => {
+                const hcr = Object.assign({}, TEST_HCR_OUT_OF_SYNC);
+                // set the sync recovery count to 1
+                hcr.syncRecoveryCount = 1;
+                // set the hb on-time
+                hcr.nextHeartbeatTime = Date.now() + 9999999;
+                return Promise.resolve(hcr);
+            });
+            const stub4 = Sinon.stub(p, 'updateHealthCheckRecord').callsFake(rec => {
+                // sync recovery count should be 0
+                Sinon.assert.match(rec.syncRecoveryCount !== syncRecoveryCount, true);
+                Sinon.assert.match(rec.syncRecoveryCount, 0);
+                // health check sync state is in-sync
+                Sinon.assert.match(rec.syncState, HealthCheckSyncState.InSync);
+                // heartbeat loss count should be reset to 0
+                Sinon.assert.match(rec.heartbeatLossCount, 0);
+                // healthy is true
+                Sinon.assert.match(rec.healthy, true);
+                return Promise.resolve();
+            });
+
+            await autoscale.handleHeartbeatSync();
+
+            stub1.restore();
+            stub2.restore();
+            stub3.restore();
+            stub4.restore();
+        }
+    );
 });
