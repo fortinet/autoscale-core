@@ -485,58 +485,54 @@ export abstract class Autoscale implements AutoscaleCore {
         const terminateUnhealthyVmSettingItem = settings.get(AutoscaleSetting.TerminateUnhealthyVm);
         const terminateUnhealthyVm =
             terminateUnhealthyVmSettingItem && terminateUnhealthyVmSettingItem.truthValue;
-
+        const vmHandler = async function(vm: VirtualMachine, self: Autoscale): Promise<void> {
+            self.proxy.logAsInfo(`handling unhealthy vm(id: ${vm.id})...`);
+            const subject = 'Autoscale unhealthy vm is detected';
+            let message =
+                `Device (id: ${vm.id}, ip: ${vm.primaryPrivateIpAddress}) has` +
+                ' been deemed unhealthy and marked as out-of-sync by the Autoscale.\n\n';
+            self.proxy.logAsWarning(
+                'Termination of unhealthy vm is ' +
+                    `${terminateUnhealthyVm ? 'enabled' : 'disabled'}.` +
+                    ` vm (id: ${vm.id}) will ${terminateUnhealthyVm ? '' : 'not '}be deleted.`
+            );
+            // if termination of unhealthy vm is set to true, terminate it
+            if (terminateUnhealthyVm) {
+                try {
+                    await self.platform.deleteVmFromScalingGroup(vm.id);
+                    try {
+                        message +=
+                            'Autoscale is now terminating this device.\n' +
+                            'Depending on the scaling policies, a replacement device may be created.' +
+                            ' Further investigation for the cause of termination may be necessary.';
+                        self.sendAutoscaleNotifications(vm, message, subject);
+                        self.proxy.logAsInfo(`handling vm (id: ${vm.id}) completed.`);
+                    } catch (err) {
+                        self.proxy.logForError('unable to send Autoscale notifications.', err);
+                    }
+                } catch (error) {
+                    self.proxy.logForError('handling unhealthy vm failed.', error);
+                }
+            }
+            // otherwise, send a warning for this unhealthy vm and keep it
+            else {
+                // get the health check record for the vm.
+                const healthcheckRecord = await self.platform.getHealthCheckRecord(vm.id);
+                try {
+                    message +=
+                        ' This device is excluded from being candidate of primary device.\n' +
+                        ` It requires (${healthcheckRecord.syncRecoveryCount})` +
+                        ' on-time heartbeats to recover from out-of-sync state to in-sync state.\n' +
+                        ' A full recovery will include this device into primary elections again.\n';
+                    self.sendAutoscaleNotifications(vm, message, subject);
+                } catch (err) {
+                    self.proxy.logForError('unable to send Autoscale notifications.', err);
+                }
+            }
+        };
         await Promise.all(
             vms.map(vm => {
-                this.proxy.logAsInfo(`handling unhealthy vm(id: ${vm.id})...`);
-                const subject = 'FortiGate Autoscale unhealthy vm is detected';
-                let message =
-                    `FortiGate (id: ${vm.id}, ip: ${vm.primaryPrivateIpAddress}) has` +
-                    ' been deemed unhealthy and marked as out-of-sync by the Autoscale.\n\n';
-                this.proxy.logAsWarning(
-                    'Termination of unhealthy vm is ' +
-                        `${terminateUnhealthyVm ? 'enabled' : 'disabled'}.` +
-                        ` vm (id: ${vm.id}) will ${terminateUnhealthyVm ? '' : 'not '}be deleted.`
-                );
-                // if termination of unhealthy vm is set to true, terminate it
-                if (terminateUnhealthyVm) {
-                    return this.platform
-                        .deleteVmFromScalingGroup(vm.id)
-                        .then(() => {
-                            message +=
-                                'Autoscale is now terminating this FortiGate.\n' +
-                                'Depending on the scaling policies, a replacement FortiGate may be created.' +
-                                ' Further investigation for the cause of termination may be necessary.';
-                            return this.sendAutoscaleNotifications(vm, message, subject)
-                                .then(() => {
-                                    this.proxy.logAsInfo(`handling vm (id: ${vm.id}) completed.`);
-                                })
-                                .catch(err => {
-                                    this.proxy.logForError(
-                                        'unable to send Autoscale notifications.',
-                                        err
-                                    );
-                                });
-                        })
-                        .catch(err => {
-                            this.proxy.logForError('handling unhealthy vm failed.', err);
-                        });
-                }
-                // otherwise, send a warning for this unhealthy vm and keep it
-                else {
-                    message +=
-                        ' This FortiGate is excluded from being a candidate of primary device.\n' +
-                        ' Note: Manually deleting its Autoscale record from the db table' +
-                        ' can include it to the primary election again.' +
-                        ' Further investigation for the cause of termination may be necessary.';
-                    return this.sendAutoscaleNotifications(vm, message, subject)
-                        .then(() => {
-                            this.proxy.logAsInfo(`handling vm(id: ${vm.id}) completed.`);
-                        })
-                        .catch(err => {
-                            this.proxy.logForError('unable to send Autoscale notifications.', err);
-                        });
-                }
+                return vmHandler(vm, this);
             })
         );
         this.proxy.logAsInfo('called handleUnhealthyVm.');

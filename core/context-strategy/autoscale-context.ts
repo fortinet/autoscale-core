@@ -280,21 +280,58 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             // delayAllowance: the time used in the calcualtion to offest any foreseeable latency
             // outside of the function execution.
             delay = heartbeatArriveTime - oldNextHeartbeatTime - delayAllowance;
-            // if vm health check shows that it's already out of sync, drop this
+            const syncRecoveryCountSettingItem = settings.get(AutoscaleSetting.SyncRecoveryCount);
+            const syncRecoveryCount =
+                syncRecoveryCountSettingItem && Number(syncRecoveryCountSettingItem.value);
+            // if vm health check shows that it's already out of sync, should drop it
             if (targetHealthCheckRecord.syncState === HeartbeatSyncState.OutOfSync) {
                 oldLossCount = targetHealthCheckRecord.heartbeatLossCount;
                 oldInterval = targetHealthCheckRecord.heartbeatInterval;
                 this.result = HealthCheckResult.Dropped;
+                // if the termination of unhealthy device is set to false, out-of-sync vm should
+                // be in the sync recovery stage.
+                // late heartbeat will reset the sync-recovery-count while on-time heartbeat will
+                // decrease the sync-recovery-count by 1 until it reaches 0 or negative integer;
+                // sync recovery will change the sync-state back to in-sync
+                const terminateUnhealthyVmSettingItem = settings.get(
+                    AutoscaleSetting.TerminateUnhealthyVm
+                );
+                const terminateUnhealthyVm =
+                    terminateUnhealthyVmSettingItem && terminateUnhealthyVmSettingItem.truthValue;
+                if (!terminateUnhealthyVm) {
+                    // late heartbeat will reset the sync-recovery-count
+                    if (delay >= 0) {
+                        targetHealthCheckRecord.syncRecoveryCount = syncRecoveryCount;
+                    }
+                    // on-time heartbeat will decrease sync-recovery-count by 1 from until
+                    // it reaches 0 or negative integer
+                    else {
+                        targetHealthCheckRecord.syncRecoveryCount -= 1;
+                        // a complete recovery (0) will change the sync-state back to in-sync
+                        if (targetHealthCheckRecord.syncRecoveryCount <= 0) {
+                            targetHealthCheckRecord.syncRecoveryCount = 0;
+                            targetHealthCheckRecord.heartbeatLossCount = 0;
+                            newLossCount = 0;
+                            targetHealthCheckRecord.syncState = HeartbeatSyncState.InSync;
+                            targetHealthCheckRecord.healthy = true;
+                            this.result = HealthCheckResult.OnTime;
+                        }
+                    }
+                }
             } else {
                 // heartbeat is late
                 if (delay >= 0) {
-                    // increase the heartbeat loss count by 1 inf delay.
+                    // increase the heartbeat loss count by 1 if delay.
                     targetHealthCheckRecord.heartbeatLossCount += 1;
                     newLossCount = targetHealthCheckRecord.heartbeatLossCount;
                     // reaching the max amount of loss count?
                     if (targetHealthCheckRecord.heartbeatLossCount >= maxLossCount) {
                         targetHealthCheckRecord.syncState = HeartbeatSyncState.OutOfSync;
                         targetHealthCheckRecord.healthy = false;
+                        // when entering out-of-sync state from in-sync state, update
+                        // the sync-recovery-count in order for the device to enter the sync state
+                        // recovery stage
+                        targetHealthCheckRecord.syncRecoveryCount = syncRecoveryCount;
                     } else {
                         targetHealthCheckRecord.syncState = HeartbeatSyncState.InSync;
                         targetHealthCheckRecord.healthy = true;
