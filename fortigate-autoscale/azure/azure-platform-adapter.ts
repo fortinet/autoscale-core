@@ -599,6 +599,8 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                 heartbeatLossCount: dbItem.heartBeatLossCount,
                 nextHeartbeatTime: dbItem.nextHeartBeatTime,
                 syncState: syncState,
+                // if the prop doesn't exist in item set it to 0 by default
+                syncRecoveryCount: dbItem.syncRecoveryCount || 0,
                 seq: dbItem.seq,
                 healthy: isHealthy,
                 upToDate: true
@@ -694,6 +696,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             heartBeatLossCount: rec.heartbeatLossCount,
             nextHeartBeatTime: rec.nextHeartbeatTime,
             syncState: syncStateString,
+            syncRecoveryCount: rec.syncRecoveryCount,
             seq: rec.seq
         });
         // NOTE: when create a db record, do not need to check data consistency.
@@ -727,6 +730,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             heartBeatLossCount: rec.heartbeatLossCount,
             nextHeartBeatTime: rec.nextHeartbeatTime,
             syncState: syncStateString,
+            syncRecoveryCount: rec.syncRecoveryCount,
             seq: rec.seq
         });
         const check: ConsistenyCheckType<typeof item> = {

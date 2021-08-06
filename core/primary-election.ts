@@ -13,6 +13,7 @@ export interface HealthCheckRecord {
     heartbeatLossCount: number;
     nextHeartbeatTime: number;
     syncState: HealthCheckSyncState;
+    syncRecoveryCount: number;
     seq: number;
     healthy: boolean;
     upToDate: boolean;
@@ -37,6 +38,7 @@ export interface HealthCheckResultDetail {
     actualDelay: number;
     heartbeatLossCount: number;
     maxHeartbeatLossCount: number;
+    syncRecoveryCount: number;
 }
 
 export enum PrimaryRecordVoteState {
