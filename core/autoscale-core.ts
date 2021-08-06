@@ -220,11 +220,36 @@ export abstract class Autoscale implements AutoscaleCore {
             await this.onVmFullyConfigured();
         }
 
-        const heartbeatTiming = await this.heartbeatSyncStrategy.healthCheckResult;
+        const heartbeatResult = await this.heartbeatSyncStrategy.healthCheckResultDetail;
+        const heartbeatTiming = heartbeatResult.result;
         // If the timing indicates that it should be dropped,
         // don't update. Respond immediately. return.
         if (heartbeatTiming === HealthCheckResult.Dropped) {
             return '';
+        }
+
+        // If the timing indicates that it is a late heartbeat,
+        // send notification for late heartbeat
+        if (heartbeatTiming === HealthCheckResult.Late) {
+            const notificationSubject = 'FortiGate Autoscale late heartbeat occurred';
+            const notificationMessage =
+                `One late heartbeat occurred on FortiGate (id: ${this.env.targetVm.id}` +
+                `, ip: ${this.env.targetVm.primaryPrivateIpAddress}).\n\nDetails:\n` +
+                ` heartbeat sequence: ${heartbeatResult.sequence},\n` +
+                ` expected arrive time: ${heartbeatResult.expectedArriveTime} ms,\n` +
+                ` actual arrive time: ${heartbeatResult.actualArriveTime} ms,\n` +
+                ` actual delay: ${heartbeatResult.actualDelay} ms,\n` +
+                ` delay allowance: ${heartbeatResult.delayAllowance} ms,\n` +
+                ` adjusted delay: ${heartbeatResult.calculatedDelay} ms,\n` +
+                ' heartbeat interval:' +
+                ` ${heartbeatResult.oldHeartbeatInerval}->${heartbeatResult.heartbeatInterval} ms,\n` +
+                ' heartbeat loss count:' +
+                ` ${heartbeatResult.heartbeatLossCount}/${heartbeatResult.maxHeartbeatLossCount}.`;
+            await this.sendAutoscaleNotifications(
+                this.env.targetVm,
+                notificationMessage,
+                notificationSubject
+            );
         }
 
         // if primary exists?
@@ -456,17 +481,62 @@ export abstract class Autoscale implements AutoscaleCore {
     async handleUnhealthyVm(vms: VirtualMachine[]): Promise<void> {
         this.proxy.logAsInfo('calling handleUnhealthyVm.');
         // call the platform scaling group to terminate the vm in the list
+        const settings = await this.platform.getSettings();
+        const terminateUnhealthyVmSettingItem = settings.get(AutoscaleSetting.TerminateUnhealthyVm);
+        const terminateUnhealthyVm =
+            terminateUnhealthyVmSettingItem && terminateUnhealthyVmSettingItem.truthValue;
+
         await Promise.all(
             vms.map(vm => {
                 this.proxy.logAsInfo(`handling unhealthy vm(id: ${vm.id})...`);
-                return this.platform
-                    .deleteVmFromScalingGroup(vm.id)
-                    .then(() => {
-                        this.proxy.logAsInfo(`handling vm (id: ${vm.id}) completed.`);
-                    })
-                    .catch(err => {
-                        this.proxy.logForError('handling unhealthy vm failed.', err);
-                    });
+                const subject = 'FortiGate Autoscale unhealthy vm is detected';
+                let message =
+                    `FortiGate (id: ${vm.id}, ip: ${vm.primaryPrivateIpAddress}) has` +
+                    ' been deemed unhealthy and marked as out-of-sync by the Autoscale.\n\n';
+                this.proxy.logAsWarning(
+                    'Termination of unhealthy vm is ' +
+                        `${terminateUnhealthyVm ? 'enabled' : 'disabled'}.` +
+                        ` vm (id: ${vm.id}) will ${terminateUnhealthyVm ? '' : 'not '}be deleted.`
+                );
+                // if termination of unhealthy vm is set to true, terminate it
+                if (terminateUnhealthyVm) {
+                    return this.platform
+                        .deleteVmFromScalingGroup(vm.id)
+                        .then(() => {
+                            message +=
+                                'Autoscale is now terminating this FortiGate.\n' +
+                                'Depending on the scaling policies, a replacement FortiGate may be created.' +
+                                ' Further investigation for the cause of termination may be necessary.';
+                            return this.sendAutoscaleNotifications(vm, message, subject)
+                                .then(() => {
+                                    this.proxy.logAsInfo(`handling vm (id: ${vm.id}) completed.`);
+                                })
+                                .catch(err => {
+                                    this.proxy.logForError(
+                                        'unable to send Autoscale notifications.',
+                                        err
+                                    );
+                                });
+                        })
+                        .catch(err => {
+                            this.proxy.logForError('handling unhealthy vm failed.', err);
+                        });
+                }
+                // otherwise, send a warning for this unhealthy vm and keep it
+                else {
+                    message +=
+                        ' This FortiGate is excluded from being a candidate of primary device.\n' +
+                        ' Note: Manually deleting its Autoscale record from the db table' +
+                        ' can include it to the primary election again.' +
+                        ' Further investigation for the cause of termination may be necessary.';
+                    return this.sendAutoscaleNotifications(vm, message, subject)
+                        .then(() => {
+                            this.proxy.logAsInfo(`handling vm(id: ${vm.id}) completed.`);
+                        })
+                        .catch(err => {
+                            this.proxy.logForError('unable to send Autoscale notifications.', err);
+                        });
+                }
             })
         );
         this.proxy.logAsInfo('called handleUnhealthyVm.');
@@ -479,7 +549,7 @@ export abstract class Autoscale implements AutoscaleCore {
         }
         // if target vm doesn't exist, unknown request
         if (!this.env.targetVm) {
-            const error = new Error(`Requested non-existing vm (id:${this.env.targetId}).`);
+            const error = new Error(`Requested non - existing vm(id: ${this.env.targetId}).`);
             this.proxy.logForError('', error);
             throw error;
         }
@@ -598,6 +668,18 @@ export abstract class Autoscale implements AutoscaleCore {
         this.proxy.logAsInfo('calling handleEgressTrafficRoute.');
         await this.routingEgressTrafficStrategy.apply();
         this.proxy.logAsInfo('called handleEgressTrafficRoute.');
+    }
+
+    sendAutoscaleNotifications(
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        vm: VirtualMachine,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        message?: string,
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        subject?: string
+    ): Promise<void> {
+        this.proxy.logAsWarning('sendAutoscaleNotifications not implemented.');
+        return Promise.resolve();
     }
 }
 

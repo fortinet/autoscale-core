@@ -324,6 +324,7 @@ describe('sanity test', () => {
         s.set(AutoscaleSetting.PrimaryElectionTimeout, new SettingItem('1', '2', '3', true, true));
         s.set(AutoscaleSetting.HeartbeatDelayAllowance, new SettingItem('1', '2', '3', true, true));
         s.set(AutoscaleSetting.HeartbeatLossCount, new SettingItem('1', '0', '3', true, true));
+        s.set(AutoscaleSetting.TerminateUnhealthyVm, new SettingItem('1', 'true', '3', true, true));
         ms = {
             prepare() {
                 return Promise.resolve();
@@ -345,6 +346,19 @@ describe('sanity test', () => {
             },
             targetHealthCheckRecord: TEST_HCR,
             healthCheckResult: HealthCheckResult.OnTime,
+            healthCheckResultDetail: {
+                sequence: 1,
+                result: HealthCheckResult.OnTime,
+                expectedArriveTime: 6,
+                actualArriveTime: 6,
+                heartbeatInterval: 30000,
+                oldHeartbeatInerval: 50000,
+                delayAllowance: 10000,
+                calculatedDelay: -10000,
+                actualDelay: 0,
+                heartbeatLossCount: 0,
+                maxHeartbeatLossCount: 999
+            },
             targetVmFirstHeartbeat: true,
             forceOutOfSync() {
                 return Promise.resolve(true);
@@ -456,6 +470,9 @@ describe('sanity test', () => {
         const stub12 = Sinon.stub(p, 'deleteVmFromScalingGroup').callsFake(() => {
             return Promise.resolve();
         });
+        const stub13 = Sinon.stub(autoscale, 'sendAutoscaleNotifications').callsFake(() => {
+            return Promise.resolve();
+        });
 
         try {
             const result = await autoscale.handleHeartbeatSync();
@@ -472,6 +489,7 @@ describe('sanity test', () => {
             Sinon.assert.match(stub10.called, true);
             Sinon.assert.match(stub11.called, true);
             Sinon.assert.match(stub12.called, true);
+            Sinon.assert.match(stub13.called, true);
             Sinon.assert.match(result, '');
         } catch (error) {
             console.log(error);
@@ -489,6 +507,7 @@ describe('sanity test', () => {
             stub10.restore();
             stub11.restore();
             stub12.restore();
+            stub13.restore();
         }
     });
 });

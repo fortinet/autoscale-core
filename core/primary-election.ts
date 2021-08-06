@@ -25,6 +25,20 @@ export enum HealthCheckResult {
     Dropped = 'dropped'
 }
 
+export interface HealthCheckResultDetail {
+    sequence: number;
+    result: HealthCheckResult;
+    expectedArriveTime: number;
+    actualArriveTime: number;
+    heartbeatInterval: number;
+    oldHeartbeatInerval: number;
+    delayAllowance: number;
+    calculatedDelay: number;
+    actualDelay: number;
+    heartbeatLossCount: number;
+    maxHeartbeatLossCount: number;
+}
+
 export enum PrimaryRecordVoteState {
     Pending = 'pending',
     Done = 'done',

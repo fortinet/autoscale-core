@@ -1,3 +1,20 @@
+import { Context } from 'aws-lambda';
+import {
+    AwsFortiGateAutoscaleSetting,
+    AwsFortiGateBootstrapStrategy,
+    AwsFortiGateBootstrapTgwStrategy,
+    AwsHybridScalingGroupStrategy,
+    AwsLambdaInvocable,
+    AwsLambdaInvocationProxy,
+    AwsNicAttachmentStrategy,
+    AwsPlatformAdapter,
+    AwsRoutingEgressTrafficViaPrimaryVmStrategy,
+    AwsTaggingAutoscaleVmStrategy,
+    AwsTgwVpnAttachmentStrategy,
+    AwsTgwVpnUpdateAttachmentRouteTableRequest,
+    ScalingGroupState,
+    TransitGatewayContext
+} from '.';
 import {
     AutoscaleEnvironment,
     CloudFunctionInvocationPayload,
@@ -17,6 +34,7 @@ import {
     NoopVpnAttachmentStrategy,
     PreferredGroupPrimaryElection,
     ReusableLicensingStrategy,
+    VirtualMachine,
     VirtualMachineState,
     VpnAttachmentStrategy,
     VpnAttachmentStrategyResult,
@@ -24,23 +42,6 @@ import {
     WaitForConditionChecker,
     WaitForPromiseEmitter
 } from '..';
-import { Context } from 'aws-lambda';
-import {
-    AwsFortiGateAutoscaleSetting,
-    AwsFortiGateBootstrapStrategy,
-    AwsFortiGateBootstrapTgwStrategy,
-    AwsHybridScalingGroupStrategy,
-    AwsLambdaInvocable,
-    AwsLambdaInvocationProxy,
-    AwsNicAttachmentStrategy,
-    AwsPlatformAdapter,
-    AwsRoutingEgressTrafficViaPrimaryVmStrategy,
-    AwsTaggingAutoscaleVmStrategy,
-    AwsTgwVpnAttachmentStrategy,
-    AwsTgwVpnUpdateAttachmentRouteTableRequest,
-    ScalingGroupState,
-    TransitGatewayContext
-} from '.';
 
 /** ./aws-fortigate-autoscale-lambda-invocable
  * AWS FortiGate Autoscale - class, with capabilities:
@@ -296,6 +297,29 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         // complete the scaling group launching strategy
         await this.scalingGroupStrategy.completeLaunching(true);
         await super.onVmFullyConfigured();
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async sendAutoscaleNotifications(
+        vm: VirtualMachine,
+        message: string,
+        subject: string
+    ): Promise<void> {
+        this.proxy.logAsInfo('calling sendAutoscaleNotifications');
+        const settings = await this.platform.getSettings();
+        const snsTopicArn = settings.get(AwsFortiGateAutoscaleSetting.AwsSNSTopicArn);
+        if (!(snsTopicArn && snsTopicArn.value)) {
+            this.proxy.logAsWarning(
+                'SNS Topic not specified, skip publishing Autoscale notification messages.'
+            );
+        } else {
+            try {
+                await this.platform.sendNotification(message, subject);
+            } catch (error) {
+                this.proxy.logAsWarning('error in sendAutoscaleNotifications.', error);
+            }
+        }
+        this.proxy.logAsInfo('called sendAutoscaleNotifications');
     }
 }
 

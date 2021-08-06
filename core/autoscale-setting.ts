@@ -35,6 +35,7 @@ export enum AutoscaleSetting {
     PaygScalingGroupMaxSize = 'scaling-group-max-size',
     PaygScalingGroupName = 'payg-scaling-group-name',
     ResourceTagPrefix = 'resource-tag-prefix',
+    TerminateUnhealthyVm = 'terminate-unhealthy-vm',
     VmInfoCacheTime = 'vm-info-cache-time',
     VpnBgpAsn = 'vpn-bgp-asn'
 }
@@ -397,6 +398,15 @@ export const AutoscaleSettingItemDictionary: SettingItemDictionary = {
         editable: true,
         jsonEncoded: false,
         booleanType: false
+    },
+    [AutoscaleSetting.TerminateUnhealthyVm]: {
+        keyName: AutoscaleSetting.TerminateUnhealthyVm,
+        description:
+            'Toggle for unhealthy vm handling behaviours. Set to true to terminate unhealthy vm' +
+            ' or set to false to keep the unhealthy vm.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: true
     },
     [AutoscaleSetting.VpnBgpAsn]: {
         keyName: AutoscaleSetting.VpnBgpAsn,

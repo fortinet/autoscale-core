@@ -11,6 +11,7 @@ export const AwsFortiGateAutoscaleSetting: SettingItemReference = {
     AwsEnableTransitGatewayVpn: 'enable-transit-gateway-vpn',
     AwsLifecycleHookTimeout: 'lifecycle-hook-timeout',
     AwsLoadBalancerTargetGroupArn: 'fortigate-autoscale-target-group-arn',
+    AwsSNSTopicArn: 'sns-topic-arn',
     AwsTransitGatewayId: 'transit-gateway-id',
     AwsTransitGatewayRouteTableInbound: 'transit-gateway-route-table-inbound',
     AwsTransitGatewayRouteTableOutbound: 'transit-gateway-route-table-outbound',
@@ -43,6 +44,13 @@ export const AwsFortiGateAutoscaleSettingItemDictionary: SettingItemDictionary =
     [AwsFortiGateAutoscaleSetting.AwsTransitGatewayId]: {
         keyName: AwsFortiGateAutoscaleSetting.AwsTransitGatewayId,
         description: 'The ID of the Transit Gateway the FortiGate Autoscale is attached to.',
+        editable: false,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AwsFortiGateAutoscaleSetting.AwsSNSTopicArn]: {
+        keyName: AwsFortiGateAutoscaleSetting.AwsSNSTopicArn,
+        description: 'The ARN of the SNS Topic to publish Autoscale notifications.',
         editable: false,
         jsonEncoded: false,
         booleanType: false
