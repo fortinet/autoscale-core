@@ -8,10 +8,6 @@
         "/dist",
         "/assets"
     ],
-    "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1",
-        "build": "npx tsc -b"
-    },
     "repository": {
         "type": "git",
         "url": "git+https://github.com/fortinet/autoscale-core.git"
