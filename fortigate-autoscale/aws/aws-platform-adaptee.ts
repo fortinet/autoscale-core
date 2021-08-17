@@ -40,7 +40,7 @@ function printTimerLog(logger: TimeLog): void {
     const msg: string = logger.message
         ? `${logger.message}(seq: ${logger.seq}) `
         : `log seq: ${logger.seq}`;
-    if (process.env.NO_LOG_SERVICE_PROCESSING_TIME !== 'true') {
+    if (process.env.LOG_SERVICE_PROCESSING_TIME === 'true') {
         console.log(`${msg}, Time used: ${Date.now() - logger.time} ms.`);
     }
 }
