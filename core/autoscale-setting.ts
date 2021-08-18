@@ -35,6 +35,7 @@ export enum AutoscaleSetting {
     PaygScalingGroupMaxSize = 'scaling-group-max-size',
     PaygScalingGroupName = 'payg-scaling-group-name',
     ResourceTagPrefix = 'resource-tag-prefix',
+    SyncRecoveryCount = 'sync-recovery-count',
     TerminateUnhealthyVm = 'terminate-unhealthy-vm',
     VmInfoCacheTime = 'vm-info-cache-time',
     VpnBgpAsn = 'vpn-bgp-asn'
@@ -395,6 +396,16 @@ export const AutoscaleSettingItemDictionary: SettingItemDictionary = {
             ' Such resource will be given a tag or label starting with this prefix.' +
             ' Also used as the name of the logical group for Autoscale resources' +
             ' in those cloud platforms which support such logical grouping.',
+        editable: true,
+        jsonEncoded: false,
+        booleanType: false
+    },
+    [AutoscaleSetting.SyncRecoveryCount]: {
+        keyName: AutoscaleSetting.SyncRecoveryCount,
+        description:
+            'The number (positive integer) of on-time heartbeat for a vm needs to send to ' +
+            ' recover from the unhealthy state. Unhealthy vm will be excluded from being' +
+            ' candidate of primary elections.',
         editable: true,
         jsonEncoded: false,
         booleanType: false

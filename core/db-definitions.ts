@@ -295,6 +295,7 @@ export interface AutoscaleDbItem extends Record {
     heartBeatLossCount: number;
     nextHeartBeatTime: number;
     syncState: string;
+    syncRecoveryCount: number;
     seq: number;
 }
 
@@ -342,6 +343,11 @@ export class Autoscale extends Table<AutoscaleDbItem> {
             isKey: false
         },
         {
+            name: 'syncRecoveryCount',
+            attrType: TypeRef.NumberType,
+            isKey: false
+        },
+        {
             name: 'seq',
             attrType: TypeRef.StringType,
             isKey: false
@@ -365,6 +371,7 @@ export class Autoscale extends Table<AutoscaleDbItem> {
             heartBeatInterval: this.typeConvert.valueToNumber(record.heartBeatInterval),
             nextHeartBeatTime: this.typeConvert.valueToNumber(record.nextHeartBeatTime),
             syncState: this.typeConvert.valueToString(record.syncState),
+            syncRecoveryCount: this.typeConvert.valueToNumber(record.syncRecoveryCount),
             seq: this.typeConvert.valueToNumber(record.seq)
         };
         return item;

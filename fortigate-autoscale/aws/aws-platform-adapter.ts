@@ -508,6 +508,8 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 heartbeatLossCount: dbItem.heartBeatLossCount,
                 nextHeartbeatTime: dbItem.nextHeartBeatTime,
                 syncState: syncState,
+                // if the prop doesn't exist in item set it to 0 by default
+                syncRecoveryCount: dbItem.syncRecoveryCount || 0,
                 seq: dbItem.seq,
                 healthy: isHealthy,
                 upToDate: true
@@ -585,6 +587,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             heartBeatLossCount: rec.heartbeatLossCount,
             nextHeartBeatTime: rec.nextHeartbeatTime,
             syncState: syncStateString,
+            syncRecoveryCount: rec.syncRecoveryCount,
             seq: rec.seq
         };
         const conditionExp: AwsDdbOperations = {
@@ -614,6 +617,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             heartBeatLossCount: rec.heartbeatLossCount,
             nextHeartBeatTime: rec.nextHeartbeatTime,
             syncState: syncStateString,
+            syncRecoveryCount: rec.syncRecoveryCount,
             seq: rec.seq
         };
         const conditionExp: AwsDdbOperations = {
