@@ -657,8 +657,13 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             deviceIsPrimary: rec.deviceIsPrimary,
             deviceChecksum: rec.deviceChecksum
         };
+        // NOTE: strictly update the record when the sequence to update is equal to or greater
+        // than the seq in the db ton ensure data not to fall back to old value in race conditions
         const conditionExp: AwsDdbOperations = {
-            Expression: '',
+            Expression: 'seq <= :seq',
+            ExpressionAttributeValues: {
+                ':seq': rec.seq
+            },
             type: DBDef.SaveCondition.UpdateOnly
         };
         await this.adaptee.saveItemToDb<DBDef.AutoscaleDbItem>(table, item, conditionExp);

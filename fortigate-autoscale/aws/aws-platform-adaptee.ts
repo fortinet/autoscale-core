@@ -135,6 +135,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 ExpressionAttributeValues: attributeValues,
                 ExpressionAttributeNames: attributeNames
             };
+            if (conditionExp.Expression) {
+                updateItemInput.ConditionExpression = conditionExp.Expression;
+            }
             const logger = getTimeLogger('saveItemToDb: docClient.update');
             await this.docClient.update(updateItemInput).promise();
             printTimerLog(logger);

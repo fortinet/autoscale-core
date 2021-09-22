@@ -253,7 +253,8 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 nextHeartbeatTime: nextHeartbeatTime,
                 syncState: HeartbeatSyncState.InSync,
                 syncRecoveryCount: 0, // sync recovery count = 0 means no recovery needed
-                seq: 1, // set to 1 because it is the first heartbeat
+                // use the device sequence if it exists or 1 as the initial sequence
+                seq: (!isNaN(deviceSyncInfo.sequence) && deviceSyncInfo.sequence) || 1,
                 healthy: true,
                 upToDate: true,
                 sendTime: deviceSyncInfo.time,
@@ -358,7 +359,12 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             }
             // update health check record
             try {
-                targetHealthCheckRecord.seq += 1;
+                // NOTE: use the sequence provided by the device
+                if (!isNaN(deviceSyncInfo.sequence)) {
+                    targetHealthCheckRecord.seq = deviceSyncInfo.sequence;
+                } else {
+                    targetHealthCheckRecord.seq += 1;
+                }
                 targetHealthCheckRecord.heartbeatInterval = newInterval;
                 targetHealthCheckRecord.nextHeartbeatTime = heartbeatArriveTime + newInterval;
                 await this.platform.updateHealthCheckRecord(targetHealthCheckRecord);
