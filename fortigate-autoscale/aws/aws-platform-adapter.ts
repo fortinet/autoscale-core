@@ -254,16 +254,30 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         }
     }
     async getReqDeviceSyncInfo(): Promise<DeviceSyncInfo> {
-        // TODO: implementation required.
-        return await Promise.resolve(null);
-    }
-    async getReqHeartbeatInterval(): Promise<number> {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {
             const body = await this.proxy.getReqBody();
-            return (body.interval && Number(body.interval)) || NaN;
+            const deviceSyncInfo: DeviceSyncInfo = {
+                instance: String(body.instance),
+                interval: (body.interval && Number(body.interval)) || NaN,
+                // partially available in some request types
+                status: (body.status && String(body.status)) || undefined,
+                // NOTE: partially available in some device versions
+                sequence: (body.sequence && Number(body.sequence)) || NaN,
+                time: (body.time && String(body.time)) || null,
+                syncTime: (body.sync_time && String(body.sync_time)) || null,
+                syncFailTime: (body.sync_fail_time && String(body.sync_fail_time)) || null,
+                syncStatus: (body.sync_status !== null && Boolean(body.sync_status)) || null,
+                isPrimary: (body.is_primary !== null && Boolean(body.is_primary)) || false,
+                checksum: (body.checksum !== null && String(body.checksum)) || null
+            };
+            return deviceSyncInfo;
         } else {
-            return NaN;
+            return null;
         }
+    }
+    async getReqHeartbeatInterval(): Promise<number> {
+        const deviceSyncInfo = await this.getReqDeviceSyncInfo();
+        return (deviceSyncInfo && deviceSyncInfo.interval) || NaN;
     }
     getReqAsString(): Promise<string> {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {

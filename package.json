@@ -14,7 +14,7 @@
         "lint-check": "ftnt-devops-ci c -fl  -F .eslintignore -L .eslintignore \"{*,**/*}{.js,.json,.ts}\"",
         "lint-fix": "ftnt-devops-ci f -fl  -F .eslintignore -L .eslintignore \"**/*{.js,.json,.ts}\"",
         "make-dist": "npm-run-all build bundle",
-        "pre-build": "cd fortigate-autoscale && rimraf node_modules/ && npm install && cd ..",
+        "pre-build": "cd core && rimraf node_modules/ && rimraf dist/ && npm install && cd .. && cd fortigate-autoscale && rimraf node_modules/ && rimraf dist/ && npm install && cd ..",
         "pre-push": "npm-run-all lint-check audit-production test build",
         "sync-version": "node scripts/compiled/sync-version.js",
         "test": "mocha --timeout 3600000 -r ts-node/register -r tsconfig-paths/register test/{*,**/**/*}.spec.ts"
