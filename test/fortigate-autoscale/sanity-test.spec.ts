@@ -9,11 +9,11 @@ import {
     CloudFunctionResponseBody,
     compare,
     ConstantIntervalHeartbeatSyncStrategy,
+    DeviceSyncInfo,
     FortiGateAutoscaleSetting,
     HealthCheckRecord,
     HealthCheckResult,
     HealthCheckSyncState,
-    DeviceSyncInfo,
     HeartbeatSyncStrategy,
     LicenseFile,
     LicenseStockRecord,
@@ -58,7 +58,13 @@ const TEST_HCR_ON_TIME: HealthCheckRecord = {
     syncRecoveryCount: 0,
     seq: 7,
     healthy: true,
-    upToDate: true
+    upToDate: true,
+    sendTime: 'sendTime',
+    deviceSyncTime: 'deviceSyncTime',
+    deviceSyncFailTime: 'deviceSyncFailTime',
+    deviceSyncStatus: 'deviceSyncStatus',
+    deviceIsPrimary: true,
+    deviceChecksum: 'deviceChecksum'
 };
 
 const TEST_HCR_LATE: HealthCheckRecord = {
@@ -73,7 +79,13 @@ const TEST_HCR_LATE: HealthCheckRecord = {
     syncRecoveryCount: 0,
     seq: 7,
     healthy: false,
-    upToDate: true
+    upToDate: true,
+    sendTime: 'sendTime',
+    deviceSyncTime: 'deviceSyncTime',
+    deviceSyncFailTime: 'deviceSyncFailTime',
+    deviceSyncStatus: 'deviceSyncStatus',
+    deviceIsPrimary: true,
+    deviceChecksum: 'deviceChecksum'
 };
 
 const TEST_HCR_OUT_OF_SYNC: HealthCheckRecord = {
@@ -88,7 +100,13 @@ const TEST_HCR_OUT_OF_SYNC: HealthCheckRecord = {
     syncRecoveryCount: 3,
     seq: 7,
     healthy: false,
-    upToDate: true
+    upToDate: true,
+    sendTime: 'sendTime',
+    deviceSyncTime: 'deviceSyncTime',
+    deviceSyncFailTime: 'deviceSyncFailTime',
+    deviceSyncStatus: 'deviceSyncStatus',
+    deviceIsPrimary: true,
+    deviceChecksum: 'deviceChecksum'
 };
 
 const TEST_VM: VirtualMachine = {
@@ -253,7 +271,17 @@ class TestPlatformAdapter implements PlatformAdapter {
     }
     getReqDeviceSyncInfo(): Promise<DeviceSyncInfo> {
         // TODO: implementation required.
-        return Promise.resolve(null);
+        return Promise.resolve({
+            instance: 'fake-instance',
+            interval: 30,
+            sequence: 1,
+            time: 'fake-time',
+            syncTime: 'fake-sync-time',
+            syncFailTime: 'fake-sync-fail-time',
+            syncStatus: null,
+            isPrimary: true,
+            checksum: 'fake-checksum'
+        });
     }
     getReqHeartbeatInterval(): Promise<number> {
         return Promise.resolve(30);

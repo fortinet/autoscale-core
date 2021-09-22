@@ -770,16 +770,28 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             deviceIsPrimary: rec.deviceIsPrimary,
             deviceChecksum: rec.deviceChecksum
         });
-        const check: ConsistenyCheckType<typeof item> = {
-            vmId: rec.vmId,
-            scalingGroupName: rec.scalingGroupName,
-            ip: rec.ip
+
+        const checker = (
+            snapshot: typeof item
+        ): Promise<{ result: boolean; errorMessage: string }> => {
+            const inconsistentDataDetailString = this.dataConsistencyCheck(
+                {
+                    vmId: rec.vmId,
+                    scalingGroupName: rec.vmId,
+                    ip: rec.vmId
+                },
+                snapshot
+            );
+            return Promise.resolve({
+                result: inconsistentDataDetailString.length === 0,
+                errorMessage: inconsistentDataDetailString
+            });
         };
         await this.adaptee.saveItemToDb<typeof item>(
             table,
             item,
             DBDef.SaveCondition.UpdateOnly,
-            check
+            checker
         );
         this.proxy.logAsInfo('called updateHealthCheckRecord');
     }
@@ -915,9 +927,20 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             }
         }
 
-        const check: ConsistenyCheckType<typeof item> = {
-            id: item.id,
-            scalingGroupName: item.scalingGroupName
+        const checker = (
+            snapshot: typeof item
+        ): Promise<{ result: boolean; errorMessage: string }> => {
+            const inconsistentDataDetailString = this.dataConsistencyCheck(
+                {
+                    id: item.id,
+                    scalingGroupName: item.vmId
+                },
+                snapshot
+            );
+            return Promise.resolve({
+                result: inconsistentDataDetailString.length === 0,
+                errorMessage: inconsistentDataDetailString
+            });
         };
 
         // upsert
@@ -925,7 +948,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             table,
             item,
             DBDef.SaveCondition.Upsert,
-            check
+            checker
         );
         this.proxy.logAsInfo('called updatePrimaryRecord.');
     }
@@ -1209,11 +1232,22 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                     }
                     saveCondition = DBDef.SaveCondition.UpdateOnly;
 
-                    const check: ConsistenyCheckType<typeof item> = {
-                        vmId: rec.reference.vmId,
-                        scalingGroupName: rec.reference.scalingGroupName,
-                        productName: rec.reference.productName,
-                        algorithm: rec.reference.algorithm
+                    const checker = (
+                        snapshot: typeof item
+                    ): Promise<{ result: boolean; errorMessage: string }> => {
+                        const inconsistentDataDetailString = this.dataConsistencyCheck(
+                            {
+                                vmId: rec.reference.vmId,
+                                scalingGroupName: rec.reference.vmId,
+                                productName: rec.reference.productName,
+                                algorithm: rec.reference.algorithm
+                            },
+                            snapshot
+                        );
+                        return Promise.resolve({
+                            result: inconsistentDataDetailString.length === 0,
+                            errorMessage: inconsistentDataDetailString
+                        });
                     };
                     typeText =
                         `update existing item (checksum: ${rec.reference.checksum}). ` +
@@ -1229,7 +1263,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                     // NOTE: must ensure the consistency because the updating of the usage record
                     // is expected to happen with a race condition.
                     return this.adaptee
-                        .saveItemToDb<AzureLicenseUsageDbItem>(table, item, saveCondition, check)
+                        .saveItemToDb<AzureLicenseUsageDbItem>(table, item, saveCondition, checker)
                         .then(() => {
                             this.proxy.logAsInfo(typeText);
                         })
@@ -1505,5 +1539,17 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         } catch (error) {
             this.proxy.logForError('Error in saving logs to CustomLog', error);
         }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    dataConsistencyCheck(dataA: { [key: string]: any }, dataB: { [key: string]: any }): string {
+        let inconsistentDataDetailString = '';
+
+        Object.entries(dataA).forEach(([k, v]) => {
+            if (dataB[k] !== v) {
+                inconsistentDataDetailString = `${inconsistentDataDetailString}key: ${k}, expected: ${v}, existing: ${dataB[k]}; `;
+            }
+        });
+        return inconsistentDataDetailString;
     }
 }
