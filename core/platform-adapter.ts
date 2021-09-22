@@ -7,6 +7,48 @@ import { JSONable } from './jsonable';
 import { HealthCheckRecord, PrimaryRecord } from './primary-election';
 import { NetworkInterface, VirtualMachine } from './virtual-machine';
 
+export interface DeviceSyncInfo {
+    /**
+     * representing property: instance, the id of the vm
+     */
+    instance: string;
+    /**
+     * representing property: interval, in second
+     */
+    interval: number;
+    /**
+     * representing property: status. not available in heartbeat type of info.
+     */
+    status?: string | null;
+    /**
+     * representing property: sequence
+     */
+    sequence: number;
+    /**
+     * representing property: time, the send time of the heartbeat, ISO 8601 format, device's time. not null value.
+     */
+    time: string;
+    /**
+     * representing property: sync_time, the last time on successful ha sync, ISO 8601 format, device's time. can be null value.
+     */
+    syncTime: string | null;
+    /**
+     * representing property: sync_fail_time, the last time on ha sync failure, ISO 8601 format, device's time. can be null value.
+     */
+    syncFailTime: string | null;
+    /**
+     * representing property: sync_status, true of false on secondary device if in-sync with primary or not; null on primary device.
+     */
+    syncStatus: boolean | null;
+    /**
+     * representing property: is_primary, true for primary devices, false for secondary, in the device's perspective.
+     */
+    isPrimary: boolean;
+    /**
+     * representing property: checksum, the HA checksum value of the device.
+     */
+    checksum: string;
+}
 export interface ResourceFilter {
     key: string;
     value: string;
@@ -66,6 +108,11 @@ export interface PlatformAdapter {
      * @returns number interval in ms
      */
     getReqHeartbeatInterval(): Promise<number>;
+    /**
+     * the device info sent from a vm
+     * @returns Promise of DeviceSyncInfo
+     */
+    getReqDeviceSyncInfo(): Promise<DeviceSyncInfo>;
     getReqVmId(): Promise<string>;
     getReqAsString(): Promise<string>;
     getSettings(): Promise<Settings>;

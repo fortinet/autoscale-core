@@ -13,6 +13,7 @@ import {
     HealthCheckRecord,
     HealthCheckResult,
     HealthCheckSyncState,
+    DeviceSyncInfo,
     HeartbeatSyncStrategy,
     LicenseFile,
     LicenseStockRecord,
@@ -249,6 +250,10 @@ class TestPlatformAdapter implements PlatformAdapter {
     }
     getRequestType(): Promise<ReqType> {
         throw new Error('Method not implemented.');
+    }
+    getReqDeviceSyncInfo(): Promise<DeviceSyncInfo> {
+        // TODO: implementation required.
+        return Promise.resolve(null);
     }
     getReqHeartbeatInterval(): Promise<number> {
         return Promise.resolve(30);

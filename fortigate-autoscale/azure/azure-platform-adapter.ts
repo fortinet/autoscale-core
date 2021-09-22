@@ -29,6 +29,7 @@ import {
     Blob,
     CloudFunctionInvocationPayload,
     constructInvocationPayload,
+    DeviceSyncInfo,
     FortiGateAutoscaleServiceRequestSource,
     genChecksum,
     HealthCheckRecord,
@@ -231,6 +232,10 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         } else {
             throw new Error(`Unsupported CloudFunctionProxy: ${JSON.stringify(this.proxy)}`);
         }
+    }
+    async getReqDeviceSyncInfo(): Promise<DeviceSyncInfo> {
+        // TODO: implementation required.
+        return await Promise.resolve(null);
     }
     /**
      * Get the heartbeat interval passing by the request called by a FortiGate

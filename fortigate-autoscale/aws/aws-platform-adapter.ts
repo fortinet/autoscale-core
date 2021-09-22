@@ -17,6 +17,7 @@ import {
     CloudFunctionInvocationPayload,
     CloudFunctionProxyAdapter,
     constructInvocationPayload,
+    DeviceSyncInfo,
     FortiGateAutoscaleServiceRequestSource,
     genChecksum,
     HealthCheckRecord,
@@ -251,6 +252,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         } else {
             throw new Error('Cannot get vm id in unsupported request.');
         }
+    }
+    async getReqDeviceSyncInfo(): Promise<DeviceSyncInfo> {
+        // TODO: implementation required.
+        return await Promise.resolve(null);
     }
     async getReqHeartbeatInterval(): Promise<number> {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {
