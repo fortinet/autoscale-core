@@ -17,6 +17,12 @@ export interface HealthCheckRecord {
     seq: number;
     healthy: boolean;
     upToDate: boolean;
+    sendTime: string;
+    deviceSyncTime: string;
+    deviceSyncFailTime: string;
+    deviceSyncStatus: string;
+    deviceIsPrimary: boolean;
+    deviceChecksum: string;
 }
 
 export enum HealthCheckResult {

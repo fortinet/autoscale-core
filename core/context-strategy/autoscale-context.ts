@@ -221,7 +221,8 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         let newLossCount = 0;
         let oldInterval = 0;
         let oldNextHeartbeatTime: number;
-        const newInterval = (await this.platform.getReqHeartbeatInterval()) * 1000;
+        const deviceSyncInfo = await this.platform.getReqDeviceSyncInfo();
+        const newInterval = deviceSyncInfo.interval * 1000;
         const heartbeatArriveTime: number = this.platform.createTime;
         let delay = 0;
         let oldSeq = 0;
@@ -254,7 +255,16 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 syncRecoveryCount: 0, // sync recovery count = 0 means no recovery needed
                 seq: 1, // set to 1 because it is the first heartbeat
                 healthy: true,
-                upToDate: true
+                upToDate: true,
+                sendTime: deviceSyncInfo.time,
+                deviceSyncTime: deviceSyncInfo.syncTime,
+                deviceSyncFailTime: deviceSyncInfo.syncFailTime,
+                deviceSyncStatus:
+                    (deviceSyncInfo.syncStatus === null && 'null') ||
+                    (deviceSyncInfo.syncStatus && 'true') ||
+                    'false',
+                deviceIsPrimary: deviceSyncInfo.isPrimary,
+                deviceChecksum: deviceSyncInfo.checksum
             };
             // create health check record
             try {

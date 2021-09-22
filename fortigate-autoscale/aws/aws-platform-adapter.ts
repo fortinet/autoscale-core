@@ -531,7 +531,13 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 syncRecoveryCount: dbItem.syncRecoveryCount || 0,
                 seq: dbItem.seq,
                 healthy: isHealthy,
-                upToDate: true
+                upToDate: true,
+                sendTime: dbItem.sendTime,
+                deviceSyncTime: dbItem.deviceSyncTime,
+                deviceSyncFailTime: dbItem.deviceSyncFailTime,
+                deviceSyncStatus: dbItem.deviceSyncStatus,
+                deviceIsPrimary: dbItem.deviceIsPrimary,
+                deviceChecksum: dbItem.deviceChecksum
             };
         }
         this.proxy.logAsInfo('called getHealthCheckRecord');
@@ -607,7 +613,13 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             nextHeartBeatTime: rec.nextHeartbeatTime,
             syncState: syncStateString,
             syncRecoveryCount: rec.syncRecoveryCount,
-            seq: rec.seq
+            seq: rec.seq,
+            sendTime: rec.sendTime,
+            deviceSyncTime: rec.deviceSyncTime,
+            deviceSyncFailTime: rec.deviceSyncFailTime,
+            deviceSyncStatus: rec.deviceSyncStatus,
+            deviceIsPrimary: rec.deviceIsPrimary,
+            deviceChecksum: rec.deviceChecksum
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',
@@ -637,7 +649,13 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             nextHeartBeatTime: rec.nextHeartbeatTime,
             syncState: syncStateString,
             syncRecoveryCount: rec.syncRecoveryCount,
-            seq: rec.seq
+            seq: rec.seq,
+            sendTime: rec.sendTime,
+            deviceSyncTime: rec.deviceSyncTime,
+            deviceSyncFailTime: rec.deviceSyncFailTime,
+            deviceSyncStatus: rec.deviceSyncStatus,
+            deviceIsPrimary: rec.deviceIsPrimary,
+            deviceChecksum: rec.deviceChecksum
         };
         const conditionExp: AwsDdbOperations = {
             Expression: '',

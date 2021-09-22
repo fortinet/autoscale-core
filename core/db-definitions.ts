@@ -297,6 +297,12 @@ export interface AutoscaleDbItem extends Record {
     syncState: string;
     syncRecoveryCount: number;
     seq: number;
+    sendTime: string;
+    deviceSyncTime: string;
+    deviceSyncFailTime: string;
+    deviceSyncStatus: string;
+    deviceIsPrimary: boolean;
+    deviceChecksum: string;
 }
 
 export class Autoscale extends Table<AutoscaleDbItem> {
@@ -351,6 +357,36 @@ export class Autoscale extends Table<AutoscaleDbItem> {
             name: 'seq',
             attrType: TypeRef.StringType,
             isKey: false
+        },
+        {
+            name: 'sendTime',
+            attrType: TypeRef.StringType,
+            isKey: false
+        },
+        {
+            name: 'deviceSyncTime',
+            attrType: TypeRef.StringType,
+            isKey: false
+        },
+        {
+            name: 'deviceSyncFailTime',
+            attrType: TypeRef.StringType,
+            isKey: false
+        },
+        {
+            name: 'deviceSyncStatus',
+            attrType: TypeRef.StringType,
+            isKey: false
+        },
+        {
+            name: 'deviceIsPrimary',
+            attrType: TypeRef.StringType,
+            isKey: false
+        },
+        {
+            name: 'deviceChecksum',
+            attrType: TypeRef.StringType,
+            isKey: false
         }
     ];
     constructor(typeConvert, namePrefix = '', nameSuffix = '') {
@@ -372,7 +408,13 @@ export class Autoscale extends Table<AutoscaleDbItem> {
             nextHeartBeatTime: this.typeConvert.valueToNumber(record.nextHeartBeatTime),
             syncState: this.typeConvert.valueToString(record.syncState),
             syncRecoveryCount: this.typeConvert.valueToNumber(record.syncRecoveryCount),
-            seq: this.typeConvert.valueToNumber(record.seq)
+            seq: this.typeConvert.valueToNumber(record.seq),
+            sendTime: this.typeConvert.valueToString(record.sendTime),
+            deviceSyncTime: this.typeConvert.valueToString(record.deviceSyncTime),
+            deviceSyncFailTime: this.typeConvert.valueToString(record.deviceSyncFailTime),
+            deviceSyncStatus: this.typeConvert.valueToString(record.deviceSyncStatus),
+            deviceIsPrimary: this.typeConvert.valueToBoolean(record.deviceIsPrimary),
+            deviceChecksum: this.typeConvert.valueToString(record.deviceChecksum)
         };
         return item;
     }
