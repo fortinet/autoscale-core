@@ -681,10 +681,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 'false',
             deviceChecksum: rec.deviceChecksum
         };
-        // NOTE: strictly update the record when the sequence to update is equal to or greater
+        // NOTE: strictly update the record when the sequence to update is greater
         // than the seq in the db ton ensure data not to fall back to old value in race conditions
         const conditionExp: AwsDdbOperations = {
-            Expression: 'seq <= :seq',
+            Expression: 'seq < :seq',
             ExpressionAttributeValues: {
                 ':seq': rec.seq
             },

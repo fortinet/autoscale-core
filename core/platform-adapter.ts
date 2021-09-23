@@ -9,61 +9,61 @@ import { NetworkInterface, VirtualMachine } from './virtual-machine';
 
 export interface DeviceSyncInfo {
     /**
-     * representing property: instance, the id of the vm
+     * Representing property: instance, the id of the vm.
      * Device always provides this property.
      * Can check null for errors.
      */
     instance: string;
     /**
-     * representing property: interval, in second
+     * Representing property: interval, in second.
      * Device always provides this property.
      * Can check NaN for errors.
      */
     interval: number;
     /**
-     * representing property: status. not available in heartbeat type of info.
+     * Representing property: status. Not available in heartbeat type of info.
      * Will be undefined if absent.
      */
     status?: string | null;
     /**
-     * representing property: sequence
+     * Representing property: sequence.
      * If device provided this property, it will not be null.
      * If device not provided this property, it will be NaN.
      */
     sequence: number;
     /**
-     * representing property: time, the send time of the heartbeat, ISO 8601 format, device's time.
+     * Representing property: time, the send time of the heartbeat, ISO 8601 format, device's time.
      * If device provided this property, it will not be null.
      * If device not provided this property, it will be null.
      */
     time: string;
     /**
-     * representing property: sync_time, the last time on successful ha sync, ISO 8601 format, device's time.
+     * Representing property: sync_time, the last time on successful ha sync, ISO 8601 format, device's time.
      * If device provided this property, it will not null.
      * If device not provided this property, it will be null.
      */
     syncTime: string | null;
     /**
-     * representing property: sync_fail_time, the last time on ha sync failure, ISO 8601 format, device's time.
+     * Representing property: sync_fail_time, the last time on ha sync failure, ISO 8601 format, device's time.
      * If device provided this property, it can be null.
      * If device not provided this property, it will be null.
      */
     syncFailTime: string | null;
     /**
-     * representing property: sync_status, true of false on secondary device if in-sync with primary or not;
+     * Representing property: sync_status, true of false on secondary device if in-sync with primary or not;
      * It will be null on primary device.
      * If device provided this property, it can be null.
      * If device not provided this property, it will be null.
      */
     syncStatus: boolean | null;
     /**
-     * representing property: is_primary, true for primary devices, false for secondary, in the device's perspective.
+     * Representing property: is_primary, true for primary devices, false for secondary, in the device's perspective.
      * If device provided this property, it can be null.
      * If device not provided this property, it will be null.
      */
     isPrimary: boolean | null;
     /**
-     * representing property: checksum, the HA checksum value of the device.
+     * Representing property: checksum, the HA checksum value of the device.
      * If device provided this property, it will not be null.
      * If device not provided this property, it will be null.
      */

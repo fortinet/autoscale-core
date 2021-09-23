@@ -22,6 +22,7 @@ import {
     NetworkInterface,
     NicAttachmentRecord,
     NoopFazIntegrationStrategy,
+    NoopRoutingEgressTrafficStrategy,
     NoopScalingGroupStrategy,
     NoopTaggingVmStrategy,
     PlatformAdapter,
@@ -35,6 +36,7 @@ import {
     ReqMethod,
     ReqType,
     ResourceFilter,
+    RoutingEgressTrafficStrategy,
     ScalingGroupStrategy,
     SettingItem,
     Settings,
@@ -62,7 +64,7 @@ const TEST_HCR_ON_TIME: HealthCheckRecord = {
     sendTime: 'sendTime',
     deviceSyncTime: 'deviceSyncTime',
     deviceSyncFailTime: 'deviceSyncFailTime',
-    deviceSyncStatus: 'deviceSyncStatus',
+    deviceSyncStatus: true,
     deviceIsPrimary: true,
     deviceChecksum: 'deviceChecksum'
 };
@@ -80,10 +82,10 @@ const TEST_HCR_LATE: HealthCheckRecord = {
     seq: 7,
     healthy: false,
     upToDate: true,
-    sendTime: 'sendTime',
-    deviceSyncTime: 'deviceSyncTime',
-    deviceSyncFailTime: 'deviceSyncFailTime',
-    deviceSyncStatus: 'deviceSyncStatus',
+    sendTime: new Date(0).toISOString(), // the beginning of UTC
+    deviceSyncTime: new Date(0).toISOString(), // the beginning of UTC
+    deviceSyncFailTime: null,
+    deviceSyncStatus: true,
     deviceIsPrimary: true,
     deviceChecksum: 'deviceChecksum'
 };
@@ -101,10 +103,10 @@ const TEST_HCR_OUT_OF_SYNC: HealthCheckRecord = {
     seq: 7,
     healthy: false,
     upToDate: true,
-    sendTime: 'sendTime',
-    deviceSyncTime: 'deviceSyncTime',
-    deviceSyncFailTime: 'deviceSyncFailTime',
-    deviceSyncStatus: 'deviceSyncStatus',
+    sendTime: new Date(0).toISOString(), // the beginning of UTC
+    deviceSyncTime: new Date(0).toISOString(), // the beginning of UTC
+    deviceSyncFailTime: null,
+    deviceSyncStatus: true,
     deviceIsPrimary: true,
     deviceChecksum: 'deviceChecksum'
 };
@@ -135,6 +137,18 @@ const TEST_PRIMARY_ELECTION: PrimaryElection = {
     newPrimaryRecord: TEST_PRIMARY_RECORD,
     candidate: TEST_VM,
     signature: '12345'
+};
+
+const TEST_DEVICE_SYNC_INFO: DeviceSyncInfo = {
+    instance: 'fake-instance',
+    interval: 30,
+    sequence: 8,
+    time: new Date().toISOString(),
+    syncTime: new Date().toISOString(),
+    syncFailTime: null,
+    syncStatus: null,
+    isPrimary: true,
+    checksum: 'fake-checksum'
 };
 
 class TestAutoscale extends Autoscale {
@@ -271,17 +285,7 @@ class TestPlatformAdapter implements PlatformAdapter {
     }
     getReqDeviceSyncInfo(): Promise<DeviceSyncInfo> {
         // TODO: implementation required.
-        return Promise.resolve({
-            instance: 'fake-instance',
-            interval: 30,
-            sequence: 1,
-            time: 'fake-time',
-            syncTime: 'fake-sync-time',
-            syncFailTime: 'fake-sync-fail-time',
-            syncStatus: null,
-            isPrimary: true,
-            checksum: 'fake-checksum'
-        });
+        return Promise.resolve(TEST_DEVICE_SYNC_INFO);
     }
     getReqHeartbeatInterval(): Promise<number> {
         return Promise.resolve(30);
@@ -382,6 +386,7 @@ describe('sanity test', () => {
     let hs: HeartbeatSyncStrategy;
     let me: PrimaryElection;
     let ss: ScalingGroupStrategy;
+    let rets: RoutingEgressTrafficStrategy;
     let autoscale: Autoscale;
     before(function() {
         p = new TestPlatformAdapter();
@@ -445,10 +450,12 @@ describe('sanity test', () => {
         ms = new PreferredGroupPrimaryElection(p, x);
         hs = new ConstantIntervalHeartbeatSyncStrategy(p, x);
         ss = new NoopScalingGroupStrategy(p, x);
+        rets = new NoopRoutingEgressTrafficStrategy(p, x);
         autoscale = new TestAutoscale(p, e, x);
         autoscale.setPrimaryElectionStrategy(ms);
         autoscale.setHeartbeatSyncStrategy(hs);
         autoscale.setScalingGroupStrategy(ss);
+        autoscale.setRoutingEgressTrafficStrategy(rets);
         autoscale.setTaggingAutoscaleVmStrategy(new NoopTaggingVmStrategy(p, x));
         autoscale.setFazIntegrationStrategy(new NoopFazIntegrationStrategy(p, x));
     });
@@ -502,9 +509,11 @@ describe('sanity test', () => {
         }
     });
     it('handleHeartbeatSync', async () => {
+        // to fake the late healthcheck
+        const FAKE_HCR_LATE = Object.assign({}, TEST_HCR_LATE);
         const stub1 = Sinon.stub(p, 'getHealthCheckRecord').callsFake(input => {
             Sinon.assert.match(Object.is(input, TEST_VM.id), true);
-            return Promise.resolve(TEST_HCR_ON_TIME);
+            return Promise.resolve(FAKE_HCR_LATE);
         });
         const stub2 = Sinon.stub(p, 'getTargetVm');
         const stub3 = Sinon.stub(autoscale, 'handleLaunchingVm').callsFake(() => {
@@ -531,9 +540,9 @@ describe('sanity test', () => {
             return true;
         });
         const stub10 = Sinon.stub(p, 'updateHealthCheckRecord').callsFake(hcr => {
-            Sinon.assert.match(compare(hcr).isEqualTo(TEST_HCR_ON_TIME), true);
-            Sinon.assert.match(hcr.vmId, TEST_HCR_ON_TIME.vmId);
-            Sinon.assert.match(hcr.scalingGroupName, TEST_HCR_ON_TIME.scalingGroupName);
+            Sinon.assert.match(compare(hcr).isEqualTo(FAKE_HCR_LATE), true);
+            Sinon.assert.match(hcr.vmId, FAKE_HCR_LATE.vmId);
+            Sinon.assert.match(hcr.scalingGroupName, FAKE_HCR_LATE.scalingGroupName);
             return Promise.resolve();
         });
         const stub11 = Sinon.stub(p, 'getSettings').callsFake(() => {
@@ -548,10 +557,7 @@ describe('sanity test', () => {
 
         try {
             const result = await autoscale.handleHeartbeatSync();
-            Sinon.assert.match(
-                compare(await stub1.returnValues[0]).isEqualTo(TEST_HCR_ON_TIME),
-                true
-            );
+            Sinon.assert.match(compare(await stub1.returnValues[0]).isEqualTo(FAKE_HCR_LATE), true);
             Sinon.assert.match(stub2.called, false);
             Sinon.assert.match(stub3.called, false);
             Sinon.assert.match(stub4.called, false);
@@ -607,9 +613,10 @@ describe('handle unhealthy vm.', () => {
         s = new Map<string, SettingItem>();
         s.set(AutoscaleSetting.PrimaryElectionTimeout, new SettingItem('1', '2', '3', true, true));
         s.set(AutoscaleSetting.HeartbeatDelayAllowance, new SettingItem('1', '2', '3', true, true));
-        s.set(AutoscaleSetting.HeartbeatLossCount, new SettingItem('1', '0', '3', true, true));
+        s.set(AutoscaleSetting.HeartbeatLossCount, new SettingItem('1', '3', '3', true, true));
         // Set termination of unhealthy vm to 'true'
         s.set(AutoscaleSetting.TerminateUnhealthyVm, new SettingItem('1', 'true', '3', true, true));
+        s.set(AutoscaleSetting.SyncRecoveryCount, new SettingItem('1', '3', '3', true, true));
         ms = {
             prepare() {
                 return Promise.resolve();
@@ -678,7 +685,14 @@ describe('handle unhealthy vm.', () => {
         });
         const stub5 = Sinon.stub(p, 'getHealthCheckRecord').callsFake(() => {
             const hcr = Object.assign({}, TEST_HCR_LATE);
+            const dsi = Object.assign({}, TEST_DEVICE_SYNC_INFO);
+            hcr.seq = dsi.sequence - 1;
+            hcr.sendTime = new Date(0).toISOString();
             return Promise.resolve(hcr);
+        });
+        const stub6 = Sinon.stub(p, 'getReqDeviceSyncInfo').callsFake(() => {
+            const dsi = Object.assign({}, TEST_DEVICE_SYNC_INFO);
+            return Promise.resolve(dsi);
         });
         await autoscale.handleHeartbeatSync();
 
@@ -693,6 +707,7 @@ describe('handle unhealthy vm.', () => {
         stub3.restore();
         stub4.restore();
         stub5.restore();
+        stub6.restore();
     });
     it('When termination is disabled, termination of unhealthy vm  is not triggered.', async () => {
         // turn on the termination toggle
@@ -756,7 +771,6 @@ describe('sync recovery of unhealthy vm.', () => {
         s.set(AutoscaleSetting.HeartbeatLossCount, new SettingItem('1', '0', '3', true, true));
         // Set termination of unhealthy vm to 'true'
         s.set(AutoscaleSetting.TerminateUnhealthyVm, new SettingItem('1', 'true', '3', true, true));
-        s.set(AutoscaleSetting.SyncRecoveryCount, new SettingItem('1', '3', '3', true, true));
         ms = {
             prepare() {
                 return Promise.resolve();
@@ -890,6 +904,7 @@ describe('sync recovery of unhealthy vm.', () => {
             const hcr = Object.assign({}, TEST_HCR_OUT_OF_SYNC);
             // set the hb on-time
             hcr.nextHeartbeatTime = Date.now() + 9999999;
+            hcr.sendTime = TEST_DEVICE_SYNC_INFO.time;
             return Promise.resolve(hcr);
         });
         const stub4 = Sinon.stub(p, 'updateHealthCheckRecord').callsFake(rec => {

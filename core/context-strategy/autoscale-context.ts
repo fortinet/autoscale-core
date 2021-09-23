@@ -224,8 +224,15 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         const deviceSyncInfo = await this.platform.getReqDeviceSyncInfo();
         const newInterval = deviceSyncInfo.interval * 1000;
         const heartbeatArriveTime: number = this.platform.createTime;
+        // the calculated delay of the current heartbeat comparing to the previous one sent from
+        // the same device
         let delay = 0;
         let oldSeq: number; // to be displayed in the log as: old seq -> new seq
+        let useDeviceSyncInfo: boolean;
+        let delayCalculationMethod = 'by arrive time';
+        let delayAtSendTime = NaN;
+        let delayAtArriveTime = NaN;
+        let outdatedHearbeatRequest = false;
         const settings = await this.platform.getSettings();
         // number in second the max amount of delay allowed to offset the network latency
         const delayAllowance =
@@ -235,6 +242,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         // get health check record for target vm
         // ASSERT: this.targetVm is valid
         let targetHealthCheckRecord = await this.platform.getHealthCheckRecord(this.targetVm.id);
+        // the next heartbeat arrive time from the Autoscale handler perspective.
         const nextHeartbeatTime = heartbeatArriveTime + newInterval;
         // if there's no health check record for this vm,
         // can deem it the first time for health check
@@ -260,6 +268,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 seq: (!isNaN(deviceSyncInfo.sequence) && deviceSyncInfo.sequence) || 1,
                 healthy: true,
                 upToDate: true,
+                // additional device sync info whenever provided
                 sendTime: deviceSyncInfo.time,
                 deviceSyncTime: deviceSyncInfo.syncTime,
                 deviceSyncFailTime: deviceSyncInfo.syncFailTime,
@@ -279,18 +288,65 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         }
         // processing regular heartbeat
         else {
+            // store a copy of the set of record data before updating the record
             oldLossCount = targetHealthCheckRecord.heartbeatLossCount;
             oldInterval = targetHealthCheckRecord.heartbeatInterval;
             oldSeq = targetHealthCheckRecord.seq;
             oldNextHeartbeatTime = targetHealthCheckRecord.nextHeartbeatTime;
-            // NOTE:
-            // heartbeatArriveTime: the starting time of the function execution, considerred as
-            // the heartbeat arrived at the function
-            // oldNextHeartbeatTime: the expected arrival time for the current heartbeat, recorded
-            // in the db, updated in the previous heartbeat calculation
-            // delayAllowance: the time used in the calcualtion to offest any foreseeable latency
-            // outside of the function execution.
-            delay = heartbeatArriveTime - oldNextHeartbeatTime - delayAllowance;
+            delayAtArriveTime = heartbeatArriveTime - oldNextHeartbeatTime;
+            // if the device provide more information about the heartbeat, do a more accurate
+            // heartbeat calculation.
+            // check if the 'time' property exists. It can indicate the availability of the device
+            // info
+            const deviceSendTime: Date =
+                deviceSyncInfo.time !== null && new Date(deviceSyncInfo.time);
+            useDeviceSyncInfo = !!deviceSendTime;
+            if (useDeviceSyncInfo) {
+                delayCalculationMethod = 'by device send time';
+                // check if the sequence is in an incremental order compared to the data in the db
+                // if not, the heartbea should be marked as outdated and to be dropped
+                if (deviceSyncInfo.sequence < targetHealthCheckRecord.seq) {
+                    outdatedHearbeatRequest = true;
+                } else {
+                    // if the device seq is immediately after the recorded value
+                    // check if the send time match the heartbeat interval
+                    if (deviceSyncInfo.sequence === targetHealthCheckRecord.seq + 1) {
+                        const recordedSendTime: Date = new Date(targetHealthCheckRecord.sendTime);
+                        // compare using the device provided interval because if the interval
+                        // has changedthe new heartbeat will be sent in the new interval
+                        // this is the delay from the device's perspective
+                        delay =
+                            deviceSendTime.getTime() -
+                            recordedSendTime.getTime() -
+                            deviceSyncInfo.interval;
+                    }
+                    // NOTE:
+                    // in this situation, there are race conditions happening between some
+                    // heartbeat requests. The reason is one autoscale handler is taking much
+                    // longer to process another heartbeat and unable to complete before this
+                    // heartbeat arrives at the handler (by a parallel cloud function thread).
+                    // The outcome of this situation is:
+                    // for the hb which is immediate after the recorded one (new seq = old seq + 1)
+                    // it will be handled in the above if-else case.
+                    // for the other hb (new seq > old seq + 1), the delay cannot be calculated
+                    // thus discarding the delay calculation, and trust it is an on-time hb
+                    else {
+                        delay = -1; // on-time hb must have a negative delay
+                    }
+                    delayAtSendTime = delay;
+                }
+            }
+            // calculate delay using the arrive time (classic method)
+            else {
+                // NOTE:
+                // heartbeatArriveTime: the starting time of the function execution, considerred as
+                // the heartbeat arrived at the function
+                // oldNextHeartbeatTime: the expected arrival time for the current heartbeat, recorded
+                // in the db, updated in the previous heartbeat calculation
+                // delayAllowance: the time used in the calcualtion to offest any foreseeable latency
+                // outside of the function execution.
+                delay = heartbeatArriveTime - oldNextHeartbeatTime - delayAllowance;
+            }
             const syncRecoveryCountSettingItem = settings.get(AutoscaleSetting.SyncRecoveryCount);
             const syncRecoveryCount =
                 syncRecoveryCountSettingItem && Number(syncRecoveryCountSettingItem.value);
@@ -357,20 +413,33 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                     this.result = HealthCheckResult.OnTime;
                 }
             }
-            // update health check record
-            try {
-                // NOTE: use the sequence provided by the device
-                if (!isNaN(deviceSyncInfo.sequence)) {
-                    targetHealthCheckRecord.seq = deviceSyncInfo.sequence;
-                } else {
-                    targetHealthCheckRecord.seq += 1;
+            // NOTE: use the sequence provided by the device
+            if (useDeviceSyncInfo && !isNaN(deviceSyncInfo.sequence)) {
+                targetHealthCheckRecord.seq = deviceSyncInfo.sequence;
+            } else {
+                targetHealthCheckRecord.seq += 1;
+            }
+            targetHealthCheckRecord.heartbeatInterval = newInterval;
+            targetHealthCheckRecord.nextHeartbeatTime = heartbeatArriveTime + newInterval;
+            // additional device sync info whenever provided
+            targetHealthCheckRecord.sendTime = deviceSyncInfo.time;
+            targetHealthCheckRecord.deviceSyncTime = deviceSyncInfo.syncTime;
+            targetHealthCheckRecord.deviceSyncFailTime = deviceSyncInfo.syncFailTime;
+            targetHealthCheckRecord.deviceSyncStatus = deviceSyncInfo.syncStatus;
+            targetHealthCheckRecord.deviceIsPrimary = deviceSyncInfo.isPrimary;
+            targetHealthCheckRecord.deviceChecksum = deviceSyncInfo.checksum;
+            // update health check record if not marked as outdated
+            if (!outdatedHearbeatRequest) {
+                try {
+                    await this.platform.updateHealthCheckRecord(targetHealthCheckRecord);
+                } catch (error) {
+                    this.proxy.logForError('updateHealthCheckRecord() error.', error);
+                    // cannot create hb record, drop this health check
+                    targetHealthCheckRecord.upToDate = false;
+                    this.result = HealthCheckResult.Dropped;
                 }
-                targetHealthCheckRecord.heartbeatInterval = newInterval;
-                targetHealthCheckRecord.nextHeartbeatTime = heartbeatArriveTime + newInterval;
-                await this.platform.updateHealthCheckRecord(targetHealthCheckRecord);
-            } catch (error) {
-                this.proxy.logForError('updateHealthCheckRecord() error.', error);
-                // cannot create hb record, drop this health check
+            } else {
+                this.proxy.logAsWarning('Dropped an outdated heartbeat request.');
                 targetHealthCheckRecord.upToDate = false;
                 this.result = HealthCheckResult.Dropped;
             }
@@ -393,11 +462,16 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         this.proxy.logAsInfo(
             `Heartbeat sync result: ${this.result},` +
                 ` heartbeat sequence: ${oldSeq}->${targetHealthCheckRecord.seq},` +
-                ` heartbeat expected arrive time: ${oldNextHeartbeatTime} ms,` +
-                ` heartbeat actual arrive time: ${heartbeatArriveTime} ms,` +
-                ` heartbeat delay allowance: ${delayAllowance} ms,` +
-                ` heartbeat calculated delay: ${delay} ms,` +
                 ` heartbeat interval: ${oldInterval}->${newInterval} ms,` +
+                ` device time for recorded heartbeat: ${targetHealthCheckRecord.sendTime},` +
+                ` device time for received heartbeat: ${deviceSyncInfo.time},` +
+                ` delay at send time: ${(isNaN(delayAtSendTime) && 'n/a') || delayAtSendTime} ms,` +
+                ' heartbeat expected arrive time:' +
+                ` ${new Date(oldNextHeartbeatTime).toISOString()},` +
+                ` heartbeat actual arrive time: ${new Date(heartbeatArriveTime).toISOString()},` +
+                ` heartbeat delay at arrive time: ${delayAtArriveTime} ms,` +
+                ` heartbeat delay allowance for arrival: ${delayAllowance} ms,` +
+                ` heartbeat calculated delay: ${delay} ms ${delayCalculationMethod},` +
                 ` heartbeat loss count: ${oldLossCount}->${newLossCount},` +
                 ` max loss count allowed: ${maxLossCount}.`
         );
