@@ -774,7 +774,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         const checker = (
             snapshot: typeof item
         ): Promise<{ result: boolean; errorMessage: string }> => {
-            const inconsistentDataDetailString = this.dataConsistencyCheck(
+            let errorMessage = this.dataConsistencyCheck(
                 {
                     vmId: rec.vmId,
                     scalingGroupName: rec.vmId,
@@ -782,9 +782,18 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                 },
                 snapshot
             );
+            // NOTE: strictly update the record when the sequence to update is equal to or greater
+            // than the seq in the db ton ensure data not to fall back to old value in race conditions
+            let result: boolean = errorMessage.length === 0;
+            if (rec.seq < snapshot.seq) {
+                result = false;
+                errorMessage =
+                    `A smaller seq is not allowed. seq to save: ${rec.seq}, seq in db: ` +
+                    `${snapshot.seq}. ${errorMessage}`;
+            }
             return Promise.resolve({
-                result: inconsistentDataDetailString.length === 0,
-                errorMessage: inconsistentDataDetailString
+                result: result,
+                errorMessage: errorMessage
             });
         };
         await this.adaptee.saveItemToDb<typeof item>(
