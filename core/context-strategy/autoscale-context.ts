@@ -225,7 +225,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         const newInterval = deviceSyncInfo.interval * 1000;
         const heartbeatArriveTime: number = this.platform.createTime;
         let delay = 0;
-        let oldSeq = 0;
+        let oldSeq: number; // to be displayed in the log as: old seq -> new seq
         const settings = await this.platform.getSettings();
         // number in second the max amount of delay allowed to offset the network latency
         const delayAllowance =
@@ -243,6 +243,9 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             this.result = HealthCheckResult.OnTime;
             // no old next heartbeat time for the first heartbeat, use the current arrival time.
             oldNextHeartbeatTime = heartbeatArriveTime;
+            // no old record for reference, use the seq provided by the device. If the seq is
+            // NaN, it means no sequence provided by the device, then use 0.
+            oldSeq = (isNaN(deviceSyncInfo.sequence) && 0) || deviceSyncInfo.sequence;
             targetHealthCheckRecord = {
                 vmId: this.targetVm.id,
                 scalingGroupName: this.targetVm.scalingGroupName,
@@ -260,10 +263,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 sendTime: deviceSyncInfo.time,
                 deviceSyncTime: deviceSyncInfo.syncTime,
                 deviceSyncFailTime: deviceSyncInfo.syncFailTime,
-                deviceSyncStatus:
-                    (deviceSyncInfo.syncStatus === null && 'null') ||
-                    (deviceSyncInfo.syncStatus && 'true') ||
-                    'false',
+                deviceSyncStatus: deviceSyncInfo.syncStatus,
                 deviceIsPrimary: deviceSyncInfo.isPrimary,
                 deviceChecksum: deviceSyncInfo.checksum
             };

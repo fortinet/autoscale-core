@@ -20,8 +20,8 @@ export interface HealthCheckRecord {
     sendTime: string;
     deviceSyncTime: string;
     deviceSyncFailTime: string;
-    deviceSyncStatus: string;
-    deviceIsPrimary: boolean;
+    deviceSyncStatus: boolean | null;
+    deviceIsPrimary: boolean | null;
     deviceChecksum: string;
 }
 

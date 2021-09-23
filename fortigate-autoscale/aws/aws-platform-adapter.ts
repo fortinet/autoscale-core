@@ -257,7 +257,8 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {
             const body = await this.proxy.getReqBody();
             const deviceSyncInfo: DeviceSyncInfo = {
-                instance: String(body.instance),
+                // always available
+                instance: (body.instance && String(body.instance)) || null,
                 interval: (body.interval && Number(body.interval)) || NaN,
                 // partially available in some request types
                 status: (body.status && String(body.status)) || undefined,
@@ -267,7 +268,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 syncTime: (body.sync_time && String(body.sync_time)) || null,
                 syncFailTime: (body.sync_fail_time && String(body.sync_fail_time)) || null,
                 syncStatus: (body.sync_status !== null && Boolean(body.sync_status)) || null,
-                isPrimary: (body.is_primary !== null && Boolean(body.is_primary)) || false,
+                isPrimary: (body.is_primary !== null && Boolean(body.is_primary)) || null,
                 checksum: (body.checksum !== null && String(body.checksum)) || null
             };
             return deviceSyncInfo;
@@ -532,12 +533,19 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 seq: dbItem.seq,
                 healthy: isHealthy,
                 upToDate: true,
-                sendTime: dbItem.sendTime,
-                deviceSyncTime: dbItem.deviceSyncTime,
-                deviceSyncFailTime: dbItem.deviceSyncFailTime,
-                deviceSyncStatus: dbItem.deviceSyncStatus,
-                deviceIsPrimary: dbItem.deviceIsPrimary,
-                deviceChecksum: dbItem.deviceChecksum
+                // the following properities are only available in some device versions
+                // convert string 'null' to null
+                sendTime: (dbItem.sendTime === 'null' && null) || dbItem.sendTime,
+                deviceSyncTime: (dbItem.deviceSyncTime === 'null' && null) || dbItem.deviceSyncTime,
+                deviceSyncFailTime:
+                    (dbItem.deviceSyncFailTime === 'null' && null) || dbItem.deviceSyncFailTime,
+                deviceSyncStatus:
+                    (dbItem.deviceSyncStatus === 'null' && null) ||
+                    dbItem.deviceSyncStatus === 'true',
+                deviceIsPrimary:
+                    (dbItem.deviceIsPrimary === 'null' && null) ||
+                    dbItem.deviceIsPrimary === 'true',
+                deviceChecksum: (dbItem.deviceChecksum === 'null' && null) || dbItem.deviceChecksum
             };
         }
         this.proxy.logAsInfo('called getHealthCheckRecord');
@@ -617,8 +625,16 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             sendTime: rec.sendTime,
             deviceSyncTime: rec.deviceSyncTime,
             deviceSyncFailTime: rec.deviceSyncFailTime,
-            deviceSyncStatus: rec.deviceSyncStatus,
-            deviceIsPrimary: rec.deviceIsPrimary,
+            // store boolean | null
+            deviceSyncStatus:
+                (rec.deviceSyncStatus === null && 'null') ||
+                (rec.deviceSyncStatus && 'true') ||
+                'false',
+            // store boolean | null
+            deviceIsPrimary:
+                (rec.deviceIsPrimary === null && 'null') ||
+                (rec.deviceIsPrimary && 'true') ||
+                'false',
             deviceChecksum: rec.deviceChecksum
         };
         const conditionExp: AwsDdbOperations = {
@@ -653,8 +669,16 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             sendTime: rec.sendTime,
             deviceSyncTime: rec.deviceSyncTime,
             deviceSyncFailTime: rec.deviceSyncFailTime,
-            deviceSyncStatus: rec.deviceSyncStatus,
-            deviceIsPrimary: rec.deviceIsPrimary,
+            // store boolean | null
+            deviceSyncStatus:
+                (rec.deviceSyncStatus === null && 'null') ||
+                (rec.deviceSyncStatus && 'true') ||
+                'false',
+            // store boolean | null
+            deviceIsPrimary:
+                (rec.deviceIsPrimary === null && 'null') ||
+                (rec.deviceIsPrimary && 'true') ||
+                'false',
             deviceChecksum: rec.deviceChecksum
         };
         // NOTE: strictly update the record when the sequence to update is equal to or greater

@@ -301,7 +301,7 @@ export interface AutoscaleDbItem extends Record {
     deviceSyncTime: string;
     deviceSyncFailTime: string;
     deviceSyncStatus: string;
-    deviceIsPrimary: boolean;
+    deviceIsPrimary: string;
     deviceChecksum: string;
 }
 
@@ -413,7 +413,7 @@ export class Autoscale extends Table<AutoscaleDbItem> {
             deviceSyncTime: this.typeConvert.valueToString(record.deviceSyncTime),
             deviceSyncFailTime: this.typeConvert.valueToString(record.deviceSyncFailTime),
             deviceSyncStatus: this.typeConvert.valueToString(record.deviceSyncStatus),
-            deviceIsPrimary: this.typeConvert.valueToBoolean(record.deviceIsPrimary),
+            deviceIsPrimary: this.typeConvert.valueToString(record.deviceIsPrimary),
             deviceChecksum: this.typeConvert.valueToString(record.deviceChecksum)
         };
         return item;
