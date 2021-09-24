@@ -1,6 +1,6 @@
 {
     "name": "@fortinet/fortigate-autoscale",
-    "version": "3.3.0",
+    "version": "3.3.1",
     "description": "Fortinet Autoscale project(s), fortigate autoscale module.",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
