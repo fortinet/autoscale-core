@@ -757,9 +757,11 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 Expression:
                     'attribute_not_exists(scalingGroupName) OR ' +
                     'attribute_exists(scalingGroupName) AND ' +
+                    'id = :id AND ' +
                     'voteState = :voteState AND ' +
                     'voteEndTime > :nowTime',
                 ExpressionAttributeValues: {
+                    ':id': item.id,
                     ':voteState': PrimaryRecordVoteState.Pending,
                     ':nowTime': Date.now()
                 }
@@ -770,6 +772,44 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             this.proxy.logForError('called updatePrimaryRecord.', error);
             throw error;
         }
+    }
+
+    async deletePrimaryRecord(rec: PrimaryRecord, fullMatch?: boolean): Promise<void> {
+        this.proxy.logAsInfo('calling deletePrimaryRecord');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsPrimaryElection(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
+        );
+        const item: DBDef.PrimaryElectionDbItem = {
+            id: rec.id,
+            scalingGroupName: rec.scalingGroupName,
+            ip: rec.ip,
+            vmId: rec.vmId,
+            virtualNetworkId: rec.virtualNetworkId,
+            subnetId: rec.subnetId,
+            voteEndTime: rec.voteEndTime,
+            voteState: rec.voteState
+        };
+        // delete record only if the keys in rec match the keys in db
+        // of if a full match is needed
+        const conditionExp: AwsDdbOperations = {
+            Expression: 'id = :id',
+            ExpressionAttributeValues: {
+                ':id': item.id
+            }
+        };
+        if (fullMatch) {
+            conditionExp.ExpressionAttributeValues = {};
+            const expressionArray = [];
+            Object.entries(item).forEach(([key, value]) => {
+                expressionArray.push(`${key} = :${key}`);
+                conditionExp.ExpressionAttributeValues[`:${key}`] = value;
+            });
+            conditionExp.Expression = expressionArray.join(' AND ');
+        }
+        await this.adaptee.deleteItemFromDb<DBDef.PrimaryElectionDbItem>(table, item, conditionExp);
+
+        this.proxy.logAsInfo('called deletePrimaryRecord');
     }
     /**
      * Load a configset file from blob storage

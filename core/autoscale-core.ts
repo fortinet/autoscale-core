@@ -404,75 +404,204 @@ export abstract class Autoscale implements AutoscaleCore {
             electionDuration: electionTimeout,
             signature: null
         };
+        // the action for updating primary record
+        let action: 'save' | 'delete' | 'noop' = 'noop';
+        let redoElection = false;
+        let reloadPrimarRecord = false;
+
         await this.primaryElectionStrategy.prepare(election);
 
-        // primary election required? condition 1: no primary vm or record
-        if (!this.env.primaryRecord || !this.env.primaryVm) {
-            // handlePrimaryElection() will update the primary vm info, if cannot determine the
-            // primary vm, primary vm info will be set to null
-            // expect that the pending primary vm info can be available
-            await this.primaryElectionStrategy.apply();
-            // after primary election complete (election may not be necessary in some cases)
-            // get the election result.
-            election = await this.primaryElectionStrategy.result();
+        // in general, possible primary election results include:
+        // 1. ineligible candidate, no existing election, no reference to the new primary vm, no reference to the old primary vm
+        // 2. ineligible candidate, no existing election, no reference to the new primary vm, has reference to the old primary vm
+        // 3. existing primary election is pending, this vm is the new primary vm, has a reference to the old primary vm
+        // 4. existing primary eleciion is pending, this vm is not the new primary, has a reference to new primary vm, has no reference to the old primary vm
+        // 5. existing primary election is done, this vm is the new primary, has reference to the old primary
+        // 6. existing primary election is done, this vm is not the new primary, has reference to the new primary vm, has no fererence to the new primary vm
+
+        // Primary Election handling diagram is available in: https://github.com/fortinet/autoscale-core
+        // workflow: if primary record not exists, start a new election
+        if (!this.env.primaryRecord) {
+            // flag the action now, and handle it later, separately.
+            action = 'save';
+            // need to redo election
+            redoElection = true;
+            // should reload the primary record
+            reloadPrimarRecord = true;
         }
-        // primary election required? condition 2: has primary record, but it's pending
-        // ASSERT: the existing primary record voteEndTime > now if voteState is pending (it's a calculated state)
-        else if (this.env.primaryRecord.voteState === PrimaryRecordVoteState.Pending) {
-            // if primary election is pending, only need to know the current result. do not need
-            // to redo the election.
-            // but if the target is also the pending primary, the primary election need to complete
-            if (this.platform.vmEquals(this.env.targetVm, this.env.primaryVm)) {
-                // only complete the election when the pending primary is healthy and still in-sync
+        // else, primary record exists
+        else {
+            // workflow: check the existing primary record state
+            // vote state: pending
+            if (this.env.primaryRecord.voteState === PrimaryRecordVoteState.Pending) {
+                // workflow: check the current vm ID
+                // the target is the pending primary
                 if (
-                    this.env.targetHealthCheckRecord &&
-                    this.env.targetHealthCheckRecord.healthy &&
-                    this.env.targetHealthCheckRecord.syncState === HealthCheckSyncState.InSync
+                    this.env.targetVm &&
+                    this.env.primaryVm &&
+                    this.env.targetVm.id === this.env.primaryVm.id
                 ) {
-                    this.env.primaryRecord.voteState = PrimaryRecordVoteState.Done;
-                    election.newPrimary = this.env.targetVm;
-                    election.newPrimaryRecord = this.env.primaryRecord;
-                    await this.platform.updatePrimaryRecord(this.env.primaryRecord);
+                    // workflow: check the vm health state
+                    // vm is healthy
+                    if (
+                        this.env.targetHealthCheckRecord &&
+                        this.env.targetHealthCheckRecord.healthy &&
+                        this.env.targetHealthCheckRecord.syncState === HealthCheckSyncState.InSync
+                    ) {
+                        // change the election to done
+                        this.env.primaryRecord.voteState = PrimaryRecordVoteState.Done;
+                        // update the election result
+                        // reference the new primary to the target vm
+                        election.newPrimary = this.env.targetVm;
+                        election.newPrimaryRecord = this.env.primaryRecord;
+                        // need to save primary record,
+                        // flag the action now, and handle it later, separately.
+                        action = 'save';
+                        // do not need to redo election
+                        redoElection = false;
+                        // should reload the primary record
+                        reloadPrimarRecord = true;
+                    }
+                    // vm is unhealthy
+                    else {
+                        // need to delete the primary record,
+                        // flag the action now, and handle it later, separately.
+                        action = 'delete';
+                        // do not need to redo election
+                        redoElection = false;
+                        // should reload the primary record
+                        reloadPrimarRecord = true;
+                    }
                 }
-                // otherwise, do nothing
+                // the target vm isn't the pending primary
+                else {
+                    // workflow: handling ends and returns election result
+                    // do nothing in this case
+                    // flag the action now, and handle it later, separately.
+                    action = 'noop';
+                    // do not need to redo election
+                    redoElection = false;
+                    // should not reload primary record
+                    reloadPrimarRecord = false;
+                }
             }
-            // otherwise, do nothing
+            // vote state: timeout
+            else if (this.env.primaryRecord.voteState === PrimaryRecordVoteState.Timeout) {
+                // if primary election already timeout, redo the primary election
+                // workflow: if state is timeout -> delete primary record
+                // need to delete the primary record,
+                // flag the action now, and handle it later, separately.
+                action = 'delete';
+                // should redo the primary election
+                redoElection = true;
+                // should reload the primary record
+                reloadPrimarRecord = true;
+            }
+            // vote state: done
+            else if (this.env.primaryRecord.voteState === PrimaryRecordVoteState.Done) {
+                // workflow: check the health state of recorded primary vm
+                if (this.env.primaryVm) {
+                    this.env.primaryHealthCheckRecord = await this.platform.getHealthCheckRecord(
+                        this.env.primaryVm.id
+                    );
+                }
+                if (
+                    this.env.primaryHealthCheckRecord &&
+                    this.env.primaryHealthCheckRecord.syncState === HealthCheckSyncState.InSync
+                ) {
+                    // primary vm is healthy
+                    // workflow: handling ends and returns election result
+                    // do nothing in this case
+                    // flag the action now, and handle it later, separately.
+                    action = 'noop';
+                    // do not need to redo election
+                    redoElection = false;
+                    // should not reload the primary record
+                    reloadPrimarRecord = false;
+                }
+                // otherwise,
+                else {
+                    // primary mv is unhealthy
+                    // workflow: if vm is healthy  -- (false) -> delete primary record
+                    // need to delete the primary record,
+                    // flag the action now, and handle it later, separately.
+                    action = 'delete';
+                    // should redo the primary election
+                    redoElection = true;
+                    // should reload the primary record
+                    reloadPrimarRecord = true;
+                }
+            }
         }
-        // primary election required? condition 3: has primary record, but it's timeout
-        else if (this.env.primaryRecord.voteState === PrimaryRecordVoteState.Timeout) {
-            // if primary election already timeout, clear the current primary vm and record
-            // handlePrimaryElection() will update the primary vm info, if cannot determine the
-            // primary vm, primary vm info will be set to null
-            // expect that a different primary will be elected and its vm info can be available
-            this.env.primaryRecord = null;
-            this.env.primaryVm = null;
-            await this.primaryElectionStrategy.apply();
-            // after primary election complete (election may not be necessary in some cases)
-            // get the election result.
-            election = await this.primaryElectionStrategy.result();
-        }
-        // primary election required? condition 4: has primary record, it's done
-        else if (this.env.primaryRecord.voteState === PrimaryRecordVoteState.Done) {
-            // how is the primary health check in this case?
-            // get primary vm healthcheck record
-            if (!this.env.primaryHealthCheckRecord) {
-                this.env.primaryHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                    this.env.primaryVm.id
+
+        // dealing with updating the primary record
+        if (action === 'delete') {
+            // NOTE: prividing the primary record data to put strict condition on the deletion
+            try {
+                this.proxy.logAsInfo(
+                    'Delete the current primary record: ',
+                    JSON.stringify(this.env.primaryRecord)
+                );
+                await this.platform.deletePrimaryRecord(this.env.primaryRecord);
+            } catch (error) {
+                // unable to delete but that is okay. no impact
+                this.proxy.logAsWarning(
+                    'Unable to delete. This message ca be discarded. ' + `error: ${error}`
                 );
             }
-            // primary is unhealthy, primary election required. if target is the primary, don't do election.
-            if (
-                !this.env.primaryHealthCheckRecord.healthy &&
-                !this.platform.vmEquals(this.env.targetVm, this.env.primaryVm)
-            ) {
-                // handlePrimaryElection() will update the primary vm info, if cannot determine the
-                // primary vm, primary vm info will be set to null
-                // expect that a different primary will be elected and its vm info can be available
+        }
+
+        // primary election need to redo?
+        if (redoElection) {
+            try {
+                // workflow: start a new primary election
                 await this.primaryElectionStrategy.apply();
-                // after primary election complete (election may not be necessary in some cases)
                 // get the election result.
                 election = await this.primaryElectionStrategy.result();
+                // if new primary election started
+                // election will be avaialble
+                this.env.primaryRecord = election.newPrimaryRecord;
+                this.env.primaryVm = election.newPrimary;
+                // need to save the primary record
+                action = 'save';
+                // should reload primary record
+                reloadPrimarRecord = true;
+            } catch (error) {
+                this.proxy.logForError('Primary election does not start. Error occurs.', error);
+                // do not need to save the primary record
+                action = 'noop';
+                // election isn't needed so new primary should be null
+                election.newPrimary = null;
+                election.newPrimaryRecord = null;
+                // should not reload the primary record
+                reloadPrimarRecord = false;
             }
+        } else {
+            // election isn't needed so new primary should be null
+            election.newPrimary = null;
+            election.newPrimaryRecord = null;
+        }
+
+        if (action === 'save') {
+            // CAUTION: there may be race conditions when updating the primary record
+            try {
+                this.proxy.logAsInfo(
+                    'Saving the primary record. ',
+                    JSON.stringify(this.env.primaryRecord)
+                );
+                await this.platform.updatePrimaryRecord(this.env.primaryRecord);
+                // primary record is saved, need to reload it
+                reloadPrimarRecord = true;
+            } catch (error) {
+                // primary record is not saved, need to reload it anyway
+                reloadPrimarRecord = true;
+                this.proxy.logForError('Unable to save primary record. ', error);
+            }
+        }
+
+        if (reloadPrimarRecord) {
+            this.env.primaryRecord = await this.platform.getPrimaryRecord();
+            this.env.primaryVm = await this.platform.getPrimaryVm();
         }
 
         this.proxy.logAsInfo('called handlePrimaryElection.');

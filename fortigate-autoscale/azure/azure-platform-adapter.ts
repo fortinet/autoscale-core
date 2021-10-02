@@ -985,6 +985,24 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         );
         this.proxy.logAsInfo('called updatePrimaryRecord.');
     }
+
+    async deletePrimaryRecord(rec: PrimaryRecord, fullMatch?: boolean): Promise<void> {
+        this.proxy.logAsInfo('calling updatePrimaryRecord.');
+        const table = new AzurePrimaryElection();
+        const item = table.downcast({
+            id: rec.id,
+            scalingGroupName: rec.scalingGroupName,
+            ip: rec.ip,
+            vmId: rec.vmId,
+            virtualNetworkId: rec.virtualNetworkId,
+            subnetId: rec.subnetId,
+            voteEndTime: rec.voteEndTime,
+            voteState: rec.voteState
+        });
+
+        await this.adaptee.deleteItemFromDb<typeof item>(table, item, fullMatch);
+        this.proxy.logAsInfo('called updatePrimaryRecord.');
+    }
     /**
      * Load a configset file from blob storage
      * The blob container will use the AssetStorageContainer or CustomAssetContainer,

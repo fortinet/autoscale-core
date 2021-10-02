@@ -121,11 +121,21 @@ const TEST_VM: VirtualMachine = {
     state: VirtualMachineState.Running
 };
 
+const TEST_PRIMARY_VM: VirtualMachine = {
+    id: 'fake-test-primary-vm-id',
+    scalingGroupName: 'fake-test-vm-scaling-group-name',
+    primaryPrivateIpAddress: '3',
+    primaryPublicIpAddress: '4',
+    virtualNetworkId: '5',
+    subnetId: '6',
+    state: VirtualMachineState.Running
+};
+
 const TEST_PRIMARY_RECORD: PrimaryRecord = {
     id: '1',
-    vmId: '2',
+    vmId: 'fake-test-primary-vm-id',
     ip: '3',
-    scalingGroupName: '4',
+    scalingGroupName: 'fake-test-vm-scaling-group-name',
     virtualNetworkId: '5',
     subnetId: '6',
     voteEndTime: 7,
@@ -297,13 +307,13 @@ class TestPlatformAdapter implements PlatformAdapter {
         return Promise.resolve(TEST_VM);
     }
     getPrimaryVm(): Promise<VirtualMachine> {
-        throw new Error('Method not implemented.');
+        return Promise.resolve(TEST_PRIMARY_VM);
     }
     getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord> {
         return Promise.resolve(TEST_HCR_ON_TIME);
     }
     getPrimaryRecord(): Promise<PrimaryRecord> {
-        throw new Error('Method not implemented.');
+        return Promise.resolve(TEST_PRIMARY_RECORD);
     }
     equalToVm(vmA: VirtualMachine, vmB: VirtualMachine): boolean {
         throw new Error('Method not implemented.');
@@ -321,6 +331,9 @@ class TestPlatformAdapter implements PlatformAdapter {
         throw new Error('Method not implemented.');
     }
     updatePrimaryRecord(rec: PrimaryRecord): Promise<void> {
+        throw new Error('Method not implemented.');
+    }
+    deletePrimaryRecord(rec: PrimaryRecord, fullMatch?: boolean): Promise<void> {
         throw new Error('Method not implemented.');
     }
     registerFortiAnalyzer(
@@ -601,6 +614,7 @@ describe('handle unhealthy vm.', () => {
     let ms: PrimaryElectionStrategy;
     let hs: HeartbeatSyncStrategy;
     let ss: ScalingGroupStrategy;
+    let rets: RoutingEgressTrafficStrategy;
     let autoscale: Autoscale;
     before(function() {
         p = new TestPlatformAdapter();
@@ -660,10 +674,12 @@ describe('handle unhealthy vm.', () => {
         ms = new PreferredGroupPrimaryElection(p, x);
         hs = new ConstantIntervalHeartbeatSyncStrategy(p, x);
         ss = new NoopScalingGroupStrategy(p, x);
+        rets = new NoopRoutingEgressTrafficStrategy(p, x);
         autoscale = new TestAutoscale(p, e, x);
         autoscale.setPrimaryElectionStrategy(ms);
         autoscale.setHeartbeatSyncStrategy(hs);
         autoscale.setScalingGroupStrategy(ss);
+        autoscale.setRoutingEgressTrafficStrategy(rets);
         autoscale.setTaggingAutoscaleVmStrategy(new NoopTaggingVmStrategy(p, x));
         autoscale.setFazIntegrationStrategy(new NoopFazIntegrationStrategy(p, x));
     });
@@ -756,6 +772,7 @@ describe('sync recovery of unhealthy vm.', () => {
     let ms: PrimaryElectionStrategy;
     let hs: HeartbeatSyncStrategy;
     let ss: ScalingGroupStrategy;
+    let rets: RoutingEgressTrafficStrategy;
     let autoscale: Autoscale;
     before(function() {
         p = new TestPlatformAdapter();
@@ -814,10 +831,12 @@ describe('sync recovery of unhealthy vm.', () => {
         ms = new PreferredGroupPrimaryElection(p, x);
         hs = new ConstantIntervalHeartbeatSyncStrategy(p, x);
         ss = new NoopScalingGroupStrategy(p, x);
+        rets = new NoopRoutingEgressTrafficStrategy(p, x);
         autoscale = new TestAutoscale(p, e, x);
         autoscale.setPrimaryElectionStrategy(ms);
         autoscale.setHeartbeatSyncStrategy(hs);
         autoscale.setScalingGroupStrategy(ss);
+        autoscale.setRoutingEgressTrafficStrategy(rets);
         autoscale.setTaggingAutoscaleVmStrategy(new NoopTaggingVmStrategy(p, x));
         autoscale.setFazIntegrationStrategy(new NoopFazIntegrationStrategy(p, x));
     });
@@ -970,6 +989,11 @@ describe('sync recovery of unhealthy vm.', () => {
         'When termination of unhealthy vm is disabled and heartbeat arrives on-time and ' +
             'the number reaches the recovery threshold, sync recovery should be completed.',
         async () => {
+            // set primary scaling group name
+            s.set(
+                AutoscaleSetting.PrimaryScalingGroupName,
+                new SettingItem('1', TEST_HCR_LATE.scalingGroupName, '3', true, true)
+            );
             // turn off the termination toggle
             // Set termination of unhealthy vm to 'false'
             s.set(
@@ -994,6 +1018,7 @@ describe('sync recovery of unhealthy vm.', () => {
                 hcr.syncRecoveryCount = 1;
                 // set the hb on-time
                 hcr.nextHeartbeatTime = Date.now() + 9999999;
+                hcr.sendTime = new Date().toUTCString();
                 return Promise.resolve(hcr);
             });
             const stub4 = Sinon.stub(p, 'updateHealthCheckRecord').callsFake(rec => {

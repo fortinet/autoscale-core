@@ -117,13 +117,31 @@ export class PreferredGroupPrimaryElection implements PrimaryElectionStrategy {
             return PrimaryElectionStrategyResult.ShouldContinue;
         } else {
             // if has candidate healthcheck record, that means this candidate is already in-service
-            // but is in a non-primary role. If it qualifies for election and wins the election, the
+            // but is in a non-primary role (e.g. secondary role or not yet assigned a role).
+            // KNOWN ISSUE: if a brand new device is the primary candidate and it wins
+            // the election to become the new primary, ALL CONFIGURATION WILL BE LOST
+            // TODO: need to find a more qualified candidate, or develop a technique to sync
+            // the configuration.
+            // solution:
+            // for the classic case:
+            // check if this device is a new device (not yet monitored) there is another existing device in the cluster, let them trigger
+            // primary election.
+            // if there isn't any other existing device in the cluster,
+            // If it qualifies for election and wins the election, the
             // primary election can be deemed done immediately as primary record created.
             if (this.env.candidateHealthCheck && this.env.candidateHealthCheck.healthy) {
-                // KNOWN ISSUE: if a brand new device is the primary candidate and it wins
-                // the election to become the new primary, ALL CONFIGURATION WILL BE LOST
-                // TODO: need to find a more qualified candidate, or develop a technique to sync
-                // the configuration.
+                // NOTE: if device has provided sync info, a more accurate election candidate
+                // qualification will perform.
+                // NOTE: improved candidate qualification
+                // need to check the syncStatus and isPrimary properties. see the prop descriptions
+                // additional infomation about all running vm will be needed
+                // if this target vm is in good health, and
+                // is in-sync with the primary (info provided by the device),
+                // then if this device is a secondary, it qualifies for a primary candidate,
+                // if this device is a primary, it qualifies as well.
+                // if this device isn't in-sync with the primary (info provided by the device),
+                // it does not qualify. Will skip it, and end this round of primary election.
+                //
                 primaryRecord.voteEndTime = Date.now(); // election ends immediately
                 primaryRecord.voteState = PrimaryRecordVoteState.Done;
             }

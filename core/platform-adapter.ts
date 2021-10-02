@@ -39,7 +39,7 @@ export interface DeviceSyncInfo {
     time: string;
     /**
      * Representing property: sync_time, the last time on successful ha sync, ISO 8601 format, device's time.
-     * If device provided this property, it will not null.
+     * If device provided this property, it can be null.
      * If device not provided this property, it will be null.
      */
     syncTime: string | null;
@@ -166,6 +166,13 @@ export interface PlatformAdapter {
      * @param rec primary record to be updated.
      */
     updatePrimaryRecord(rec: PrimaryRecord): Promise<void>;
+    /**
+     * delete the primary record using the given rec. delete only when the record property values
+     * strictly match the record in the db.
+     * @param rec primary record to be delete.
+     * @param fullMatch need a full match of each property to delete
+     */
+    deletePrimaryRecord(rec: PrimaryRecord, fullMatch?: boolean): Promise<void>;
     /**
      * Load a configset file from blob storage
      * The blob container will use the AssetStorageContainer or CustomAssetContainer,
