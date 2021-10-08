@@ -488,9 +488,12 @@ export abstract class Autoscale implements AutoscaleCore {
         const vmHandler = async (vm: VirtualMachine): Promise<void> => {
             this.proxy.logAsInfo(`handling unhealthy vm(id: ${vm.id})...`);
             const subject = 'Autoscale unhealthy vm is detected';
-            let message =
+
+            let message;
+            this.proxy.logAsWarning(
                 `Device (id: ${vm.id}, ip: ${vm.primaryPrivateIpAddress}) has` +
-                ' been deemed unhealthy and marked as out-of-sync by the Autoscale.\n\n';
+                    ' been deemed unhealthy and marked as out-of-sync by the Autoscale.\n\n'
+            );
             this.proxy.logAsWarning(
                 'Termination of unhealthy vm is ' +
                     `${terminateUnhealthyVm ? 'enabled' : 'disabled'}.` +
