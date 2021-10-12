@@ -409,8 +409,6 @@ export abstract class Autoscale implements AutoscaleCore {
         let redoElection = false;
         let reloadPrimarRecord = false;
 
-        await this.primaryElectionStrategy.prepare(election);
-
         // in general, possible primary election results include:
         // 1. ineligible candidate, no existing election, no reference to the new primary vm, no reference to the old primary vm
         // 2. ineligible candidate, no existing election, no reference to the new primary vm, has reference to the old primary vm
@@ -554,18 +552,37 @@ export abstract class Autoscale implements AutoscaleCore {
         // primary election need to redo?
         if (redoElection) {
             try {
+                await this.primaryElectionStrategy.prepare(election);
                 // workflow: start a new primary election
                 await this.primaryElectionStrategy.apply();
                 // get the election result.
                 election = await this.primaryElectionStrategy.result();
                 // if new primary election started
-                // election will be avaialble
+                // election will be avaialble: new primary vm and new primary record will not be null
                 this.env.primaryRecord = election.newPrimaryRecord;
                 this.env.primaryVm = election.newPrimary;
-                // need to save the primary record
-                action = 'save';
-                // should reload primary record
-                reloadPrimarRecord = true;
+                // only when primary record isn't null, it needs to save the primary record
+                if (election.newPrimary && election.newPrimaryRecord) {
+                    // If the target VM is new elected primary, and is already in the monitor,
+                    // can resolve the primary immediately
+                    // otherwise, the primary election will be resolved when the elected primary
+                    // state becomes in-service
+                    if (
+                        this.platform.vmEquals(this.env.targetVm, election.newPrimary) &&
+                        this.env.targetHealthCheckRecord
+                    ) {
+                        election.newPrimaryRecord.voteEndTime = Date.now(); // election ends immediately
+                        election.newPrimaryRecord.voteState = PrimaryRecordVoteState.Done;
+                    }
+                    action = 'save';
+                    // should reload primary record
+                    reloadPrimarRecord = true;
+                } else {
+                    // do not need to save the primary record
+                    action = 'noop';
+                    // should not reload the primary record
+                    reloadPrimarRecord = false;
+                }
             } catch (error) {
                 this.proxy.logForError('Primary election does not start. Error occurs.', error);
                 // do not need to save the primary record

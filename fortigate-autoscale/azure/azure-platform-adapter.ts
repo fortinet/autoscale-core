@@ -496,6 +496,29 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called getPrimaryVm');
         return vm;
     }
+
+    async getVmById(vmId: string, scalingGroupName: string): Promise<VirtualMachine> {
+        this.proxy.logAsInfo('calling getVmById');
+        if (!scalingGroupName) {
+            this.proxy.logAsInfo('called getVmById');
+            return null;
+        }
+        const describeInstanceResult = await this.adaptee.describeInstance(scalingGroupName, vmId);
+        let vm: VirtualMachine;
+        if (describeInstanceResult.result) {
+            // get network interfaces
+            const listNetworkInterfacesResult = await this.adaptee.listNetworkInterfaces(
+                scalingGroupName,
+                Number(describeInstanceResult.result.instanceId),
+                ApiCacheOption.ReadCacheFirst,
+                describeInstanceResult.ttl
+            );
+            const nics = listNetworkInterfacesResult.result;
+            vm = this.mapVm(describeInstanceResult.result, scalingGroupName, nics);
+        }
+        this.proxy.logAsInfo('called getVmById');
+        return vm;
+    }
     /**
      * List all vm instances of a certain scaling group
      * @param  {string} scalingGroupName the scaling group name to list
@@ -569,6 +592,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
      */
     async getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord> {
         this.proxy.logAsInfo('calling getHealthCheckRecord');
+        const settings = await this.getSettings();
         const table = new AzureAutoscale();
         const dbItem = await this.adaptee.getItemFromDb<AzureAutoscaleDbItem>(table, [
             {
@@ -578,10 +602,22 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         ]);
 
         let record: HealthCheckRecord;
-        const heartbeatDelayAllowanceSettingItem = this.settings.get(
+
+        if (dbItem) {
+            record = this.parseHealthCheckRecord(dbItem, settings);
+        }
+        this.proxy.logAsInfo('called getHealthCheckRecord');
+        return record;
+    }
+
+    private parseHealthCheckRecord(
+        dbItem: DBDef.AutoscaleDbItem,
+        settings: Settings
+    ): HealthCheckRecord {
+        const heartbeatDelayAllowanceSettingItem = settings.get(
             AzureFortiGateAutoscaleSetting.HeartbeatDelayAllowance
         );
-        const maxHeartbeatLossCountSettingItem = this.settings.get(
+        const maxHeartbeatLossCountSettingItem = settings.get(
             AzureFortiGateAutoscaleSetting.HeartbeatLossCount
         );
 
@@ -593,55 +629,62 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         const maxHeartbeatLossCount: number =
             (maxHeartbeatLossCountSettingItem && Number(maxHeartbeatLossCountSettingItem.value)) ||
             0;
+        // if heartbeatDelay is <= 0, it means hb arrives early or ontime
+        const heartbeatDelay = this.createTime - dbItem.nextHeartBeatTime - delayAllowance;
 
-        if (dbItem) {
-            // if heartbeatDelay is <= 0, it means hb arrives early or ontime
-            const heartbeatDelay = this.createTime - dbItem.nextHeartBeatTime - delayAllowance;
+        const [syncState] = Object.entries(HealthCheckSyncState)
+            .filter(([, value]) => {
+                return dbItem.syncState === value;
+            })
+            .map(([, v]) => v);
 
-            const [syncState] = Object.entries(HealthCheckSyncState)
-                .filter(([, value]) => {
-                    return dbItem.syncState === value;
-                })
-                .map(([, v]) => v);
+        const nextHeartbeatLossCount = dbItem.heartBeatLossCount + ((heartbeatDelay > 0 && 1) || 0);
 
-            const nextHeartbeatLossCount =
-                dbItem.heartBeatLossCount + ((heartbeatDelay > 0 && 1) || 0);
+        // healthy reason: next heartbeat loss count is smaller than max allowed value.
+        const isHealthy = nextHeartbeatLossCount < maxHeartbeatLossCount;
 
-            // healthy reason: next heartbeat loss count is smaller than max allowed value.
-            const isHealthy = nextHeartbeatLossCount < maxHeartbeatLossCount;
-
-            record = {
-                vmId: vmId,
-                scalingGroupName: dbItem.scalingGroupName,
-                ip: dbItem.ip,
-                primaryIp: dbItem.primaryIp,
-                heartbeatInterval: dbItem.heartBeatInterval,
-                heartbeatLossCount: dbItem.heartBeatLossCount,
-                nextHeartbeatTime: dbItem.nextHeartBeatTime,
-                syncState: syncState,
-                // if the prop doesn't exist in item set it to 0 by default
-                syncRecoveryCount: dbItem.syncRecoveryCount || 0,
-                seq: dbItem.seq,
-                healthy: isHealthy,
-                upToDate: true,
-                // the following properities are only available in some device versions
-                // convert string 'null' to null
-                sendTime: (dbItem.sendTime === 'null' && null) || dbItem.sendTime,
-                deviceSyncTime: (dbItem.deviceSyncTime === 'null' && null) || dbItem.deviceSyncTime,
-                deviceSyncFailTime:
-                    (dbItem.deviceSyncFailTime === 'null' && null) || dbItem.deviceSyncFailTime,
-                deviceSyncStatus:
-                    (dbItem.deviceSyncStatus === 'null' && null) ||
-                    dbItem.deviceSyncStatus === 'true',
-                deviceIsPrimary:
-                    (dbItem.deviceIsPrimary === 'null' && null) ||
-                    dbItem.deviceIsPrimary === 'true',
-                deviceChecksum: (dbItem.deviceChecksum === 'null' && null) || dbItem.deviceChecksum
-            };
-        }
-        this.proxy.logAsInfo('called getHealthCheckRecord');
-        return record;
+        return {
+            vmId: dbItem.vmId,
+            scalingGroupName: dbItem.scalingGroupName,
+            ip: dbItem.ip,
+            primaryIp: dbItem.primaryIp,
+            heartbeatInterval: dbItem.heartBeatInterval,
+            heartbeatLossCount: dbItem.heartBeatLossCount,
+            nextHeartbeatTime: dbItem.nextHeartBeatTime,
+            syncState: syncState,
+            // if the prop doesn't exist in item set it to 0 by default
+            syncRecoveryCount: dbItem.syncRecoveryCount || 0,
+            seq: dbItem.seq,
+            healthy: isHealthy,
+            upToDate: true,
+            // the following properities are only available in some device versions
+            // convert string 'null' to null
+            sendTime: (dbItem.sendTime === 'null' && null) || dbItem.sendTime,
+            deviceSyncTime: (dbItem.deviceSyncTime === 'null' && null) || dbItem.deviceSyncTime,
+            deviceSyncFailTime:
+                (dbItem.deviceSyncFailTime === 'null' && null) || dbItem.deviceSyncFailTime,
+            deviceSyncStatus:
+                (dbItem.deviceSyncStatus === 'null' && null) || dbItem.deviceSyncStatus === 'true',
+            deviceIsPrimary:
+                (dbItem.deviceIsPrimary === 'null' && null) || dbItem.deviceIsPrimary === 'true',
+            deviceChecksum: (dbItem.deviceChecksum === 'null' && null) || dbItem.deviceChecksum
+        };
     }
+
+    async listHealthCheckRecord(): Promise<HealthCheckRecord[]> {
+        this.proxy.logAsInfo('calling listHealthCheckRecord');
+        const settings = await this.getSettings();
+        const table = new AzureAutoscale();
+        const queryResult = await this.adaptee.listItemFromDb<DBDef.AutoscaleDbItem>(table);
+        const dbItems = queryResult.result || [];
+        const records: HealthCheckRecord[] = dbItems.map(dbItem => {
+            return this.parseHealthCheckRecord(dbItem, settings);
+        });
+
+        this.proxy.logAsInfo('called listHealthCheckRecord');
+        return records;
+    }
+
     /**
      * Get the Autoscale health check record of the elected primary vm
      * @param  {DBDef.KeyValue[]} filters optional filter to match the record or null if not match

@@ -50,7 +50,7 @@ export interface DeviceSyncInfo {
      */
     syncFailTime: string | null;
     /**
-     * Representing property: sync_status, true of false on secondary device if in-sync with primary or not;
+     * Representing property: sync_status, true or false on secondary device if in-sync with primary or not;
      * It will be null on primary device.
      * If device provided this property, it can be null.
      * If device not provided this property, it will be null.
@@ -144,11 +144,13 @@ export interface PlatformAdapter {
     validateSettings(): Promise<boolean>;
     getTargetVm(): Promise<VirtualMachine | null>;
     getPrimaryVm(): Promise<VirtualMachine | null>;
+    getVmById(vmId: string, scalingGroupName?: string): Promise<VirtualMachine | null>;
     listAutoscaleVm(
         identifyScalingGroup?: boolean,
         listNic?: boolean
     ): Promise<VirtualMachine[] | null>;
     getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord | null>;
+    listHealthCheckRecord(): Promise<HealthCheckRecord[] | null>;
     getPrimaryRecord(filters?: KeyValue[]): Promise<PrimaryRecord | null>;
     vmEquals(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean;
     createHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;

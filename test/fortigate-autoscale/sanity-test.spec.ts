@@ -26,7 +26,7 @@ import {
     NoopScalingGroupStrategy,
     NoopTaggingVmStrategy,
     PlatformAdapter,
-    PreferredGroupPrimaryElection,
+    WeightedScorePreferredGroupPrimaryElection,
     PrimaryElection,
     PrimaryElectionStrategy,
     PrimaryElectionStrategyResult,
@@ -106,6 +106,27 @@ const TEST_HCR_OUT_OF_SYNC: HealthCheckRecord = {
     sendTime: new Date(0).toISOString(), // the beginning of UTC
     deviceSyncTime: new Date(0).toISOString(), // the beginning of UTC
     deviceSyncFailTime: null,
+    deviceSyncStatus: true,
+    deviceIsPrimary: true,
+    deviceChecksum: 'deviceChecksum'
+};
+
+const TEST_HCR_PRIMARY_ON_TIME: HealthCheckRecord = {
+    vmId: 'fake-test-primary-vm-id',
+    scalingGroupName: 'fake-test-vm-scaling-group-name',
+    ip: '2',
+    primaryIp: '3',
+    heartbeatInterval: 4,
+    heartbeatLossCount: 0,
+    nextHeartbeatTime: 6,
+    syncState: HealthCheckSyncState.InSync,
+    syncRecoveryCount: 0,
+    seq: 7,
+    healthy: true,
+    upToDate: true,
+    sendTime: 'sendTime',
+    deviceSyncTime: 'deviceSyncTime',
+    deviceSyncFailTime: 'deviceSyncFailTime',
     deviceSyncStatus: true,
     deviceIsPrimary: true,
     deviceChecksum: 'deviceChecksum'
@@ -309,8 +330,14 @@ class TestPlatformAdapter implements PlatformAdapter {
     getPrimaryVm(): Promise<VirtualMachine> {
         return Promise.resolve(TEST_PRIMARY_VM);
     }
+    getVmById(vmId: string, scalingGroupName?: string): Promise<VirtualMachine> {
+        return Promise.resolve(TEST_VM);
+    }
     getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord> {
         return Promise.resolve(TEST_HCR_ON_TIME);
+    }
+    listHealthCheckRecord(): Promise<HealthCheckRecord[]> {
+        return Promise.resolve([TEST_HCR_LATE, TEST_HCR_ON_TIME, TEST_HCR_OUT_OF_SYNC]);
     }
     getPrimaryRecord(): Promise<PrimaryRecord> {
         return Promise.resolve(TEST_PRIMARY_RECORD);
@@ -460,7 +487,7 @@ describe('sanity test', () => {
             candidate: TEST_VM,
             signature: 'test-signature'
         };
-        ms = new PreferredGroupPrimaryElection(p, x);
+        ms = new WeightedScorePreferredGroupPrimaryElection(p, x);
         hs = new ConstantIntervalHeartbeatSyncStrategy(p, x);
         ss = new NoopScalingGroupStrategy(p, x);
         rets = new NoopRoutingEgressTrafficStrategy(p, x);
@@ -671,7 +698,7 @@ describe('handle unhealthy vm.', () => {
                 return Promise.resolve(true);
             }
         };
-        ms = new PreferredGroupPrimaryElection(p, x);
+        ms = new WeightedScorePreferredGroupPrimaryElection(p, x);
         hs = new ConstantIntervalHeartbeatSyncStrategy(p, x);
         ss = new NoopScalingGroupStrategy(p, x);
         rets = new NoopRoutingEgressTrafficStrategy(p, x);
@@ -774,11 +801,11 @@ describe('sync recovery of unhealthy vm.', () => {
     let ss: ScalingGroupStrategy;
     let rets: RoutingEgressTrafficStrategy;
     let autoscale: Autoscale;
-    before(function() {
+    beforeEach(function() {
         p = new TestPlatformAdapter();
         e = {
             targetVm: TEST_VM,
-            primaryVm: TEST_VM,
+            primaryVm: TEST_PRIMARY_VM,
             primaryRecord: TEST_PRIMARY_RECORD
         };
         x = new TestCloudFunctionProxyAdapter();
@@ -828,7 +855,7 @@ describe('sync recovery of unhealthy vm.', () => {
                 return Promise.resolve(true);
             }
         };
-        ms = new PreferredGroupPrimaryElection(p, x);
+        ms = new WeightedScorePreferredGroupPrimaryElection(p, x);
         hs = new ConstantIntervalHeartbeatSyncStrategy(p, x);
         ss = new NoopScalingGroupStrategy(p, x);
         rets = new NoopRoutingEgressTrafficStrategy(p, x);
@@ -1012,8 +1039,14 @@ describe('sync recovery of unhealthy vm.', () => {
             const stub2 = Sinon.stub(p, 'vmEquals').callsFake(() => {
                 return true;
             });
-            const stub3 = Sinon.stub(p, 'getHealthCheckRecord').callsFake(() => {
-                const hcr = Object.assign({}, TEST_HCR_OUT_OF_SYNC);
+            const stub3 = Sinon.stub(p, 'getHealthCheckRecord').callsFake(vmId => {
+                let hcr: HealthCheckRecord;
+                // if get primary health check, return the healthy primary health check
+                if (vmId === TEST_HCR_PRIMARY_ON_TIME.vmId) {
+                    hcr = Object.assign({}, TEST_HCR_PRIMARY_ON_TIME);
+                } else {
+                    hcr = Object.assign({}, TEST_HCR_OUT_OF_SYNC);
+                }
                 // set the sync recovery count to 1
                 hcr.syncRecoveryCount = 1;
                 // set the hb on-time
@@ -1033,6 +1066,9 @@ describe('sync recovery of unhealthy vm.', () => {
                 Sinon.assert.match(rec.healthy, true);
                 return Promise.resolve();
             });
+            const stub5 = Sinon.stub(p, 'updatePrimaryRecord').callsFake(rec => {
+                return Promise.resolve();
+            });
 
             await autoscale.handleHeartbeatSync();
 
@@ -1040,6 +1076,7 @@ describe('sync recovery of unhealthy vm.', () => {
             stub2.restore();
             stub3.restore();
             stub4.restore();
+            stub5.restore();
         }
     );
 });

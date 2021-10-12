@@ -414,6 +414,26 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         return vm;
     }
 
+    async getVmById(vmId: string, scalingGroupName?: string): Promise<VirtualMachine> {
+        this.proxy.logAsInfo('calling getVmById');
+        const instance = await this.adaptee.describeInstance(vmId);
+        let vm: VirtualMachine;
+        let scalingGroup = scalingGroupName;
+        if (instance) {
+            // NOTE: vm in terminated state can be still described. We should consider such vm as unavailable
+            if (vm.state === VirtualMachineState.Terminated) {
+                vm = null;
+            }
+            if (!scalingGroup) {
+                const scalingGroupMap = await this.adaptee.identifyInstanceScalingGroup([vmId]);
+                scalingGroup = scalingGroupMap.get(vmId) || null;
+            }
+            vm = this.instanceToVm(instance, scalingGroup, instance.NetworkInterfaces);
+        }
+        this.proxy.logAsInfo('called getVmById');
+        return vm;
+    }
+
     async listAutoscaleVm(
         identifyScalingGroup?: boolean,
         listNic?: boolean
@@ -495,62 +515,82 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         let record: HealthCheckRecord;
 
         if (dbItem) {
-            // if heartbeatDelay is <= 0, it means hb arrives early or ontime
-            const heartbeatDelay =
-                this.createTime -
-                dbItem.nextHeartBeatTime -
-                Number(
-                    this.settings.get(AwsFortiGateAutoscaleSetting.HeartbeatDelayAllowance).value
-                );
-
-            const maxHeartbeatLossCount = Number(
-                this.settings.get(AwsFortiGateAutoscaleSetting.HeartbeatLossCount).value
-            );
-
-            const [syncState] = Object.entries(HealthCheckSyncState)
-                .filter(([, value]) => {
-                    return dbItem.syncState === value;
-                })
-                .map(([, v]) => v);
-
-            const nextHeartbeatLossCount =
-                dbItem.heartBeatLossCount + ((heartbeatDelay > 0 && 1) || 0);
-
-            // healthy reason: next heartbeat loss count is smaller than max allowed value.
-            const isHealthy = nextHeartbeatLossCount < maxHeartbeatLossCount;
-
-            record = {
-                vmId: vmId,
-                scalingGroupName: dbItem.scalingGroupName,
-                ip: dbItem.ip,
-                primaryIp: dbItem.primaryIp,
-                heartbeatInterval: dbItem.heartBeatInterval,
-                heartbeatLossCount: dbItem.heartBeatLossCount,
-                nextHeartbeatTime: dbItem.nextHeartBeatTime,
-                syncState: syncState,
-                // if the prop doesn't exist in item set it to 0 by default
-                syncRecoveryCount: dbItem.syncRecoveryCount || 0,
-                seq: dbItem.seq,
-                healthy: isHealthy,
-                upToDate: true,
-                // the following properities are only available in some device versions
-                // convert string 'null' to null
-                sendTime: (dbItem.sendTime === 'null' && null) || dbItem.sendTime,
-                deviceSyncTime: (dbItem.deviceSyncTime === 'null' && null) || dbItem.deviceSyncTime,
-                deviceSyncFailTime:
-                    (dbItem.deviceSyncFailTime === 'null' && null) || dbItem.deviceSyncFailTime,
-                deviceSyncStatus:
-                    (dbItem.deviceSyncStatus === 'null' && null) ||
-                    dbItem.deviceSyncStatus === 'true',
-                deviceIsPrimary:
-                    (dbItem.deviceIsPrimary === 'null' && null) ||
-                    dbItem.deviceIsPrimary === 'true',
-                deviceChecksum: (dbItem.deviceChecksum === 'null' && null) || dbItem.deviceChecksum
-            };
+            record = this.parseHealthCheckRecord(dbItem, settings);
         }
         this.proxy.logAsInfo('called getHealthCheckRecord');
         return record;
     }
+
+    private parseHealthCheckRecord(
+        dbItem: DBDef.AutoscaleDbItem,
+        settings: Settings
+    ): HealthCheckRecord {
+        // if heartbeatDelay is <= 0, it means hb arrives early or ontime
+        const heartbeatDelay =
+            this.createTime -
+            dbItem.nextHeartBeatTime -
+            Number(settings.get(AwsFortiGateAutoscaleSetting.HeartbeatDelayAllowance).value);
+
+        const maxHeartbeatLossCount = Number(
+            settings.get(AwsFortiGateAutoscaleSetting.HeartbeatLossCount).value
+        );
+
+        const [syncState] = Object.entries(HealthCheckSyncState)
+            .filter(([, value]) => {
+                return dbItem.syncState === value;
+            })
+            .map(([, v]) => v);
+
+        const nextHeartbeatLossCount = dbItem.heartBeatLossCount + ((heartbeatDelay > 0 && 1) || 0);
+
+        // healthy reason: next heartbeat loss count is smaller than max allowed value.
+        const isHealthy = nextHeartbeatLossCount < maxHeartbeatLossCount;
+
+        return {
+            vmId: dbItem.vmId,
+            scalingGroupName: dbItem.scalingGroupName,
+            ip: dbItem.ip,
+            primaryIp: dbItem.primaryIp,
+            heartbeatInterval: dbItem.heartBeatInterval,
+            heartbeatLossCount: dbItem.heartBeatLossCount,
+            nextHeartbeatTime: dbItem.nextHeartBeatTime,
+            syncState: syncState,
+            // if the prop doesn't exist in item set it to 0 by default
+            syncRecoveryCount: dbItem.syncRecoveryCount || 0,
+            seq: dbItem.seq,
+            healthy: isHealthy,
+            upToDate: true,
+            // the following properities are only available in some device versions
+            // convert string 'null' to null
+            sendTime: (dbItem.sendTime === 'null' && null) || dbItem.sendTime,
+            deviceSyncTime: (dbItem.deviceSyncTime === 'null' && null) || dbItem.deviceSyncTime,
+            deviceSyncFailTime:
+                (dbItem.deviceSyncFailTime === 'null' && null) || dbItem.deviceSyncFailTime,
+            deviceSyncStatus:
+                (dbItem.deviceSyncStatus === 'null' && null) || dbItem.deviceSyncStatus === 'true',
+            deviceIsPrimary:
+                (dbItem.deviceIsPrimary === 'null' && null) || dbItem.deviceIsPrimary === 'true',
+            deviceChecksum: (dbItem.deviceChecksum === 'null' && null) || dbItem.deviceChecksum
+        };
+    }
+
+    async listHealthCheckRecord(): Promise<HealthCheckRecord[]> {
+        this.proxy.logAsInfo('calling listHealthCheckRecord');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsAutoscale(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+        );
+
+        const dbItems = await this.adaptee.listItemFromDb<DBDef.AutoscaleDbItem>(table);
+
+        const records: HealthCheckRecord[] = dbItems.map(dbItem => {
+            return this.parseHealthCheckRecord(dbItem, settings);
+        });
+
+        this.proxy.logAsInfo('called listHealthCheckRecord');
+        return records;
+    }
+
     async getPrimaryRecord(filters?: DBDef.KeyValue[]): Promise<PrimaryRecord> {
         this.proxy.logAsInfo('calling getPrimaryRecord');
         const settings = await this.getSettings();
