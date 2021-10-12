@@ -107,8 +107,7 @@ export enum ApiCacheOption {
 const TTLS = {
     listInstances: 600,
     describeInstance: 600,
-    listNetworkInterfaces: 600,
-    loadSettings: 60
+    listNetworkInterfaces: 600
 };
 
 export class AzurePlatformAdaptee implements PlatformAdaptee {
@@ -179,8 +178,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
     async reloadSettings(invalidateCache: boolean): Promise<ApiCache<Settings>> {
         const req: ApiCacheRequest = {
             api: 'loadSettings',
-            parameters: [],
-            ttl: TTLS.loadSettings // expected time to live
+            parameters: []
         };
 
         const requestProcessor = async (): Promise<AzureSettingsDbItem[]> => {
