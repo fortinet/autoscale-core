@@ -16,14 +16,6 @@ import { SecretClient } from '@azure/keyvault-secrets';
 import * as msRestNodeAuth from '@azure/ms-rest-nodeauth';
 import { BlobServiceClient, StorageSharedKeyCredential } from '@azure/storage-blob';
 import * as DBDef from '@fortinet/autoscale-core/db-definitions';
-import {
-    Blob,
-    jsonParseReviver,
-    jsonStringifyReplacer,
-    PlatformAdaptee,
-    SettingItem,
-    Settings
-} from '..';
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import fs from 'fs';
 import * as HttpStatusCodes from 'http-status-codes';
@@ -38,6 +30,14 @@ import {
     CosmosDBQueryWhereClause,
     CosmosDbTableMetaData
 } from '.';
+import {
+    Blob,
+    jsonParseReviver,
+    jsonStringifyReplacer,
+    PlatformAdaptee,
+    SettingItem,
+    Settings
+} from '..';
 
 export enum requiredEnvVars {
     AUTOSCALE_DB_ACCOUNT = 'AUTOSCALE_DB_ACCOUNT',
@@ -175,31 +175,17 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         );
     }
 
-    async reloadSettings(invalidateCache: boolean): Promise<ApiCache<Settings>> {
-        const req: ApiCacheRequest = {
-            api: 'loadSettings',
-            parameters: []
-        };
-
-        const requestProcessor = async (): Promise<AzureSettingsDbItem[]> => {
-            const table = new AzureSettings();
-            const queryResult: CosmosDBQueryResult<AzureSettingsDbItem> = await this.listItemFromDb<
-                AzureSettingsDbItem
-            >(table);
-            return queryResult.result || [];
-        };
+    async reloadSettings(invalidateCache: boolean): Promise<Settings> {
+        const table = new AzureSettings();
+        const queryResult: CosmosDBQueryResult<AzureSettingsDbItem> = await this.listItemFromDb<
+            AzureSettingsDbItem
+        >(table);
+        const res = queryResult.result || [];
         if (invalidateCache) {
             this.settings = null;
         }
-        const res = await this.requestWithCaching<AzureSettingsDbItem[]>(
-            req,
-            invalidateCache ? ApiCacheOption.ReadCacheAndDelete : ApiCacheOption.ReadCacheFirst,
-            requestProcessor
-        );
         const records: Map<string, AzureSettingsDbItem> = new Map();
-        if (res && res.result) {
-            res.result.forEach(rec => records.set(rec.settingKey, rec));
-        }
+        res.forEach(rec => records.set(rec.settingKey, rec));
         const settings: Settings = new Map<string, SettingItem>();
         Object.values(AzureFortiGateAutoscaleSetting).forEach(value => {
             if (records.has(value)) {
@@ -214,13 +200,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                 settings.set(value, settingItem);
             }
         });
-        const cache: ApiCache<Settings> = {
-            result: settings,
-            hitCache: res.hitCache,
-            cacheTime: res.cacheTime,
-            ttl: res.ttl
-        };
-        return cache;
+        return settings;
     }
 
     async loadSettings(): Promise<Settings> {
@@ -228,7 +208,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             return this.settings;
         }
         const data = await this.reloadSettings(false);
-        this.settings = data.result;
+        this.settings = data;
         return this.settings;
     }
 
