@@ -722,7 +722,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             deviceChecksum: rec.deviceChecksum
         };
         // NOTE: strictly update the record when the sequence to update is greater
-        // than the seq in the db ton ensure data not to fall back to old value in race conditions
+        // than the seq in the db to ensure data not to fall back to old value in race conditions
         const conditionExp: AwsDdbOperations = {
             Expression: 'seq < :seq',
             ExpressionAttributeValues: {
@@ -1096,7 +1096,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 // NOTE: for updating an existing record, it requires a reference of the existing
                 // record as a snapshot of db data. Only when the record data at the time of updating
                 // matches exactly the same as the snapshot, the update succeeds. Otherwise, the
-                // record is considerred changed, and inconsistent anymore, thus not allowing updating.
+                // record is considered changed, and inconsistent anymore, thus not allowing updating.
                 if (items.has(rec.item.checksum)) {
                     // ASSERT: it must have a referenced record to replace. otherwise, if should fail
                     if (!rec.reference) {

@@ -641,7 +641,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             oldNextHeartbeatTime = heartbeatArriveTime;
             // no old record for reference, use the seq provided by the device. If the seq is
             // NaN, it means no sequence provided by the device, then use 0.
-            oldSeq = (isNaN(deviceSyncInfo.sequence) && 0) || deviceSyncInfo.sequence;
+            oldSeq = isNaN(deviceSyncInfo.sequence) ? 0 : deviceSyncInfo.sequence;
             targetHealthCheckRecord = {
                 vmId: this.targetVm.id,
                 scalingGroupName: this.targetVm.scalingGroupName,
@@ -653,7 +653,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 syncState: HeartbeatSyncState.InSync,
                 syncRecoveryCount: 0, // sync recovery count = 0 means no recovery needed
                 // use the device sequence if it exists or 1 as the initial sequence
-                seq: (!isNaN(deviceSyncInfo.sequence) && deviceSyncInfo.sequence) || 1,
+                seq: !isNaN(deviceSyncInfo.sequence) ? deviceSyncInfo.sequence : 1,
                 healthy: true,
                 upToDate: true,
                 // additional device sync info whenever provided
@@ -692,7 +692,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             if (useDeviceSyncInfo) {
                 delayCalculationMethod = 'by device send time';
                 // check if the sequence is in an incremental order compared to the data in the db
-                // if not, the heartbea should be marked as outdated and to be dropped
+                // if not, the heartbeat should be marked as outdated and to be dropped
                 if (deviceSyncInfo.sequence < targetHealthCheckRecord.seq) {
                     outdatedHearbeatRequest = true;
                 } else {
@@ -712,7 +712,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                     // in this situation, there are race conditions happening between some
                     // heartbeat requests. The reason is one autoscale handler is taking much
                     // longer to process another heartbeat and unable to complete before this
-                    // heartbeat arrives at the handler (by a parallel cloud function thread).
+                    // heartbeat arrives at the handler (by a parallel cloud function process).
                     // The outcome of this situation is:
                     // for the hb which is immediate after the recorded one (new seq = old seq + 1)
                     // it will be handled in the above if-else case.
@@ -727,7 +727,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             // calculate delay using the arrive time (classic method)
             else {
                 // NOTE:
-                // heartbeatArriveTime: the starting time of the function execution, considerred as
+                // heartbeatArriveTime: the starting time of the function execution, considered as
                 // the heartbeat arrived at the function
                 // oldNextHeartbeatTime: the expected arrival time for the current heartbeat, recorded
                 // in the db, updated in the previous heartbeat calculation
