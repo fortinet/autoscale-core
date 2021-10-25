@@ -106,8 +106,7 @@ export enum ApiCacheOption {
 const TTLS = {
     listInstances: 600,
     describeInstance: 600,
-    listNetworkInterfaces: 600,
-    loadSettings: 60
+    listNetworkInterfaces: 600
 };
 
 export class AzurePlatformAdaptee implements PlatformAdaptee {
@@ -175,32 +174,17 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         );
     }
 
-    async reloadSettings(invalidateCache: boolean): Promise<ApiCache<Settings>> {
-        const req: ApiCacheRequest = {
-            api: 'loadSettings',
-            parameters: [],
-            ttl: TTLS.loadSettings // expected time to live
-        };
-
-        const requestProcessor = async (): Promise<AzureSettingsDbItem[]> => {
-            const table = new AzureSettings();
-            const queryResult: CosmosDBQueryResult<AzureSettingsDbItem> = await this.listItemFromDb<
-                AzureSettingsDbItem
-            >(table);
-            return queryResult.result || [];
-        };
+    async reloadSettings(invalidateCache: boolean): Promise<Settings> {
+        const table = new AzureSettings();
+        const queryResult: CosmosDBQueryResult<AzureSettingsDbItem> = await this.listItemFromDb<
+            AzureSettingsDbItem
+        >(table);
+        const res = queryResult.result || [];
         if (invalidateCache) {
             this.settings = null;
         }
-        const res = await this.requestWithCaching<AzureSettingsDbItem[]>(
-            req,
-            invalidateCache ? ApiCacheOption.ReadCacheAndDelete : ApiCacheOption.ReadCacheFirst,
-            requestProcessor
-        );
         const records: Map<string, AzureSettingsDbItem> = new Map();
-        if (res && res.result) {
-            res.result.forEach(rec => records.set(rec.settingKey, rec));
-        }
+        res.forEach(rec => records.set(rec.settingKey, rec));
         const settings: Settings = new Map<string, SettingItem>();
         Object.values(AzureFortiGateAutoscaleSetting).forEach(value => {
             if (records.has(value)) {
@@ -215,13 +199,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                 settings.set(value, settingItem);
             }
         });
-        const cache: ApiCache<Settings> = {
-            result: settings,
-            hitCache: res.hitCache,
-            cacheTime: res.cacheTime,
-            ttl: res.ttl
-        };
-        return cache;
+        return settings;
     }
 
     async loadSettings(): Promise<Settings> {
@@ -229,7 +207,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             return this.settings;
         }
         const data = await this.reloadSettings(false);
-        this.settings = data.result;
+        this.settings = data;
         return this.settings;
     }
 
