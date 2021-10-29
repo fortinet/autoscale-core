@@ -395,17 +395,17 @@ export abstract class FortiGateBootstrapConfigStrategy implements BootstrapConfi
         targetVm: VirtualMachine,
         primaryVm?: VirtualMachine
     ): Promise<string> {
-        const setPrimaryIpSection =
+        // TODO: remove when master-slave terminology is fully abandoned in all FOS version
+        const setMasterIpSection =
             (primaryVm && `\n    set master-ip ${primaryVm.primaryPrivateIpAddress}`) || '';
+        const setPrimaryIpSection =
+            (primaryVm && `\n    set primary-ip ${primaryVm.primaryPrivateIpAddress}`) || '';
         const conf = this.processConfig(config, { '@device': targetVm });
         // TODO: fix it when primary/secondary terminology has been used in FOS CLI command.
         // NOTE: primary/secondary terminology is only available since FOS 7.0.1
         return Promise.resolve(
             conf
-                .replace(
-                    new RegExp('set role master', 'gm'),
-                    `set role slave${setPrimaryIpSection}`
-                )
+                .replace(new RegExp('set role master', 'gm'), `set role slave${setMasterIpSection}`)
                 .replace(
                     new RegExp('set role primary', 'gm'),
                     `set role secondary${setPrimaryIpSection}`

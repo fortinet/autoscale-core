@@ -10,9 +10,9 @@ config system auto-scale
     set sync-interface "{SYNC_INTERFACE}"
     set hb-interval "{HEART_BEAT_INTERVAL}"
     # set role command has changed the options since FOS 7.0.1 The 'command fail' errors can be safely ignored if you see them.
-    # set role master/slave is available before FOS 7.0.1
+    # options master and slave are only available before FOS 7.0.1
     set role master
-    # set role primary/secondary is available since FOS 7.0.1
+    # options primary and secondary are only available since FOS 7.0.1
     set role primary
     set callback-url "{CALLBACK_URL}"
     set psksecret "{PSK_SECRET}"

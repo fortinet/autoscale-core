@@ -379,7 +379,8 @@ export abstract class Autoscale implements AutoscaleCore {
             this.env.targetHealthCheckRecord.primaryIp = updatedPrimaryIp;
             await this.platform.updateHealthCheckRecord(this.env.targetHealthCheckRecord);
             response = JSON.stringify({
-                'master-ip': updatedPrimaryIp
+                'master-ip': updatedPrimaryIp,
+                'primary-ip': updatedPrimaryIp
             });
         }
         this.proxy.logAsInfo('called handleHeartbeatSync.');
@@ -550,10 +551,10 @@ export abstract class Autoscale implements AutoscaleCore {
                 );
             }
         }
-
         // primary election need to redo?
         if (redoElection) {
             try {
+                this.proxy.logAsInfo('Primary election starting now.');
                 // because it needs to redo the election, all those stale health check records
                 // should be removed.
                 await this.handleStaleVm();
@@ -568,6 +569,11 @@ export abstract class Autoscale implements AutoscaleCore {
                 this.env.primaryVm = election.newPrimary;
                 // only when primary record isn't null, it needs to save the primary record
                 if (election.newPrimary && election.newPrimaryRecord) {
+                    this.proxy.logAsInfo(
+                        'Primary election strategy completed.' +
+                            ` The new primary is: vmId: ${election.newPrimaryRecord.vmId},` +
+                            ` ip: ${election.newPrimaryRecord.ip}.`
+                    );
                     // If the target VM is new elected primary, and is already in the monitor,
                     // can resolve the primary immediately
                     // otherwise, the primary election will be resolved when the elected primary
@@ -586,6 +592,9 @@ export abstract class Autoscale implements AutoscaleCore {
                     // if primary election is needed but no primary can be elected, should send
                     // notifications to ask for manual observation or troubleshooting
                     if (decision === PrimaryElectionStrategyResult.CannotDeterminePrimary) {
+                        this.proxy.logAsWarning(
+                            'Autoscale unable to determine the new primary device'
+                        );
                         await this.sendAutoscaleNotifications(
                             this.env.targetVm,
                             'The Autoscale primary election strategy cannot automatically' +
@@ -597,6 +606,10 @@ export abstract class Autoscale implements AutoscaleCore {
                     // NOTE: wait for the next round
                     else if (decision === PrimaryElectionStrategyResult.SkipAndContinue) {
                         // TODO: any action to take here?
+                        this.proxy.logAsInfo(
+                            'Primary election strategy suggests that election' +
+                                ' should skip this round and will restart in the next round.'
+                        );
                     }
                     // do not need to save the primary record
                     action = 'noop';

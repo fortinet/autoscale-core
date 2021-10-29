@@ -420,17 +420,16 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         const instance = await this.adaptee.describeInstance(vmId);
         let vm: VirtualMachine;
         let scalingGroup = scalingGroupName;
-        this.proxy.logAsDebug(`vm: ${JSON.stringify(instance)}`);
         if (instance) {
-            // NOTE: vm in terminated state can be still described. We should consider such vm as unavailable
-            if (vm.state === VirtualMachineState.Terminated) {
-                vm = null;
-            }
             if (!scalingGroup) {
                 const scalingGroupMap = await this.adaptee.identifyInstanceScalingGroup([vmId]);
                 scalingGroup = scalingGroupMap.get(vmId) || null;
             }
             vm = this.instanceToVm(instance, scalingGroup, instance.NetworkInterfaces);
+            // NOTE: vm in terminated state can be still described. We should consider such vm as unavailable
+            if (vm.state === VirtualMachineState.Terminated) {
+                vm = null;
+            }
         }
         this.proxy.logAsInfo('called getVmById');
         return vm;
@@ -472,7 +471,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 nicMap.get(instance.InstanceId)
             );
         });
-        return vms;
+        return vms.filter(vm =>
+            [VirtualMachineState.Running, VirtualMachineState.Standby].includes(vm.state)
+        );
     }
 
     async listPrimaryRoleVmId(): Promise<string[]> {
@@ -697,6 +698,22 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 return rec.syncState === value;
             })
             .map(([, v]) => v);
+        let deviceSyncStatus: string;
+        if (rec.deviceSyncStatus === null) {
+            deviceSyncStatus = 'null';
+        } else if (rec.deviceSyncStatus) {
+            deviceSyncStatus = 'true';
+        } else {
+            deviceSyncStatus = 'false';
+        }
+        let deviceIsPrimary: string;
+        if (rec.deviceIsPrimary === null) {
+            deviceIsPrimary = 'null';
+        } else if (rec.deviceIsPrimary) {
+            deviceIsPrimary = 'true';
+        } else {
+            deviceIsPrimary = 'false';
+        }
         const item: DBDef.AutoscaleDbItem = {
             vmId: rec.vmId,
             scalingGroupName: rec.scalingGroupName,
@@ -712,26 +729,22 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             deviceSyncTime: rec.deviceSyncTime,
             deviceSyncFailTime: rec.deviceSyncFailTime,
             // store boolean | null
-            deviceSyncStatus:
-                (rec.deviceSyncStatus === null && 'null') ||
-                (rec.deviceSyncStatus && 'true') ||
-                'false',
+            deviceSyncStatus: deviceSyncStatus,
             // store boolean | null
-            deviceIsPrimary:
-                (rec.deviceIsPrimary === null && 'null') ||
-                (rec.deviceIsPrimary && 'true') ||
-                'false',
+            deviceIsPrimary: deviceIsPrimary,
             deviceChecksum: rec.deviceChecksum
         };
-        // NOTE: strictly update the record when the sequence to update is greater
+        // NOTE: strictly update the record when the sequence to update is not less
         // than the seq in the db to ensure data not to fall back to old value in race conditions
         const conditionExp: AwsDdbOperations = {
-            Expression: 'seq < :seq',
+            Expression: 'attribute_not_exists(vmId) OR seq <= :seq',
             ExpressionAttributeValues: {
                 ':seq': rec.seq
             },
-            type: DBDef.SaveCondition.UpdateOnly
+            type: DBDef.SaveCondition.Upsert
         };
+        this.proxy.logAsDebug(`item: ${JSON.stringify(item)}`);
+        this.proxy.logAsDebug(`conditionExp: ${JSON.stringify(conditionExp)}`);
         await this.adaptee.saveItemToDb<DBDef.AutoscaleDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called updateHealthCheckRecord');
     }

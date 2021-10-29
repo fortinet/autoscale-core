@@ -425,7 +425,7 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
 
         const primaryRecord: PrimaryRecord = {
             id: `${electedPrimaryHealthCheckRecord.scalingGroupName}:${electedPrimaryHealthCheckRecord.vmId}`,
-            ip: electedPrimaryHealthCheckRecord.primaryIp,
+            ip: electedPrimaryHealthCheckRecord.ip,
             vmId: electedPrimaryHealthCheckRecord.vmId,
             scalingGroupName: electedPrimaryHealthCheckRecord.scalingGroupName,
             virtualNetworkId: (primaryVm && primaryVm.virtualNetworkId) || '',
@@ -786,10 +786,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                         // compare using the device provided interval because if the interval
                         // has changedthe new heartbeat will be sent in the new interval
                         // this is the delay from the device's perspective
-                        delay =
-                            deviceSendTime.getTime() -
-                            recordedSendTime.getTime() -
-                            deviceSyncInfo.interval;
+                        delay = deviceSendTime.getTime() - recordedSendTime.getTime() - newInterval;
                     }
                     // NOTE:
                     // in this situation, there are race conditions happening between some
@@ -802,7 +799,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                     // for the other hb (new seq > old seq + 1), the delay cannot be calculated
                     // thus discarding the delay calculation, and trust it is an on-time hb
                     else {
-                        delay = -1; // on-time hb must have a negative delay
+                        delay = 0; // on-time hb must have a zero or negative delay
                     }
                     delayAtSendTime = delay;
                 }
@@ -838,7 +835,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                     terminateUnhealthyVmSettingItem && terminateUnhealthyVmSettingItem.truthValue;
                 if (!terminateUnhealthyVm) {
                     // late heartbeat will reset the sync-recovery-count
-                    if (delay >= 0) {
+                    if (delay > 0) {
                         targetHealthCheckRecord.syncRecoveryCount = syncRecoveryCount;
                     }
                     // on-time heartbeat will decrease sync-recovery-count by 1 from until
@@ -858,7 +855,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 }
             } else {
                 // heartbeat is late
-                if (delay >= 0) {
+                if (delay > 0) {
                     // increase the heartbeat loss count by 1 if delay.
                     targetHealthCheckRecord.heartbeatLossCount += 1;
                     newLossCount = targetHealthCheckRecord.heartbeatLossCount;
