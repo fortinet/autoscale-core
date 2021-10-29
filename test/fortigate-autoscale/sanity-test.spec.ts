@@ -26,7 +26,6 @@ import {
     NoopScalingGroupStrategy,
     NoopTaggingVmStrategy,
     PlatformAdapter,
-    WeightedScorePreferredGroupPrimaryElection,
     PrimaryElection,
     PrimaryElectionStrategy,
     PrimaryElectionStrategyResult,
@@ -41,7 +40,8 @@ import {
     SettingItem,
     Settings,
     VirtualMachine,
-    VirtualMachineState
+    VirtualMachineState,
+    WeightedScorePreferredGroupPrimaryElection
 } from '../../fortigate-autoscale';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -354,6 +354,9 @@ class TestPlatformAdapter implements PlatformAdapter {
     updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
         return Promise.resolve();
     }
+    deleteHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
+        return Promise.resolve();
+    }
     createPrimaryRecord(rec: PrimaryRecord, oldRec: PrimaryRecord): Promise<void> {
         throw new Error('Method not implemented.');
     }
@@ -446,7 +449,7 @@ describe('sanity test', () => {
                 return Promise.resolve();
             },
             apply() {
-                return Promise.resolve(PrimaryElectionStrategyResult.ShouldContinue);
+                return Promise.resolve(PrimaryElectionStrategyResult.CompleteAndContinue);
             },
             result() {
                 return Promise.resolve(TEST_PRIMARY_ELECTION);
@@ -663,7 +666,7 @@ describe('handle unhealthy vm.', () => {
                 return Promise.resolve();
             },
             apply() {
-                return Promise.resolve(PrimaryElectionStrategyResult.ShouldContinue);
+                return Promise.resolve(PrimaryElectionStrategyResult.CompleteAndContinue);
             },
             result() {
                 return Promise.resolve(TEST_PRIMARY_ELECTION);
@@ -820,7 +823,7 @@ describe('sync recovery of unhealthy vm.', () => {
                 return Promise.resolve();
             },
             apply() {
-                return Promise.resolve(PrimaryElectionStrategyResult.ShouldContinue);
+                return Promise.resolve(PrimaryElectionStrategyResult.CompleteAndContinue);
             },
             result() {
                 return Promise.resolve(TEST_PRIMARY_ELECTION);

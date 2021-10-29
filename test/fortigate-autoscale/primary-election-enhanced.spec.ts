@@ -1,3 +1,4 @@
+/* eslint-disable mocha/no-skipped-tests */
 import { describe } from 'mocha';
 import Sinon, { SinonStub } from 'sinon';
 import {
@@ -191,7 +192,7 @@ class TestPlatformAdapter implements PlatformAdapter {
         return Promise.resolve([]);
     }
     listAutoscaleVm(identifyScalingGroup?: boolean, listNic?: boolean): Promise<VirtualMachine[]> {
-        throw new Error('Method not implemented.');
+        return Promise.resolve([]);
     }
     vmEquals(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean {
         throw new Error('Method not implemented.');
@@ -321,6 +322,9 @@ class TestPlatformAdapter implements PlatformAdapter {
         throw new Error('Method not implemented.');
     }
     updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
+        return Promise.resolve();
+    }
+    deleteHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
         return Promise.resolve();
     }
     createPrimaryRecord(rec: PrimaryRecord, oldRec: PrimaryRecord): Promise<void> {
@@ -1522,7 +1526,7 @@ describe('Enhanced primary election.', () => {
                 /**
                  *  | VM1               | VM2                | VM3               | VM4                | VM5                | VM6                |
                     |------------------ |--------------------|-------------------|--------------------|--------------------|--------------------|
-                    | is-primary:false  | is-primary:false   | is-primary:false  | is-primary:fals    | is-primary:false   | is-primary:false   |
+                    | is-primary:false  | is-primary:false   | is-primary:false  | is-primary:false   | is-primary:false   | is-primary:false   |
                     | sync_status:false | sync_status:false  | sync_status:false | sync_status:false  | sync_status:false  | sync_status:false  |
                     | checksum:aaaa     | checksum:aaaa      | checksum:bbbb     | checksum:bbbb      | checksum:cccc      | checksum:cccc      |
                     | sync_time:any     | sync_time:any      | sync_time:(latest)| sync_time:any      | sync_time:any      | sync_time:any      |
@@ -1598,7 +1602,7 @@ describe('Enhanced primary election.', () => {
                 /**
                  *  | VM1               | VM2                | VM3               | VM4                | VM5                | VM6                |
                     |------------------ |--------------------|-------------------|--------------------|--------------------|--------------------|
-                    | is-primary:false  | is-primary:false   | is-primary:false  | is-primary:fals    | is-primary:false   | is-primary:false   |
+                    | is-primary:false  | is-primary:false   | is-primary:false  | is-primary:false   | is-primary:false   | is-primary:false   |
                     | sync_status:false | sync_status:false  | sync_status:false | sync_status:false  | sync_status:false  | sync_status:false  |
                     | checksum:null     | checksum:aaaa      | checksum:null     | checksum:null      | checksum:null      | checksum:null      |
                     | sync_time:null    | sync_time:null     | sync_time:null    | sync_time:null     | sync_time:null     | sync_time:null     |
@@ -1674,88 +1678,12 @@ describe('Enhanced primary election.', () => {
                 /**
                  *  | VM1               | VM2                | VM3               | VM4                | VM5                | VM6                |
                     |------------------ |--------------------|-------------------|--------------------|--------------------|--------------------|
-                    | is-primary:false  | is-primary:false   | is-primary:false  | is-primary:fals    | is-primary:false   | is-primary:false   |
-                    | sync_status:false | sync_status:false  | sync_status:false | sync_status:false  | sync_status:false  | sync_status:false  |
-                    | checksum:aaaa     | checksum:aaaa      | checksum:bbbb     | checksum:bbbb      | checksum:cccc      | checksum:cccc      |
-                    | sync_time:null    | sync_time:null     | sync_time:null    | sync_time:null     | sync_time:null     | sync_time:null     |
-                */
-                it('Case 8 (case detail see code comments)', async function() {
-                    // prepare the 6 vm as the table above
-                    let i = 0;
-                    /* eslint-disable prettier/prettier */
-                    TEMP_TEST_HCR_1 = createTestHCR(
-                        TEMP_TEST_HCR,
-                        `-duplicate-${++i}`,
-                        false,
-                        false,
-                        'aaaa',
-                        null
-                    );
-                    TEMP_TEST_HCR_2 = createTestHCR(
-                        TEMP_TEST_HCR,
-                        `-duplicate-${++i}`,
-                        false,
-                        false,
-                        'aaaa',
-                        null
-                    );
-                    TEMP_TEST_HCR_3 = createTestHCR(
-                        TEMP_TEST_HCR,
-                        `-duplicate-${++i}`,
-                        false,
-                        false,
-                        'bbbb',
-                        null
-                    );
-                    TEMP_TEST_HCR_4 = createTestHCR(
-                        TEMP_TEST_HCR,
-                        `-duplicate-${++i}`,
-                        false,
-                        false,
-                        'bbbb',
-                        null
-                    );
-                    TEMP_TEST_HCR_5 = createTestHCR(
-                        TEMP_TEST_HCR,
-                        `-duplicate-${++i}`,
-                        false,
-                        false,
-                        'cccc',
-                        null
-                    );
-                    TEMP_TEST_HCR_6 = createTestHCR(
-                        TEMP_TEST_HCR,
-                        `-duplicate-${++i}`,
-                        false,
-                        false,
-                        'cccc',
-                        null
-                    );
-                    /* eslint-enable prettier/prettier */
-
-                    // by the test data of this test case each VM has the same score so no primary can be determined
-                    // run autoscale
-                    await autoscale.handleHeartbeatSync();
-
-                    // post task verification
-                    await getStub('p.updatePrimaryRecord').then(stub => {
-                        Sinon.assert.match(stub.called, false);
-                    });
-                    await getStub('pes.result').then(async stub => {
-                        const returnValues = await stub.returnValues[0];
-                        Sinon.assert.match(returnValues.newPrimary === null, true);
-                        Sinon.assert.match(returnValues.newPrimaryRecord === null, true);
-                    });
-                });
-                /**
-                 *  | VM1               | VM2                | VM3               | VM4                | VM5                | VM6                |
-                    |------------------ |--------------------|-------------------|--------------------|--------------------|--------------------|
-                    | is-primary:false  | is-primary:false   | is-primary:false  | is-primary:fals    | is-primary:false   | is-primary:false   |
+                    | is-primary:false  | is-primary:false   | is-primary:false  | is-primary:false   | is-primary:false   | is-primary:false   |
                     | sync_status:false | sync_status:false  | sync_status:false | sync_status:false  | sync_status:false  | sync_status:false  |
                     | checksum:aaaa     | checksum:bbbb      | checksum:cccc     | checksum:dddd      | checksum:eeee      | checksum:ffff      |
                     | sync_time:null    | sync_time:null     | sync_time:null    | sync_time:null     | sync_time:null     | sync_time:null     |
                 */
-                it('Case 9 (case detail see code comments)', async function() {
+                it('Case 8 (case detail see code comments)', async function() {
                     // prepare the 6 vm as the table above
                     let i = 0;
                     /* eslint-disable prettier/prettier */
@@ -1805,6 +1733,83 @@ describe('Enhanced primary election.', () => {
                         false,
                         false,
                         'ffff',
+                        null
+                    );
+                    /* eslint-enable prettier/prettier */
+
+                    // by the test data of this test case each VM has the same score so the special
+                    // method will be applied to elect a the new primary
+                    // run autoscale
+                    await autoscale.handleHeartbeatSync();
+
+                    // post task verification
+                    await getStub('p.updatePrimaryRecord').then(stub => {
+                        Sinon.assert.match(stub.called, true);
+                    });
+                    await getStub('pes.result').then(async stub => {
+                        const returnValues = await stub.returnValues[0];
+                        Sinon.assert.match(returnValues.newPrimary === null, false);
+                        Sinon.assert.match(returnValues.newPrimaryRecord === null, false);
+                    });
+                });
+                /**
+                 *  | VM1               | VM2                | VM3               | VM4                | VM5                | VM6                |
+                    |------------------ |--------------------|-------------------|--------------------|--------------------|--------------------|
+                    | is-primary:false  | is-primary:false   | is-primary:false  | is-primary:false   | is-primary:false   | is-primary:false   |
+                    | sync_status:false | sync_status:false  | sync_status:false | sync_status:false  | sync_status:false  | sync_status:false  |
+                    | checksum:aaaa     | checksum:aaaa      | checksum:bbbb     | checksum:bbbb      | checksum:cccc      | checksum:cccc      |
+                    | sync_time:null    | sync_time:null     | sync_time:null    | sync_time:null     | sync_time:null     | sync_time:null     |
+                */
+                it('Case 9 (case detail see code comments)', async function() {
+                    // prepare the 6 vm as the table above
+                    let i = 0;
+                    /* eslint-disable prettier/prettier */
+                    TEMP_TEST_HCR_1 = createTestHCR(
+                        TEMP_TEST_HCR,
+                        `-duplicate-${++i}`,
+                        false,
+                        false,
+                        'aaaa',
+                        null
+                    );
+                    TEMP_TEST_HCR_2 = createTestHCR(
+                        TEMP_TEST_HCR,
+                        `-duplicate-${++i}`,
+                        false,
+                        false,
+                        'aaaa',
+                        null
+                    );
+                    TEMP_TEST_HCR_3 = createTestHCR(
+                        TEMP_TEST_HCR,
+                        `-duplicate-${++i}`,
+                        false,
+                        false,
+                        'bbbb',
+                        null
+                    );
+                    TEMP_TEST_HCR_4 = createTestHCR(
+                        TEMP_TEST_HCR,
+                        `-duplicate-${++i}`,
+                        false,
+                        false,
+                        'bbbb',
+                        null
+                    );
+                    TEMP_TEST_HCR_5 = createTestHCR(
+                        TEMP_TEST_HCR,
+                        `-duplicate-${++i}`,
+                        false,
+                        false,
+                        'cccc',
+                        null
+                    );
+                    TEMP_TEST_HCR_6 = createTestHCR(
+                        TEMP_TEST_HCR,
+                        `-duplicate-${++i}`,
+                        false,
+                        false,
+                        'cccc',
                         null
                     );
                     /* eslint-enable prettier/prettier */

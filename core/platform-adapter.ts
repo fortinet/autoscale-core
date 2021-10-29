@@ -155,6 +155,7 @@ export interface PlatformAdapter {
     vmEquals(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean;
     createHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
     updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
+    deleteHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
     /**
      * create the primary record in the db system.
      * @param rec the new primary record

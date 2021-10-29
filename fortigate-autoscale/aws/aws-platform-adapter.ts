@@ -416,9 +416,11 @@ export class AwsPlatformAdapter implements PlatformAdapter {
 
     async getVmById(vmId: string, scalingGroupName?: string): Promise<VirtualMachine> {
         this.proxy.logAsInfo('calling getVmById');
+        this.proxy.logAsDebug(`vmId: ${vmId}, scaling group name: ${scalingGroupName}`);
         const instance = await this.adaptee.describeInstance(vmId);
         let vm: VirtualMachine;
         let scalingGroup = scalingGroupName;
+        this.proxy.logAsDebug(`vm: ${JSON.stringify(instance)}`);
         if (instance) {
             // NOTE: vm in terminated state can be still described. We should consider such vm as unavailable
             if (vm.state === VirtualMachineState.Terminated) {
@@ -732,6 +734,51 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         };
         await this.adaptee.saveItemToDb<DBDef.AutoscaleDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called updateHealthCheckRecord');
+    }
+    async deleteHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
+        this.proxy.logAsInfo('calling deleteHealthCheckRecord.');
+        try {
+            const settings = await this.getSettings();
+            const table = new AwsDBDef.AwsAutoscale(
+                settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+            );
+            const [syncStateString] = Object.entries(HealthCheckSyncState)
+                .filter(([, value]) => {
+                    return rec.syncState === value;
+                })
+                .map(([, v]) => v);
+            const item: DBDef.AutoscaleDbItem = {
+                vmId: rec.vmId,
+                scalingGroupName: rec.scalingGroupName,
+                ip: rec.ip,
+                primaryIp: rec.primaryIp,
+                heartBeatInterval: rec.heartbeatInterval,
+                heartBeatLossCount: rec.heartbeatLossCount,
+                nextHeartBeatTime: rec.nextHeartbeatTime,
+                syncState: syncStateString,
+                syncRecoveryCount: rec.syncRecoveryCount,
+                seq: rec.seq,
+                sendTime: rec.sendTime,
+                deviceSyncTime: rec.deviceSyncTime,
+                deviceSyncFailTime: rec.deviceSyncFailTime,
+                // store boolean | null
+                deviceSyncStatus:
+                    (rec.deviceSyncStatus === null && 'null') ||
+                    (rec.deviceSyncStatus && 'true') ||
+                    'false',
+                // store boolean | null
+                deviceIsPrimary:
+                    (rec.deviceIsPrimary === null && 'null') ||
+                    (rec.deviceIsPrimary && 'true') ||
+                    'false',
+                deviceChecksum: rec.deviceChecksum
+            };
+            await this.adaptee.deleteItemFromDb<DBDef.AutoscaleDbItem>(table, item);
+        } catch (error) {
+            this.proxy.logAsError(`cannot delete health check record (vmId: ${rec.vmId})`);
+            throw error;
+        }
+        this.proxy.logAsInfo('called deleteHealthCheckRecord.');
     }
     async createPrimaryRecord(rec: PrimaryRecord, oldRec: PrimaryRecord | null): Promise<void> {
         this.proxy.logAsInfo('calling createPrimaryRecord.');

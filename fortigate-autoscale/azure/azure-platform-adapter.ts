@@ -871,6 +871,44 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         );
         this.proxy.logAsInfo('called updateHealthCheckRecord');
     }
+    async deleteHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
+        this.proxy.logAsInfo('calling deleteHealthCheckRecord');
+        const table = new AzureAutoscale();
+        const [syncStateString] = Object.entries(HealthCheckSyncState)
+            .filter(([, value]) => {
+                return rec.syncState === value;
+            })
+            .map(([, v]) => v);
+        const item = table.downcast({
+            vmId: rec.vmId,
+            scalingGroupName: rec.scalingGroupName,
+            ip: rec.ip,
+            primaryIp: rec.primaryIp,
+            heartBeatInterval: rec.heartbeatInterval,
+            heartBeatLossCount: rec.heartbeatLossCount,
+            nextHeartBeatTime: rec.nextHeartbeatTime,
+            syncState: syncStateString,
+            syncRecoveryCount: rec.syncRecoveryCount,
+            seq: rec.seq,
+            sendTime: rec.sendTime,
+            deviceSyncTime: rec.deviceSyncTime,
+            deviceSyncFailTime: rec.deviceSyncFailTime,
+            // store boolean | null
+            deviceSyncStatus:
+                (rec.deviceSyncStatus === null && 'null') ||
+                (rec.deviceSyncStatus && 'true') ||
+                'false',
+            // store boolean | null
+            deviceIsPrimary:
+                (rec.deviceIsPrimary === null && 'null') ||
+                (rec.deviceIsPrimary && 'true') ||
+                'false',
+            deviceChecksum: rec.deviceChecksum
+        });
+
+        await this.adaptee.deleteItemFromDb<typeof item>(table, item);
+        this.proxy.logAsInfo('called deleteHealthCheckRecord');
+    }
     /**
      * insert a primary record, not overwrite one with the same primary key.
      * can also optionally replace an existing one with a given primary key value

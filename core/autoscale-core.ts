@@ -6,6 +6,7 @@ import {
     AutoscaleContext,
     HeartbeatSyncStrategy,
     PrimaryElectionStrategy,
+    PrimaryElectionStrategyResult,
     RoutingEgressTrafficStrategy,
     TaggingVmStrategy,
     VmTagging
@@ -22,6 +23,7 @@ import {
 import { FazIntegrationStrategy } from './faz-integration-strategy';
 import { PlatformAdapter } from './platform-adapter';
 import {
+    HealthCheckRecord,
     HealthCheckResult,
     HealthCheckSyncState,
     PrimaryElection,
@@ -552,9 +554,12 @@ export abstract class Autoscale implements AutoscaleCore {
         // primary election need to redo?
         if (redoElection) {
             try {
+                // because it needs to redo the election, all those stale health check records
+                // should be removed.
+                await this.handleStaleVm();
                 await this.primaryElectionStrategy.prepare(election);
                 // workflow: start a new primary election
-                await this.primaryElectionStrategy.apply();
+                const decision = await this.primaryElectionStrategy.apply();
                 // get the election result.
                 election = await this.primaryElectionStrategy.result();
                 // if new primary election started
@@ -578,6 +583,21 @@ export abstract class Autoscale implements AutoscaleCore {
                     // should reload primary record
                     reloadPrimarRecord = true;
                 } else {
+                    // if primary election is needed but no primary can be elected, should send
+                    // notifications to ask for manual observation or troubleshooting
+                    if (decision === PrimaryElectionStrategyResult.CannotDeterminePrimary) {
+                        await this.sendAutoscaleNotifications(
+                            this.env.targetVm,
+                            'The Autoscale primary election strategy cannot automatically' +
+                                ' determine the new primary device using the device information.' +
+                                ' Manually configuring the primary device is needed.',
+                            'Autoscale unable to determine the new primary device'
+                        );
+                    }
+                    // NOTE: wait for the next round
+                    else if (decision === PrimaryElectionStrategyResult.SkipAndContinue) {
+                        // TODO: any action to take here?
+                    }
                     // do not need to save the primary record
                     action = 'noop';
                     // should not reload the primary record
@@ -624,6 +644,30 @@ export abstract class Autoscale implements AutoscaleCore {
         this.proxy.logAsInfo('called handlePrimaryElection.');
         return election;
     }
+    async handleStaleVm(): Promise<HealthCheckRecord[]> {
+        const [activeVms, healthcheckRecords] = await Promise.all([
+            this.platform.listAutoscaleVm(false, false),
+            this.platform.listHealthCheckRecord()
+        ]);
+        const activeVmIds = activeVms.map(vm => vm.id);
+        const activeHealthCheckRecords = healthcheckRecords.filter(rec =>
+            activeVmIds.includes(rec.vmId)
+        );
+        const staleHealthCheckRecords = healthcheckRecords.filter(
+            rec => !activeVmIds.includes(rec.vmId)
+        );
+        // delete those stale healthcheck records
+        await Promise.all(
+            staleHealthCheckRecords.map(rec => {
+                this.proxy.logAsInfo(
+                    `Deleting health check record of vm (id: ${rec.vmId}) ` +
+                        'that no longer exists.'
+                );
+                return this.platform.deleteHealthCheckRecord(rec);
+            })
+        );
+        return activeHealthCheckRecords;
+    }
     async handleUnhealthyVm(vms: VirtualMachine[]): Promise<void> {
         this.proxy.logAsInfo('calling handleUnhealthyVm.');
         // call the platform scaling group to terminate the vm in the list
@@ -646,6 +690,11 @@ export abstract class Autoscale implements AutoscaleCore {
             if (terminateUnhealthyVm) {
                 try {
                     await this.platform.deleteVmFromScalingGroup(vm.id);
+                    // delete corresponding health check record
+                    const healthcheckRecord = await this.platform.getHealthCheckRecord(vm.id);
+                    if (healthcheckRecord) {
+                        await this.platform.deleteHealthCheckRecord(healthcheckRecord);
+                    }
                     try {
                         message +=
                             'Autoscale is now terminating this device.\n' +

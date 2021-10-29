@@ -37,8 +37,9 @@ export interface PrimaryElectionStrategy {
 }
 
 export enum PrimaryElectionStrategyResult {
-    ShouldStop = 'ShouldStop',
-    ShouldContinue = 'ShouldContinue'
+    CannotDeterminePrimary = 'CannotDeterminePrimary',
+    CompleteAndContinue = 'CompleteAndContinue',
+    SkipAndContinue = 'SkipAndContinue'
 }
 
 export interface HeartbeatSyncStrategy {
@@ -114,7 +115,7 @@ export class PreferredGroupPrimaryElection implements PrimaryElectionStrategy {
             );
             this.res.newPrimary = null;
             this.res.newPrimaryRecord = null;
-            return PrimaryElectionStrategyResult.ShouldContinue;
+            return PrimaryElectionStrategyResult.SkipAndContinue;
         }
         const signature = this.env.candidate
             ? `${this.env.candidate.scalingGroupName}:${this.env.candidate.id}`
@@ -158,7 +159,7 @@ export class PreferredGroupPrimaryElection implements PrimaryElectionStrategy {
                 this.res.newPrimary = this.env.candidate;
                 this.res.newPrimaryRecord = newPrimaryRecord;
                 // immediately return
-                return PrimaryElectionStrategyResult.ShouldContinue;
+                return PrimaryElectionStrategyResult.CompleteAndContinue;
             }
             // otherwise, check if there's any other vm already exists in the monitor, those
             // vm would be a better primary candidate
@@ -181,7 +182,7 @@ export class PreferredGroupPrimaryElection implements PrimaryElectionStrategy {
                 if (eligilePrimaryCandidates.length > 0) {
                     this.res.newPrimary = null;
                     this.res.newPrimaryRecord = null;
-                    return PrimaryElectionStrategyResult.ShouldContinue;
+                    return PrimaryElectionStrategyResult.SkipAndContinue;
                 }
                 // otherwise, it is considered eligible
                 // in this case, this vm does not sync with the previous primary
@@ -193,7 +194,7 @@ export class PreferredGroupPrimaryElection implements PrimaryElectionStrategy {
                     // since it is a new vm, there's no health record for it.
                     // a new record will be created
                     this.res.newPrimaryRecord = newPrimaryRecord;
-                    return PrimaryElectionStrategyResult.ShouldContinue;
+                    return PrimaryElectionStrategyResult.CompleteAndContinue;
                 }
             }
         }
@@ -207,7 +208,7 @@ export class PreferredGroupPrimaryElection implements PrimaryElectionStrategy {
             if (this.env.candidateHealthCheck && !this.env.candidateHealthCheck.healthy) {
                 this.res.newPrimary = null;
                 this.res.newPrimaryRecord = null;
-                return PrimaryElectionStrategyResult.ShouldContinue;
+                return PrimaryElectionStrategyResult.SkipAndContinue;
             } else {
                 // workflow: if VM is a primary role
                 // if the vm hasn't been assigned a role, or
@@ -264,13 +265,13 @@ export class PreferredGroupPrimaryElection implements PrimaryElectionStrategy {
                     ) {
                         this.res.newPrimary = this.env.candidate;
                         this.res.newPrimaryRecord = newPrimaryRecord;
-                        return PrimaryElectionStrategyResult.ShouldContinue;
+                        return PrimaryElectionStrategyResult.CompleteAndContinue;
                     }
                     // otherwise, ineligible
                     else {
                         this.res.newPrimary = null;
                         this.res.newPrimaryRecord = null;
-                        return PrimaryElectionStrategyResult.ShouldContinue;
+                        return PrimaryElectionStrategyResult.SkipAndContinue;
                     }
                 }
                 // if this vm is a secondary role
@@ -280,13 +281,13 @@ export class PreferredGroupPrimaryElection implements PrimaryElectionStrategy {
                 if (this.env.candidateHealthCheck.deviceSyncStatus) {
                     this.res.newPrimary = this.env.candidate;
                     this.res.newPrimaryRecord = newPrimaryRecord;
-                    return PrimaryElectionStrategyResult.ShouldContinue;
+                    return PrimaryElectionStrategyResult.CompleteAndContinue;
                 }
                 // otherwise, ineligible
                 else {
                     this.res.newPrimary = null;
                     this.res.newPrimaryRecord = null;
-                    return PrimaryElectionStrategyResult.ShouldContinue;
+                    return PrimaryElectionStrategyResult.SkipAndContinue;
                 }
             }
         }
@@ -348,7 +349,7 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
             // exclude those are not in the preferred scaling group for primary election
             .filter(rec => rec.scalingGroupName === settingGroupName);
 
-        // if no candidate available, end election
+        // if no vm healthcheck record available, end election
         if (allHealthCheckRecords.length === 0) {
             this.proxy.log(
                 "There isn't any healthy vm in the preferred scaling group for primary election." +
@@ -357,7 +358,7 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
             );
             this.res.newPrimary = null;
             this.res.newPrimaryRecord = null;
-            return PrimaryElectionStrategyResult.ShouldContinue;
+            return PrimaryElectionStrategyResult.SkipAndContinue;
         }
 
         // scores
@@ -398,11 +399,23 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
             );
         }
 
-        // cannot determine the primary, election strategy ends.
+        // if no primary can be determined using the weighted methods, try the special method.
+        // NOTE: special condition. usually occurs in the intial state where all VM are initially
+        // launched as a secondary role, never sync with any other.
+        // in this case whichever has the oldest send_time will be the election primary
+        // run the method to find the one
+        if (!electedPrimaryHealthCheckRecord) {
+            electedPrimaryId = this.weightMethodSpecial(scores, allHealthCheckRecords);
+            [electedPrimaryHealthCheckRecord] = allHealthCheckRecords.filter(
+                rec => rec.vmId === electedPrimaryId
+            );
+        }
+
+        // still cannot determine the primary, election strategy ends.
         if (!electedPrimaryHealthCheckRecord) {
             this.res.newPrimary = null;
             this.res.newPrimaryRecord = null;
-            return PrimaryElectionStrategyResult.ShouldContinue;
+            return PrimaryElectionStrategyResult.CannotDeterminePrimary;
         }
 
         const primaryVm = await this.platform.getVmById(electedPrimaryHealthCheckRecord.vmId);
@@ -422,7 +435,7 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
         };
 
         this.res.newPrimaryRecord = primaryRecord;
-        return PrimaryElectionStrategyResult.ShouldContinue;
+        return PrimaryElectionStrategyResult.CompleteAndContinue;
     }
 
     /**
@@ -574,6 +587,76 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
      */
     weightMethod4(rec: HealthCheckRecord): number {
         return rec.deviceIsPrimary ? 64 : 0;
+    }
+    /**
+     * one among all or none will get (128) bonus points if all these conditions are met:
+     * 1. has non-null checksum
+     * 2. checksum is mutually exclusive
+     * 3. each record in the group has null sync_time
+     * 4. each record in the group has an equal score
+     * 5. send_time is the oldest
+     * @param {Map} scores the scores of all participants
+     * @param {HealthCheckRecord[]} groups the group of healthcheck records
+     * @returns {string} vmId who will get the bonus
+     */
+    weightMethodSpecial(scores: Map<string, number>, groups: HealthCheckRecord[]): string {
+        // check mutually exclusive and find non-null sync_time
+        let foundNonNullSyncTime = false;
+        const checksumCount: Map<string, number> = new Map();
+        groups.forEach(grec => {
+            if (grec.deviceSyncTime !== null) {
+                foundNonNullSyncTime = true;
+            }
+            if (!checksumCount.has(grec.deviceChecksum)) {
+                checksumCount.set(grec.deviceChecksum, 0);
+            }
+            checksumCount.set(grec.deviceChecksum, checksumCount.get(grec.deviceChecksum) + 1);
+        });
+
+        if (foundNonNullSyncTime) {
+            return null;
+        }
+
+        let mutuallyExclusive = true;
+
+        checksumCount.forEach(count => {
+            if (count > 1) {
+                mutuallyExclusive = false;
+            }
+        });
+        if (!mutuallyExclusive) {
+            return null;
+        }
+
+        // check equal score and oldest send time
+        let hasEqualScore = true;
+        let score: number = undefined;
+        let oldestSendTime: Date;
+        let vmId: string;
+        groups.forEach(grec => {
+            if (score === undefined) {
+                score = scores.get(grec.vmId);
+            }
+            if (score !== scores.get(grec.vmId)) {
+                hasEqualScore = false;
+            }
+            const sendTime = new Date(grec.sendTime);
+            if (oldestSendTime === undefined || sendTime.getTime() < oldestSendTime.getTime()) {
+                oldestSendTime = sendTime;
+                vmId = grec.vmId;
+            }
+            // in an extreme edge condition that there are two same send time, whichever has the
+            // alphabetically smaller vmId will get the point
+            else if (sendTime.getTime() === oldestSendTime.getTime() && grec.vmId < vmId) {
+                vmId = grec.vmId;
+            }
+        });
+
+        if (!hasEqualScore) {
+            return null;
+        }
+
+        return vmId;
     }
 }
 
