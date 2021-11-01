@@ -799,7 +799,7 @@ export class LicenseUsage extends Table<LicenseUsageDbItem> {
             isKey: false
         },
         {
-            name: 'product',
+            name: 'productName',
             attrType: TypeRef.StringType,
             isKey: false
         },

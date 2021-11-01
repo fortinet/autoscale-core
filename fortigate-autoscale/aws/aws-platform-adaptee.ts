@@ -135,9 +135,17 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 ExpressionAttributeValues: attributeValues,
                 ExpressionAttributeNames: attributeNames
             };
+
             if (conditionExp.Expression) {
                 updateItemInput.ConditionExpression = conditionExp.Expression;
+                if (conditionExp.ExpressionAttributeValues) {
+                    Object.keys(conditionExp.ExpressionAttributeValues).forEach(key => {
+                        updateItemInput.ExpressionAttributeValues[key] =
+                            conditionExp.ExpressionAttributeValues[key];
+                    });
+                }
             }
+
             const logger = getTimeLogger('saveItemToDb: docClient.update');
             await this.docClient.update(updateItemInput).promise();
             printTimerLog(logger);
@@ -149,6 +157,7 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 ExpressionAttributeValues:
                     (conditionExp && conditionExp.ExpressionAttributeValues) || undefined
             };
+            console.log(`putItemInput: ${JSON.stringify(putItemInput)}`);
             const logger1 = getTimeLogger('saveItemToDb: docClient.put');
             await this.docClient.put(putItemInput).promise();
             printTimerLog(logger1);

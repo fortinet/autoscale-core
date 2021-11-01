@@ -1168,19 +1168,20 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                         return Promise.resolve();
                     }
                     conditionExp.type = DBDef.SaveCondition.UpdateOnly;
-                    // the conditional expression ensures the consistency of the DB system (ACID)
                     conditionExp.Expression =
-                        'attribute_exists(checksum) AND vmId = :vmId' +
-                        ' scalingGroupName = :scalingGroupName' +
-                        ' AND productName = :productName' +
-                        ' AND algorithm = :algorithm' +
-                        ' AND assignedTime = :assignedTime';
+                        'attribute_exists(checksum) AND vmId = :oldVmId' +
+                        ' AND scalingGroupName = :oldScalingGroupName' +
+                        ' AND productName = :oldProductName' +
+                        ' AND algorithm = :oldAlgorithm' +
+                        ' AND assignedTime = :oldAssignedTime';
                     conditionExp.ExpressionAttributeValues = {
-                        ':vmId': rec.reference.vmId,
-                        ':scalingGroupName': rec.reference.scalingGroupName,
-                        ':productName': rec.reference.productName,
-                        ':algorithm': rec.reference.algorithm,
-                        ':assignedTime': rec.reference.assignedTime ? rec.reference.assignedTime : 0
+                        ':oldVmId': rec.reference.vmId,
+                        ':oldScalingGroupName': rec.reference.scalingGroupName,
+                        ':oldProductName': rec.reference.productName,
+                        ':oldAlgorithm': rec.reference.algorithm,
+                        ':oldAssignedTime': rec.reference.assignedTime
+                            ? rec.reference.assignedTime
+                            : 0
                     };
                     typeText =
                         `update existing item (checksum: ${rec.reference.checksum}). ` +
