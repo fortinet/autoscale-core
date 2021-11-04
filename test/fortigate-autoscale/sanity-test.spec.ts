@@ -477,7 +477,8 @@ describe('sanity test', () => {
                 actualDelay: 0,
                 heartbeatLossCount: 0,
                 maxHeartbeatLossCount: 999,
-                syncRecoveryCount: 0
+                syncRecoveryCount: 0,
+                maxSyncRecoveryCount: 3
             },
             targetVmFirstHeartbeat: true,
             forceOutOfSync() {
@@ -694,7 +695,8 @@ describe('handle unhealthy vm.', () => {
                 actualDelay: 0,
                 heartbeatLossCount: 0,
                 maxHeartbeatLossCount: 999,
-                syncRecoveryCount: 0
+                syncRecoveryCount: 0,
+                maxSyncRecoveryCount: 3
             },
             targetVmFirstHeartbeat: true,
             forceOutOfSync() {
@@ -851,7 +853,8 @@ describe('sync recovery of unhealthy vm.', () => {
                 actualDelay: 0,
                 heartbeatLossCount: 0,
                 maxHeartbeatLossCount: 999,
-                syncRecoveryCount: 0
+                syncRecoveryCount: 0,
+                maxSyncRecoveryCount: 3
             },
             targetVmFirstHeartbeat: true,
             forceOutOfSync() {

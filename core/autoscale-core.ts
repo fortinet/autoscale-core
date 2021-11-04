@@ -181,6 +181,7 @@ export abstract class Autoscale implements AutoscaleCore {
     }
     async handleHeartbeatSync(): Promise<string> {
         this.proxy.logAsInfo('calling handleHeartbeatSync.');
+        const settings = await this.platform.getSettings();
         let response = '';
         let error: Error;
         const unhealthyVms: VirtualMachine[] = [];
@@ -224,17 +225,48 @@ export abstract class Autoscale implements AutoscaleCore {
 
         const heartbeatResult = await this.heartbeatSyncStrategy.healthCheckResultDetail;
         const heartbeatTiming = heartbeatResult.result;
+        let notificationSubject: string;
+        let notificationMessage: string;
+        const terminateUnhealthyVmSettingItem = settings.get(AutoscaleSetting.TerminateUnhealthyVm);
+        const terminateUnhealthyVm =
+            terminateUnhealthyVmSettingItem && terminateUnhealthyVmSettingItem.truthValue;
+
         // If the timing indicates that it should be dropped,
         // don't update. Respond immediately. return.
         if (heartbeatTiming === HealthCheckResult.Dropped) {
             return '';
+        } else if (heartbeatTiming === HealthCheckResult.Recovering) {
+            notificationSubject = 'FortiGate Autoscale out-of-sync VM is recovering';
+            notificationMessage =
+                `FortiGate (id: ${this.env.targetVm.id}) is recovering from` +
+                ` an out-of-sync state. It requires ${heartbeatResult.syncRecoveryCount}` +
+                ` out of ${heartbeatResult.maxSyncRecoveryCount} more on-time heartbeat(s)` +
+                ' to go back to the in-sync state.\n\n' +
+                'Note: If a new primary election is needed,' +
+                ' only VM in in-sync state can be an eligible primary role.';
+            await this.sendAutoscaleNotifications(
+                this.env.targetVm,
+                notificationMessage,
+                notificationSubject
+            );
+        } else if (heartbeatTiming === HealthCheckResult.Recovered) {
+            notificationSubject = 'FortiGate Autoscale out-of-sync VM is recovered';
+            notificationMessage =
+                `FortiGate (id: ${this.env.targetVm.id}) is recovered from` +
+                ' the out-of-sync state and now is in-sync. It will participate in' +
+                ' any further primary election.';
+            await this.sendAutoscaleNotifications(
+                this.env.targetVm,
+                notificationMessage,
+                notificationSubject
+            );
         }
 
         // If the timing indicates that it is a late heartbeat,
         // send notification for late heartbeat
-        if (heartbeatTiming === HealthCheckResult.Late) {
-            const notificationSubject = 'FortiGate Autoscale late heartbeat occurred';
-            const notificationMessage =
+        else if (heartbeatTiming === HealthCheckResult.Late) {
+            notificationSubject = 'FortiGate Autoscale late heartbeat occurred';
+            notificationMessage =
                 `One late heartbeat occurred on FortiGate (id: ${this.env.targetVm.id}` +
                 `, ip: ${this.env.targetVm.primaryPrivateIpAddress}).\n\nDetails:\n` +
                 ` heartbeat sequence: ${heartbeatResult.sequence},\n` +
@@ -246,7 +278,26 @@ export abstract class Autoscale implements AutoscaleCore {
                 ' heartbeat interval:' +
                 ` ${heartbeatResult.oldHeartbeatInerval}->${heartbeatResult.heartbeatInterval} ms,\n` +
                 ' heartbeat loss count:' +
-                ` ${heartbeatResult.heartbeatLossCount}/${heartbeatResult.maxHeartbeatLossCount}.`;
+                ` ${heartbeatResult.heartbeatLossCount}/${heartbeatResult.maxHeartbeatLossCount}.\n\n` +
+                'Note: once the VM heartbeat loss count reached the ' +
+                `maximum count ${heartbeatResult.maxHeartbeatLossCount},` +
+                ' it enters into out-of-sync state.';
+            if (terminateUnhealthyVm) {
+                notificationMessage =
+                    `${notificationMessage}\n\n` +
+                    'Out-of-sync (unhealthy) VM will be terminated.' +
+                    ' Termination on unhealthy' +
+                    " VM is turned 'on' in the FortiGate Autoscale Settings." +
+                    " The configuration can be manually turned 'off'.";
+            } else {
+                notificationMessage =
+                    `${notificationMessage}\n\n` +
+                    'Out-of-sync (unhealthy) VM will be temporarily excluded from' +
+                    ' further primary election until it recovers and becomes in-sync again.' +
+                    ' Termination on unhealthy' +
+                    " VM is turned 'off' in the FortiGate Autoscale Settings." +
+                    " The configuration can be manually turned 'on'.";
+            }
             await this.sendAutoscaleNotifications(
                 this.env.targetVm,
                 notificationMessage,
@@ -537,7 +588,7 @@ export abstract class Autoscale implements AutoscaleCore {
 
         // dealing with updating the primary record
         if (action === 'delete') {
-            // NOTE: prividing the primary record data to put strict condition on the deletion
+            // NOTE: providing the primary record data to put strict condition on the deletion
             try {
                 this.proxy.logAsInfo(
                     'Delete the current primary record: ',
@@ -547,7 +598,7 @@ export abstract class Autoscale implements AutoscaleCore {
             } catch (error) {
                 // unable to delete but that is okay. no impact
                 this.proxy.logAsWarning(
-                    'Unable to delete. This message ca be discarded. ' + `error: ${error}`
+                    'Unable to delete. This message can be discarded. ' + `error: ${error}`
                 );
             }
         }

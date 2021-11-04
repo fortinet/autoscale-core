@@ -457,7 +457,8 @@ describe('classic primary election.', () => {
                 actualDelay: 0,
                 heartbeatLossCount: 0,
                 maxHeartbeatLossCount: 999,
-                syncRecoveryCount: 0
+                syncRecoveryCount: 0,
+                maxSyncRecoveryCount: 3
             },
             targetVmFirstHeartbeat: true,
             forceOutOfSync() {
@@ -508,7 +509,8 @@ describe('classic primary election.', () => {
                     actualDelay: 0,
                     heartbeatLossCount: 0,
                     maxHeartbeatLossCount: 999,
-                    syncRecoveryCount: 0
+                    syncRecoveryCount: 0,
+                    maxSyncRecoveryCount: 3
                 },
                 targetVmFirstHeartbeat: true,
                 forceOutOfSync() {
@@ -616,7 +618,8 @@ describe('classic primary election.', () => {
                     actualDelay: 0,
                     heartbeatLossCount: 0,
                     maxHeartbeatLossCount: 999,
-                    syncRecoveryCount: 0
+                    syncRecoveryCount: 0,
+                    maxSyncRecoveryCount: 3
                 },
                 targetVmFirstHeartbeat: true,
                 forceOutOfSync() {
@@ -721,7 +724,8 @@ describe('classic primary election.', () => {
                     actualDelay: 0,
                     heartbeatLossCount: 0,
                     maxHeartbeatLossCount: 999,
-                    syncRecoveryCount: 0
+                    syncRecoveryCount: 0,
+                    maxSyncRecoveryCount: 3
                 },
                 targetVmFirstHeartbeat: true,
                 forceOutOfSync() {
@@ -826,7 +830,8 @@ describe('classic primary election.', () => {
                     actualDelay: 0,
                     heartbeatLossCount: 0,
                     maxHeartbeatLossCount: 999,
-                    syncRecoveryCount: 0
+                    syncRecoveryCount: 0,
+                    maxSyncRecoveryCount: 3
                 },
                 targetVmFirstHeartbeat: true,
                 forceOutOfSync() {
@@ -935,7 +940,8 @@ describe('classic primary election.', () => {
                     actualDelay: 0,
                     heartbeatLossCount: 0,
                     maxHeartbeatLossCount: 999,
-                    syncRecoveryCount: 0
+                    syncRecoveryCount: 0,
+                    maxSyncRecoveryCount: 3
                 },
                 targetVmFirstHeartbeat: true,
                 forceOutOfSync() {
@@ -1053,7 +1059,8 @@ describe('classic primary election.', () => {
                     actualDelay: 0,
                     heartbeatLossCount: 0,
                     maxHeartbeatLossCount: 999,
-                    syncRecoveryCount: 0
+                    syncRecoveryCount: 0,
+                    maxSyncRecoveryCount: 3
                 },
                 targetVmFirstHeartbeat: true,
                 forceOutOfSync() {
@@ -1171,7 +1178,8 @@ describe('classic primary election.', () => {
                     actualDelay: 0,
                     heartbeatLossCount: 0,
                     maxHeartbeatLossCount: 999,
-                    syncRecoveryCount: 0
+                    syncRecoveryCount: 0,
+                    maxSyncRecoveryCount: 3
                 },
                 targetVmFirstHeartbeat: true,
                 forceOutOfSync() {

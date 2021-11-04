@@ -692,6 +692,7 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         let newLossCount = 0;
         let oldInterval = 0;
         let oldNextHeartbeatTime: number;
+        let oldRecordedSendTime: string;
         const deviceSyncInfo = await this.platform.getReqDeviceSyncInfo();
         const newInterval = deviceSyncInfo.interval * 1000;
         const heartbeatArriveTime: number = this.platform.createTime;
@@ -710,9 +711,16 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             Number(settings.get(AutoscaleSetting.HeartbeatDelayAllowance).value) * 1000;
         // max amount of heartbeat loss count allowed before deeming a device unhealthy
         const maxLossCount = Number(settings.get(AutoscaleSetting.HeartbeatLossCount).value);
+        const syncRecoveryCountSettingItem = settings.get(AutoscaleSetting.SyncRecoveryCount);
+        const syncRecoveryCount =
+            syncRecoveryCountSettingItem && Number(syncRecoveryCountSettingItem.value);
+        const terminateUnhealthyVmSettingItem = settings.get(AutoscaleSetting.TerminateUnhealthyVm);
+        const terminateUnhealthyVm =
+            terminateUnhealthyVmSettingItem && terminateUnhealthyVmSettingItem.truthValue;
         // get health check record for target vm
         // ASSERT: this.targetVm is valid
         let targetHealthCheckRecord = await this.platform.getHealthCheckRecord(this.targetVm.id);
+        const originalTargetHealthCheckRecord = { ...targetHealthCheckRecord };
         // the next heartbeat arrive time from the Autoscale handler perspective.
         const nextHeartbeatTime = heartbeatArriveTime + newInterval;
         // if there's no health check record for this vm,
@@ -765,28 +773,57 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             oldSeq = targetHealthCheckRecord.seq;
             oldNextHeartbeatTime = targetHealthCheckRecord.nextHeartbeatTime;
             delayAtArriveTime = heartbeatArriveTime - oldNextHeartbeatTime;
+            oldRecordedSendTime = targetHealthCheckRecord.sendTime;
             // if the device provide more information about the heartbeat, do a more accurate
             // heartbeat calculation.
             // check if the 'time' property exists. It can indicate the availability of the device
             // info
             const deviceSendTime: Date =
                 deviceSyncInfo.time !== null && new Date(deviceSyncInfo.time);
+            const recordedSendTime = new Date(targetHealthCheckRecord.sendTime);
+            const sendTimeDiff =
+                deviceSendTime && recordedSendTime
+                    ? deviceSendTime.getTime() - recordedSendTime.getTime()
+                    : NaN;
             useDeviceSyncInfo = !!deviceSendTime;
             if (useDeviceSyncInfo) {
                 delayCalculationMethod = 'by device send time';
                 // check if the sequence is in an incremental order compared to the data in the db
                 // if not, the heartbeat should be marked as outdated and to be dropped
-                if (deviceSyncInfo.sequence < targetHealthCheckRecord.seq) {
+                // NOTE: if the device has been reboorted, the sequence will be reset to 0
+                // need to check the send time as well
+
+                // if the sequence number of current heartbeat request is smaller
+                // than the recorded one, there are two situations:
+                // 1. the device is rebooted so the sequence has reset to 0
+                // 2. the current heartbeat request has been taken longer time to process for
+                // some external reasons such as platform api taking longer time to response,
+                // one or more hb requests (with seq increased) have been processed and saved
+                // into the db. As the result, the sequence recorded in the db will be greater
+                // than the current one.
+
+                // handling case 2
+                if (deviceSyncInfo.sequence < targetHealthCheckRecord.seq && sendTimeDiff < 0) {
                     outdatedHearbeatRequest = true;
                 } else {
                     // if the device seq is immediately after the recorded value
                     // check if the send time match the heartbeat interval
                     if (deviceSyncInfo.sequence === targetHealthCheckRecord.seq + 1) {
-                        const recordedSendTime: Date = new Date(targetHealthCheckRecord.sendTime);
                         // compare using the device provided interval because if the interval
                         // has changedthe new heartbeat will be sent in the new interval
                         // this is the delay from the device's perspective
-                        delay = deviceSendTime.getTime() - recordedSendTime.getTime() - newInterval;
+                        delay = sendTimeDiff - newInterval;
+                    }
+                    // deal with the sequence being reset on the device
+                    // in this case, the sequence will be less than the recorded sequence
+                    // but the device sendtime will be greater than the recorded.
+                    // if such situation occurs, the delay cannot be calculated, just treat it as
+                    // an on-time heartbeat.
+                    else if (
+                        deviceSyncInfo.sequence < targetHealthCheckRecord.seq &&
+                        sendTimeDiff > 0
+                    ) {
+                        delay = 0;
                     }
                     // NOTE:
                     // in this situation, there are race conditions happening between some
@@ -815,9 +852,6 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 // outside of the function execution.
                 delay = heartbeatArriveTime - oldNextHeartbeatTime - delayAllowance;
             }
-            const syncRecoveryCountSettingItem = settings.get(AutoscaleSetting.SyncRecoveryCount);
-            const syncRecoveryCount =
-                syncRecoveryCountSettingItem && Number(syncRecoveryCountSettingItem.value);
             // if vm health check shows that it's already out of sync, should drop it
             if (targetHealthCheckRecord.syncState === HeartbeatSyncState.OutOfSync) {
                 oldLossCount = targetHealthCheckRecord.heartbeatLossCount;
@@ -828,11 +862,6 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 // late heartbeat will reset the sync-recovery-count while on-time heartbeat will
                 // decrease the sync-recovery-count by 1 until it reaches 0 or negative integer;
                 // sync recovery will change the sync-state back to in-sync
-                const terminateUnhealthyVmSettingItem = settings.get(
-                    AutoscaleSetting.TerminateUnhealthyVm
-                );
-                const terminateUnhealthyVm =
-                    terminateUnhealthyVmSettingItem && terminateUnhealthyVmSettingItem.truthValue;
                 if (!terminateUnhealthyVm) {
                     // late heartbeat will reset the sync-recovery-count
                     if (delay > 0) {
@@ -849,7 +878,9 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                             newLossCount = 0;
                             targetHealthCheckRecord.syncState = HeartbeatSyncState.InSync;
                             targetHealthCheckRecord.healthy = true;
-                            this.result = HealthCheckResult.OnTime;
+                            this.result = HealthCheckResult.Recovered; // recovered from out-of-sync
+                        } else {
+                            this.result = HealthCheckResult.Recovering; // still recovering
                         }
                     }
                 }
@@ -899,6 +930,10 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             // update health check record if not marked as outdated
             if (!outdatedHearbeatRequest) {
                 try {
+                    this.proxy.logAsInfo(
+                        `Original Recorded HB: ${JSON.stringify(originalTargetHealthCheckRecord)}`
+                    );
+                    this.proxy.logAsInfo(`DeviceSyncInfo: ${JSON.stringify(deviceSyncInfo)}`);
                     await this.platform.updateHealthCheckRecord(targetHealthCheckRecord);
                 } catch (error) {
                     this.proxy.logForError('updateHealthCheckRecord() error.', error);
@@ -925,24 +960,46 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             actualDelay: delay + delayAllowance,
             heartbeatLossCount: newLossCount,
             maxHeartbeatLossCount: maxLossCount,
-            syncRecoveryCount: targetHealthCheckRecord.syncRecoveryCount
+            syncRecoveryCount: targetHealthCheckRecord.syncRecoveryCount,
+            maxSyncRecoveryCount: syncRecoveryCount
         };
-        this.proxy.logAsInfo(
+        let logMessage =
             `Heartbeat sync result: ${this.result},` +
-                ` heartbeat sequence: ${oldSeq}->${targetHealthCheckRecord.seq},` +
-                ` heartbeat interval: ${oldInterval}->${newInterval} ms,` +
-                ` device time for recorded heartbeat: ${targetHealthCheckRecord.sendTime},` +
-                ` device time for received heartbeat: ${deviceSyncInfo.time},` +
-                ` delay at send time: ${(isNaN(delayAtSendTime) && 'n/a') || delayAtSendTime} ms,` +
-                ' heartbeat expected arrive time:' +
-                ` ${new Date(oldNextHeartbeatTime).toISOString()},` +
-                ` heartbeat actual arrive time: ${new Date(heartbeatArriveTime).toISOString()},` +
-                ` heartbeat delay at arrive time: ${delayAtArriveTime} ms,` +
-                ` heartbeat delay allowance for arrival: ${delayAllowance} ms,` +
-                ` heartbeat calculated delay: ${delay} ms ${delayCalculationMethod},` +
-                ` heartbeat loss count: ${oldLossCount}->${newLossCount},` +
-                ` max loss count allowed: ${maxLossCount}.`
-        );
+            ` heartbeat sequence: ${oldSeq}->${targetHealthCheckRecord.seq},` +
+            ` heartbeat interval: ${oldInterval}->${newInterval} ms,` +
+            ` device time for recorded heartbeat: ${oldRecordedSendTime},` +
+            ` device time for received heartbeat: ${deviceSyncInfo.time},` +
+            ` delay at send time: ${(isNaN(delayAtSendTime) && 'n/a') || delayAtSendTime} ms,` +
+            ' heartbeat expected arrive time:' +
+            ` ${new Date(oldNextHeartbeatTime).toISOString()},` +
+            ` heartbeat actual arrive time: ${new Date(heartbeatArriveTime).toISOString()},` +
+            ` heartbeat delay at arrive time: ${delayAtArriveTime} ms,` +
+            ` heartbeat delay allowance for arrival: ${delayAllowance} ms,` +
+            ` heartbeat calculated delay: ${delay > 0 ? delay : 0} ms ${delayCalculationMethod},` +
+            ` heartbeat loss count: ${oldLossCount}->${newLossCount},` +
+            ` max loss count allowed: ${maxLossCount}.`;
+        switch (this.result) {
+            case HealthCheckResult.Recovering:
+                logMessage =
+                    `${logMessage} This VM requires` +
+                    ` ${targetHealthCheckRecord.syncRecoveryCount} out of ${syncRecoveryCount}` +
+                    ' more on-time heartbeat(s) to recover from out-of-sync state' +
+                    ' and to become in-sync again.';
+                break;
+            case HealthCheckResult.Recovered:
+                logMessage =
+                    `${logMessage} This VM is recovered. It's state is now:` +
+                    ` ${targetHealthCheckRecord.syncState}.`;
+                break;
+            case HealthCheckResult.Late:
+                logMessage =
+                    `${logMessage} VM termination will ${terminateUnhealthyVm ? '' : 'not'} occur` +
+                    ' on this VM when it enters out-of-sync state.';
+                break;
+            default:
+                break;
+        }
+        this.proxy.logAsInfo(logMessage);
         this.proxy.logAsInfo('applied ConstantIntervalHeartbeatSyncStrategy strategy.');
         return this.result;
     }

@@ -737,9 +737,11 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         // NOTE: strictly update the record when the sequence to update is not less
         // than the seq in the db to ensure data not to fall back to old value in race conditions
         const conditionExp: AwsDdbOperations = {
-            Expression: 'attribute_not_exists(vmId) OR seq <= :seq',
+            Expression:
+                'attribute_not_exists(vmId) OR seq <= :seq OR (seq > :seq AND sendTime <= :sendTime)',
             ExpressionAttributeValues: {
-                ':seq': rec.seq
+                ':seq': rec.seq,
+                ':sendTime': rec.sendTime
             },
             type: DBDef.SaveCondition.Upsert
         };

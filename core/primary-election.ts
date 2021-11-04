@@ -29,7 +29,9 @@ export enum HealthCheckResult {
     OnTime = 'on-time',
     Late = 'late',
     TooLate = 'too-late',
-    Dropped = 'dropped'
+    Dropped = 'dropped',
+    Recovering = 'recovering',
+    Recovered = 'recovered'
 }
 
 export interface HealthCheckResultDetail {
@@ -45,6 +47,7 @@ export interface HealthCheckResultDetail {
     heartbeatLossCount: number;
     maxHeartbeatLossCount: number;
     syncRecoveryCount: number;
+    maxSyncRecoveryCount: number;
 }
 
 export enum PrimaryRecordVoteState {
