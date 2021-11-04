@@ -157,7 +157,6 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 ExpressionAttributeValues:
                     (conditionExp && conditionExp.ExpressionAttributeValues) || undefined
             };
-            console.log(`putItemInput: ${JSON.stringify(putItemInput)}`);
             const logger1 = getTimeLogger('saveItemToDb: docClient.put');
             await this.docClient.put(putItemInput).promise();
             printTimerLog(logger1);

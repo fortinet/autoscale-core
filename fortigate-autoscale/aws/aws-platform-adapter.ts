@@ -745,8 +745,6 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             },
             type: DBDef.SaveCondition.Upsert
         };
-        this.proxy.logAsDebug(`item: ${JSON.stringify(item)}`);
-        this.proxy.logAsDebug(`conditionExp: ${JSON.stringify(conditionExp)}`);
         await this.adaptee.saveItemToDb<DBDef.AutoscaleDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called updateHealthCheckRecord');
     }

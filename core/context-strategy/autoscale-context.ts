@@ -720,7 +720,6 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
         // get health check record for target vm
         // ASSERT: this.targetVm is valid
         let targetHealthCheckRecord = await this.platform.getHealthCheckRecord(this.targetVm.id);
-        const originalTargetHealthCheckRecord = { ...targetHealthCheckRecord };
         // the next heartbeat arrive time from the Autoscale handler perspective.
         const nextHeartbeatTime = heartbeatArriveTime + newInterval;
         // if there's no health check record for this vm,
@@ -930,10 +929,6 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             // update health check record if not marked as outdated
             if (!outdatedHearbeatRequest) {
                 try {
-                    this.proxy.logAsInfo(
-                        `Original Recorded HB: ${JSON.stringify(originalTargetHealthCheckRecord)}`
-                    );
-                    this.proxy.logAsInfo(`DeviceSyncInfo: ${JSON.stringify(deviceSyncInfo)}`);
                     await this.platform.updateHealthCheckRecord(targetHealthCheckRecord);
                 } catch (error) {
                     this.proxy.logForError('updateHealthCheckRecord() error.', error);
