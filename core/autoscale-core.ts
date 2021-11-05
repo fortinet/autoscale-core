@@ -382,6 +382,7 @@ export abstract class Autoscale implements AutoscaleCore {
 
         // the health check record may need to update again.
         let needToUpdateHealthCheckRecord = false;
+        let primaryIpHasChanged = false;
         let updatedPrimaryIp: string;
 
         // if there's a new primary elected, and the new primary ip doesn't match the primary ip of
@@ -392,6 +393,7 @@ export abstract class Autoscale implements AutoscaleCore {
                 primaryElection.newPrimary.primaryPrivateIpAddress
         ) {
             needToUpdateHealthCheckRecord = true;
+            primaryIpHasChanged = true;
             updatedPrimaryIp = primaryElection.newPrimary.primaryPrivateIpAddress;
         }
         // if there's an old primary, and it's in healthy state, and the target vm doesn't have
@@ -406,6 +408,7 @@ export abstract class Autoscale implements AutoscaleCore {
                 primaryElection.oldPrimary.primaryPrivateIpAddress
         ) {
             needToUpdateHealthCheckRecord = true;
+            primaryIpHasChanged = true;
             updatedPrimaryIp = primaryElection.oldPrimary.primaryPrivateIpAddress;
         }
 
@@ -428,11 +431,20 @@ export abstract class Autoscale implements AutoscaleCore {
         // need to update the health check record again due to primary ip changes.
         if (needToUpdateHealthCheckRecord) {
             this.env.targetHealthCheckRecord.primaryIp = updatedPrimaryIp;
-            await this.platform.updateHealthCheckRecord(this.env.targetHealthCheckRecord);
-            response = JSON.stringify({
-                'master-ip': updatedPrimaryIp,
-                'primary-ip': updatedPrimaryIp
-            });
+            await this.platform
+                .updateHealthCheckRecord(this.env.targetHealthCheckRecord)
+                .catch(err => {
+                    this.proxy.logForError('Error in updating health check record', err);
+                });
+            if (primaryIpHasChanged) {
+                response = JSON.stringify({
+                    'master-ip': updatedPrimaryIp,
+                    'primary-ip': updatedPrimaryIp
+                });
+                this.proxy.logAsInfo('Primary IP has changed to');
+                this.proxy.logAsDebug(`New primary IP: ${updatedPrimaryIp}`);
+                this.proxy.logAsDebug(`Response: ${response}`);
+            }
         }
         this.proxy.logAsInfo('called handleHeartbeatSync.');
         return response;

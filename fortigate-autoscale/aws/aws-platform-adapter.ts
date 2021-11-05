@@ -738,10 +738,12 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         // than the seq in the db to ensure data not to fall back to old value in race conditions
         const conditionExp: AwsDdbOperations = {
             Expression:
-                'attribute_not_exists(vmId) OR seq <= :seq OR (seq > :seq AND sendTime <= :sendTime)',
+                'attribute_not_exists(vmId)' +
+                ' OR attribute_exists(vmId) AND (seq <= :seq' +
+                ' OR (seq > :seq AND sendTime <= :sendTime))',
             ExpressionAttributeValues: {
                 ':seq': rec.seq,
-                ':sendTime': rec.sendTime
+                ':sendTime': rec.sendTime === null ? new Date().toISOString() : rec.sendTime
             },
             type: DBDef.SaveCondition.Upsert
         };
