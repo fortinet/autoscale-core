@@ -28,6 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     name: main job
     steps:
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '14.17.0'
       - name: preparation
         run: |
           echo "name-prefix=${{ github.event.inputs['name-prefix'] && 'devrel_' || github.event.inputs['name-prefix'] }}" >> $GITHUB_ENV
