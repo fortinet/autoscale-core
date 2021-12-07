@@ -1,5 +1,15 @@
 import { Context } from '@azure/functions';
 import {
+    AzureFortiGateAutoscaleSetting,
+    AzureFortiGateBootstrapStrategy,
+    AzureFunctionHttpTriggerProxy,
+    AzureFunctionInvocable,
+    AzureHybridScalingGroupStrategy,
+    AzurePlatformAdapter,
+    AzureRoutingEgressTrafficViaPrimaryVmStrategy,
+    AzureTaggingAutoscaleVmStrategy
+} from '.';
+import {
     AutoscaleEnvironment,
     CloudFunctionInvocationPayload,
     CloudFunctionInvocationTimeOutError,
@@ -10,19 +20,9 @@ import {
     FortiGateAutoscale,
     FortiGateAutoscaleFunctionInvocationHandler,
     JSONable,
-    PreferredGroupPrimaryElection,
-    ReusableLicensingStrategy
+    ReusableLicensingStrategy,
+    WeightedScorePreferredGroupPrimaryElection
 } from '..';
-import {
-    AzureFortiGateAutoscaleSetting,
-    AzureFortiGateBootstrapStrategy,
-    AzureFunctionHttpTriggerProxy,
-    AzureFunctionInvocable,
-    AzureHybridScalingGroupStrategy,
-    AzurePlatformAdapter,
-    AzureRoutingEgressTrafficViaPrimaryVmStrategy,
-    AzureTaggingAutoscaleVmStrategy
-} from '.';
 
 export class AzureFortiGateAutoscale<TReq, TContext, TRes> extends FortiGateAutoscale<
     TReq,
@@ -39,7 +39,9 @@ export class AzureFortiGateAutoscale<TReq, TContext, TRes> extends FortiGateAuto
         // use noop scaling group strategy
         this.setScalingGroupStrategy(new AzureHybridScalingGroupStrategy(platform, proxy));
         // use peferred group primary election for Hybrid licensing model
-        this.setPrimaryElectionStrategy(new PreferredGroupPrimaryElection(platform, proxy));
+        this.setPrimaryElectionStrategy(
+            new WeightedScorePreferredGroupPrimaryElection(platform, proxy)
+        );
         // use a constant interval heartbeat sync strategy
         this.setHeartbeatSyncStrategy(new ConstantIntervalHeartbeatSyncStrategy(platform, proxy));
         // TODO: implement the Azure tagging feature

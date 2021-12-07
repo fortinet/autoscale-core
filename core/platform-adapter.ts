@@ -7,6 +7,68 @@ import { JSONable } from './jsonable';
 import { HealthCheckRecord, PrimaryRecord } from './primary-election';
 import { NetworkInterface, VirtualMachine } from './virtual-machine';
 
+export interface DeviceSyncInfo {
+    /**
+     * Representing property: instance, the id of the vm.
+     * Device always provides this property.
+     * Can check null for errors.
+     */
+    instance: string;
+    /**
+     * Representing property: interval, in second.
+     * Device always provides this property.
+     * Can check NaN for errors.
+     */
+    interval: number;
+    /**
+     * Representing property: status. Not available in heartbeat type of info.
+     * Will be undefined if absent.
+     */
+    status?: string | null;
+    /**
+     * Representing property: sequence.
+     * If device provided this property, it will not be null.
+     * If device not provided this property, it will be NaN.
+     */
+    sequence: number;
+    /**
+     * Representing property: time, the send time of the heartbeat, ISO 8601 format, device's time.
+     * If device provided this property, it will not be null.
+     * If device not provided this property, it will be null.
+     */
+    time: string;
+    /**
+     * Representing property: sync_time, the last time on successful ha sync, ISO 8601 format, device's time.
+     * If device provided this property, it can be null.
+     * If device not provided this property, it will be null.
+     */
+    syncTime: string | null;
+    /**
+     * Representing property: sync_fail_time, the last time on ha sync failure, ISO 8601 format, device's time.
+     * If device provided this property, it can be null.
+     * If device not provided this property, it will be null.
+     */
+    syncFailTime: string | null;
+    /**
+     * Representing property: sync_status, true or false on secondary device if in-sync with primary or not;
+     * It will be null on primary device.
+     * If device provided this property, it can be null.
+     * If device not provided this property, it will be null.
+     */
+    syncStatus: boolean | null;
+    /**
+     * Representing property: is_primary, true for primary devices, false for secondary, in the device's perspective.
+     * If device provided this property, it can be null.
+     * If device not provided this property, it will be null.
+     */
+    isPrimary: boolean | null;
+    /**
+     * Representing property: checksum, the HA checksum value of the device.
+     * If device provided this property, it will not be null.
+     * If device not provided this property, it will be null.
+     */
+    checksum: string;
+}
 export interface ResourceFilter {
     key: string;
     value: string;
@@ -66,6 +128,11 @@ export interface PlatformAdapter {
      * @returns number interval in ms
      */
     getReqHeartbeatInterval(): Promise<number>;
+    /**
+     * the device info sent from a vm
+     * @returns Promise of DeviceSyncInfo
+     */
+    getReqDeviceSyncInfo(): Promise<DeviceSyncInfo>;
     getReqVmId(): Promise<string>;
     getReqAsString(): Promise<string>;
     getSettings(): Promise<Settings>;
@@ -77,15 +144,18 @@ export interface PlatformAdapter {
     validateSettings(): Promise<boolean>;
     getTargetVm(): Promise<VirtualMachine | null>;
     getPrimaryVm(): Promise<VirtualMachine | null>;
+    getVmById(vmId: string, scalingGroupName?: string): Promise<VirtualMachine | null>;
     listAutoscaleVm(
         identifyScalingGroup?: boolean,
         listNic?: boolean
     ): Promise<VirtualMachine[] | null>;
     getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord | null>;
+    listHealthCheckRecord(): Promise<HealthCheckRecord[] | null>;
     getPrimaryRecord(filters?: KeyValue[]): Promise<PrimaryRecord | null>;
     vmEquals(vmA?: VirtualMachine, vmB?: VirtualMachine): boolean;
     createHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
     updateHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
+    deleteHealthCheckRecord(rec: HealthCheckRecord): Promise<void>;
     /**
      * create the primary record in the db system.
      * @param rec the new primary record
@@ -99,6 +169,13 @@ export interface PlatformAdapter {
      * @param rec primary record to be updated.
      */
     updatePrimaryRecord(rec: PrimaryRecord): Promise<void>;
+    /**
+     * delete the primary record using the given rec. delete only when the record property values
+     * strictly match the record in the db.
+     * @param rec primary record to be delete.
+     * @param fullMatch need a full match of each property to delete
+     */
+    deletePrimaryRecord(rec: PrimaryRecord, fullMatch?: boolean): Promise<void>;
     /**
      * Load a configset file from blob storage
      * The blob container will use the AssetStorageContainer or CustomAssetContainer,

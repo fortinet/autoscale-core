@@ -6,6 +6,7 @@ import {
     AutoscaleContext,
     HeartbeatSyncStrategy,
     PrimaryElectionStrategy,
+    PrimaryElectionStrategyResult,
     RoutingEgressTrafficStrategy,
     TaggingVmStrategy,
     VmTagging
@@ -22,6 +23,7 @@ import {
 import { FazIntegrationStrategy } from './faz-integration-strategy';
 import { PlatformAdapter } from './platform-adapter';
 import {
+    HealthCheckRecord,
     HealthCheckResult,
     HealthCheckSyncState,
     PrimaryElection,
@@ -179,6 +181,7 @@ export abstract class Autoscale implements AutoscaleCore {
     }
     async handleHeartbeatSync(): Promise<string> {
         this.proxy.logAsInfo('calling handleHeartbeatSync.');
+        const settings = await this.platform.getSettings();
         let response = '';
         let error: Error;
         const unhealthyVms: VirtualMachine[] = [];
@@ -222,17 +225,48 @@ export abstract class Autoscale implements AutoscaleCore {
 
         const heartbeatResult = await this.heartbeatSyncStrategy.healthCheckResultDetail;
         const heartbeatTiming = heartbeatResult.result;
+        let notificationSubject: string;
+        let notificationMessage: string;
+        const terminateUnhealthyVmSettingItem = settings.get(AutoscaleSetting.TerminateUnhealthyVm);
+        const terminateUnhealthyVm =
+            terminateUnhealthyVmSettingItem && terminateUnhealthyVmSettingItem.truthValue;
+
         // If the timing indicates that it should be dropped,
         // don't update. Respond immediately. return.
         if (heartbeatTiming === HealthCheckResult.Dropped) {
             return '';
+        } else if (heartbeatTiming === HealthCheckResult.Recovering) {
+            notificationSubject = 'FortiGate Autoscale out-of-sync VM is recovering';
+            notificationMessage =
+                `FortiGate (id: ${this.env.targetVm.id}) is recovering from` +
+                ` an out-of-sync state. It requires ${heartbeatResult.syncRecoveryCount}` +
+                ` out of ${heartbeatResult.maxSyncRecoveryCount} more on-time heartbeat(s)` +
+                ' to go back to the in-sync state.\n\n' +
+                'Note: If a new primary election is needed,' +
+                ' only VM in in-sync state can be an eligible primary role.';
+            await this.sendAutoscaleNotifications(
+                this.env.targetVm,
+                notificationMessage,
+                notificationSubject
+            );
+        } else if (heartbeatTiming === HealthCheckResult.Recovered) {
+            notificationSubject = 'FortiGate Autoscale out-of-sync VM is recovered';
+            notificationMessage =
+                `FortiGate (id: ${this.env.targetVm.id}) is recovered from` +
+                ' the out-of-sync state and now is in-sync. It will participate in' +
+                ' any further primary election.';
+            await this.sendAutoscaleNotifications(
+                this.env.targetVm,
+                notificationMessage,
+                notificationSubject
+            );
         }
 
         // If the timing indicates that it is a late heartbeat,
         // send notification for late heartbeat
-        if (heartbeatTiming === HealthCheckResult.Late) {
-            const notificationSubject = 'FortiGate Autoscale late heartbeat occurred';
-            const notificationMessage =
+        else if (heartbeatTiming === HealthCheckResult.Late) {
+            notificationSubject = 'FortiGate Autoscale late heartbeat occurred';
+            notificationMessage =
                 `One late heartbeat occurred on FortiGate (id: ${this.env.targetVm.id}` +
                 `, ip: ${this.env.targetVm.primaryPrivateIpAddress}).\n\nDetails:\n` +
                 ` heartbeat sequence: ${heartbeatResult.sequence},\n` +
@@ -244,7 +278,26 @@ export abstract class Autoscale implements AutoscaleCore {
                 ' heartbeat interval:' +
                 ` ${heartbeatResult.oldHeartbeatInerval}->${heartbeatResult.heartbeatInterval} ms,\n` +
                 ' heartbeat loss count:' +
-                ` ${heartbeatResult.heartbeatLossCount}/${heartbeatResult.maxHeartbeatLossCount}.`;
+                ` ${heartbeatResult.heartbeatLossCount}/${heartbeatResult.maxHeartbeatLossCount}.\n\n` +
+                'Note: once the VM heartbeat loss count reached the ' +
+                `maximum count ${heartbeatResult.maxHeartbeatLossCount},` +
+                ' it enters into out-of-sync state.';
+            if (terminateUnhealthyVm) {
+                notificationMessage =
+                    `${notificationMessage}\n\n` +
+                    'Out-of-sync (unhealthy) VM will be terminated.' +
+                    ' Termination on unhealthy' +
+                    " VM is turned 'on' in the FortiGate Autoscale Settings." +
+                    " The configuration can be manually turned 'off'.";
+            } else {
+                notificationMessage =
+                    `${notificationMessage}\n\n` +
+                    'Out-of-sync (unhealthy) VM will be temporarily excluded from' +
+                    ' further primary election until it recovers and becomes in-sync again.' +
+                    ' Termination on unhealthy' +
+                    " VM is turned 'off' in the FortiGate Autoscale Settings." +
+                    " The configuration can be manually turned 'on'.";
+            }
             await this.sendAutoscaleNotifications(
                 this.env.targetVm,
                 notificationMessage,
@@ -329,6 +382,7 @@ export abstract class Autoscale implements AutoscaleCore {
 
         // the health check record may need to update again.
         let needToUpdateHealthCheckRecord = false;
+        let primaryIpHasChanged = false;
         let updatedPrimaryIp: string;
 
         // if there's a new primary elected, and the new primary ip doesn't match the primary ip of
@@ -339,6 +393,7 @@ export abstract class Autoscale implements AutoscaleCore {
                 primaryElection.newPrimary.primaryPrivateIpAddress
         ) {
             needToUpdateHealthCheckRecord = true;
+            primaryIpHasChanged = true;
             updatedPrimaryIp = primaryElection.newPrimary.primaryPrivateIpAddress;
         }
         // if there's an old primary, and it's in healthy state, and the target vm doesn't have
@@ -353,6 +408,7 @@ export abstract class Autoscale implements AutoscaleCore {
                 primaryElection.oldPrimary.primaryPrivateIpAddress
         ) {
             needToUpdateHealthCheckRecord = true;
+            primaryIpHasChanged = true;
             updatedPrimaryIp = primaryElection.oldPrimary.primaryPrivateIpAddress;
         }
 
@@ -375,10 +431,20 @@ export abstract class Autoscale implements AutoscaleCore {
         // need to update the health check record again due to primary ip changes.
         if (needToUpdateHealthCheckRecord) {
             this.env.targetHealthCheckRecord.primaryIp = updatedPrimaryIp;
-            await this.platform.updateHealthCheckRecord(this.env.targetHealthCheckRecord);
-            response = JSON.stringify({
-                'master-ip': updatedPrimaryIp
-            });
+            await this.platform
+                .updateHealthCheckRecord(this.env.targetHealthCheckRecord)
+                .catch(err => {
+                    this.proxy.logForError('Error in updating health check record', err);
+                });
+            if (primaryIpHasChanged) {
+                response = JSON.stringify({
+                    'master-ip': updatedPrimaryIp,
+                    'primary-ip': updatedPrimaryIp
+                });
+                this.proxy.logAsInfo('Primary IP has changed to');
+                this.proxy.logAsDebug(`New primary IP: ${updatedPrimaryIp}`);
+                this.proxy.logAsDebug(`Response: ${response}`);
+            }
         }
         this.proxy.logAsInfo('called handleHeartbeatSync.');
         return response;
@@ -404,79 +470,279 @@ export abstract class Autoscale implements AutoscaleCore {
             electionDuration: electionTimeout,
             signature: null
         };
-        await this.primaryElectionStrategy.prepare(election);
+        // the action for updating primary record
+        let action: 'save' | 'delete' | 'noop' = 'noop';
+        let redoElection = false;
+        let reloadPrimaryRecord = false;
 
-        // primary election required? condition 1: no primary vm or record
-        if (!this.env.primaryRecord || !this.env.primaryVm) {
-            // handlePrimaryElection() will update the primary vm info, if cannot determine the
-            // primary vm, primary vm info will be set to null
-            // expect that the pending primary vm info can be available
-            await this.primaryElectionStrategy.apply();
-            // after primary election complete (election may not be necessary in some cases)
-            // get the election result.
-            election = await this.primaryElectionStrategy.result();
+        // in general, possible primary election results include:
+        // 1. ineligible candidate, no existing election, no reference to the new primary vm, no reference to the old primary vm
+        // 2. ineligible candidate, no existing election, no reference to the new primary vm, has reference to the old primary vm
+        // 3. existing primary election is pending, this vm is the new primary vm, has a reference to the old primary vm
+        // 4. existing primary eleciion is pending, this vm is not the new primary, has a reference to new primary vm, has no reference to the old primary vm
+        // 5. existing primary election is done, this vm is the new primary, has reference to the old primary
+        // 6. existing primary election is done, this vm is not the new primary, has reference to the new primary vm, has no fererence to the new primary vm
+
+        // Primary Election handling diagram is available in: https://github.com/fortinet/autoscale-core
+        // workflow: if primary record not exists, start a new election
+        if (!this.env.primaryRecord) {
+            // flag the action now, and handle it later, separately.
+            action = 'save';
+            // need to redo election
+            redoElection = true;
+            // should reload the primary record
+            reloadPrimaryRecord = true;
         }
-        // primary election required? condition 2: has primary record, but it's pending
-        // ASSERT: the existing primary record voteEndTime > now if voteState is pending (it's a calculated state)
-        else if (this.env.primaryRecord.voteState === PrimaryRecordVoteState.Pending) {
-            // if primary election is pending, only need to know the current result. do not need
-            // to redo the election.
-            // but if the target is also the pending primary, the primary election need to complete
-            if (this.platform.vmEquals(this.env.targetVm, this.env.primaryVm)) {
-                // only complete the election when the pending primary is healthy and still in-sync
+        // else, primary record exists
+        else {
+            // workflow: check the existing primary record state
+            // vote state: pending
+            if (this.env.primaryRecord.voteState === PrimaryRecordVoteState.Pending) {
+                // workflow: check the current vm ID
+                // the target is the pending primary
                 if (
-                    this.env.targetHealthCheckRecord &&
-                    this.env.targetHealthCheckRecord.healthy &&
-                    this.env.targetHealthCheckRecord.syncState === HealthCheckSyncState.InSync
+                    this.env.targetVm &&
+                    this.env.primaryVm &&
+                    this.env.targetVm.id === this.env.primaryVm.id
                 ) {
-                    this.env.primaryRecord.voteState = PrimaryRecordVoteState.Done;
-                    election.newPrimary = this.env.targetVm;
-                    election.newPrimaryRecord = this.env.primaryRecord;
-                    await this.platform.updatePrimaryRecord(this.env.primaryRecord);
+                    // workflow: check the vm health state
+                    // vm is healthy
+                    if (
+                        this.env.targetHealthCheckRecord &&
+                        this.env.targetHealthCheckRecord.healthy &&
+                        this.env.targetHealthCheckRecord.syncState === HealthCheckSyncState.InSync
+                    ) {
+                        // change the election to done
+                        this.env.primaryRecord.voteState = PrimaryRecordVoteState.Done;
+                        // update the election result
+                        // reference the new primary to the target vm
+                        election.newPrimary = this.env.targetVm;
+                        election.newPrimaryRecord = this.env.primaryRecord;
+                        // need to save primary record,
+                        // flag the action now, and handle it later, separately.
+                        action = 'save';
+                        // do not need to redo election
+                        redoElection = false;
+                        // should reload the primary record
+                        reloadPrimaryRecord = true;
+                    }
+                    // vm is unhealthy
+                    else {
+                        // need to delete the primary record,
+                        // flag the action now, and handle it later, separately.
+                        action = 'delete';
+                        // do not need to redo election
+                        redoElection = false;
+                        // should reload the primary record
+                        reloadPrimaryRecord = true;
+                    }
                 }
-                // otherwise, do nothing
+                // the target vm isn't the pending primary
+                else {
+                    // workflow: handling ends and returns election result
+                    // do nothing in this case
+                    // flag the action now, and handle it later, separately.
+                    action = 'noop';
+                    // do not need to redo election
+                    redoElection = false;
+                    // should not reload primary record
+                    reloadPrimaryRecord = false;
+                }
             }
-            // otherwise, do nothing
+            // vote state: timeout
+            else if (this.env.primaryRecord.voteState === PrimaryRecordVoteState.Timeout) {
+                // if primary election already timeout, redo the primary election
+                // workflow: if state is timeout -> delete primary record
+                // need to delete the primary record,
+                // flag the action now, and handle it later, separately.
+                action = 'delete';
+                // should redo the primary election
+                redoElection = true;
+                // should reload the primary record
+                reloadPrimaryRecord = true;
+            }
+            // vote state: done
+            else if (this.env.primaryRecord.voteState === PrimaryRecordVoteState.Done) {
+                // workflow: check the health state of recorded primary vm
+                if (this.env.primaryVm) {
+                    this.env.primaryHealthCheckRecord = await this.platform.getHealthCheckRecord(
+                        this.env.primaryVm.id
+                    );
+                }
+                if (
+                    this.env.primaryHealthCheckRecord &&
+                    this.env.primaryHealthCheckRecord.syncState === HealthCheckSyncState.InSync
+                ) {
+                    // primary vm is healthy
+                    // workflow: handling ends and returns election result
+                    // do nothing in this case
+                    // flag the action now, and handle it later, separately.
+                    action = 'noop';
+                    // do not need to redo election
+                    redoElection = false;
+                    // should not reload the primary record
+                    reloadPrimaryRecord = false;
+                }
+                // otherwise,
+                else {
+                    // primary mv is unhealthy
+                    // workflow: if vm is healthy  -- (false) -> delete primary record
+                    // need to delete the primary record,
+                    // flag the action now, and handle it later, separately.
+                    action = 'delete';
+                    // should redo the primary election
+                    redoElection = true;
+                    // should reload the primary record
+                    reloadPrimaryRecord = true;
+                }
+            }
         }
-        // primary election required? condition 3: has primary record, but it's timeout
-        else if (this.env.primaryRecord.voteState === PrimaryRecordVoteState.Timeout) {
-            // if primary election already timeout, clear the current primary vm and record
-            // handlePrimaryElection() will update the primary vm info, if cannot determine the
-            // primary vm, primary vm info will be set to null
-            // expect that a different primary will be elected and its vm info can be available
-            this.env.primaryRecord = null;
-            this.env.primaryVm = null;
-            await this.primaryElectionStrategy.apply();
-            // after primary election complete (election may not be necessary in some cases)
-            // get the election result.
-            election = await this.primaryElectionStrategy.result();
-        }
-        // primary election required? condition 4: has primary record, it's done
-        else if (this.env.primaryRecord.voteState === PrimaryRecordVoteState.Done) {
-            // how is the primary health check in this case?
-            // get primary vm healthcheck record
-            if (!this.env.primaryHealthCheckRecord) {
-                this.env.primaryHealthCheckRecord = await this.platform.getHealthCheckRecord(
-                    this.env.primaryVm.id
+
+        // dealing with updating the primary record
+        if (action === 'delete') {
+            // NOTE: providing the primary record data to put strict condition on the deletion
+            try {
+                this.proxy.logAsInfo(
+                    'Delete the current primary record: ',
+                    JSON.stringify(this.env.primaryRecord)
+                );
+                await this.platform.deletePrimaryRecord(this.env.primaryRecord);
+            } catch (error) {
+                // unable to delete but that is okay. no impact
+                this.proxy.logAsWarning(
+                    'Unable to delete. This message can be discarded. ' + `error: ${error}`
                 );
             }
-            // primary is unhealthy, primary election required. if target is the primary, don't do election.
-            if (
-                !this.env.primaryHealthCheckRecord.healthy &&
-                !this.platform.vmEquals(this.env.targetVm, this.env.primaryVm)
-            ) {
-                // handlePrimaryElection() will update the primary vm info, if cannot determine the
-                // primary vm, primary vm info will be set to null
-                // expect that a different primary will be elected and its vm info can be available
-                await this.primaryElectionStrategy.apply();
-                // after primary election complete (election may not be necessary in some cases)
+        }
+        // primary election need to redo?
+        if (redoElection) {
+            try {
+                this.proxy.logAsInfo('Primary election starting now.');
+                // because it needs to redo the election, all those stale health check records
+                // should be removed.
+                await this.handleStaleVm();
+                await this.primaryElectionStrategy.prepare(election);
+                // workflow: start a new primary election
+                const decision = await this.primaryElectionStrategy.apply();
                 // get the election result.
                 election = await this.primaryElectionStrategy.result();
+                // if new primary election started
+                // election will be avaialble: new primary vm and new primary record will not be null
+                this.env.primaryRecord = election.newPrimaryRecord;
+                this.env.primaryVm = election.newPrimary;
+                // only when primary record isn't null, it needs to save the primary record
+                if (election.newPrimary && election.newPrimaryRecord) {
+                    this.proxy.logAsInfo(
+                        'Primary election strategy completed.' +
+                            ` The new primary is: vmId: ${election.newPrimaryRecord.vmId},` +
+                            ` ip: ${election.newPrimaryRecord.ip}.`
+                    );
+                    // If the target VM is new elected primary, and is already in the monitor,
+                    // can resolve the primary immediately
+                    // otherwise, the primary election will be resolved when the elected primary
+                    // state becomes in-service
+                    if (
+                        this.platform.vmEquals(this.env.targetVm, election.newPrimary) &&
+                        this.env.targetHealthCheckRecord
+                    ) {
+                        election.newPrimaryRecord.voteEndTime = Date.now(); // election ends immediately
+                        election.newPrimaryRecord.voteState = PrimaryRecordVoteState.Done;
+                    }
+                    action = 'save';
+                    // should reload primary record
+                    reloadPrimaryRecord = true;
+                } else {
+                    // if primary election is needed but no primary can be elected, should send
+                    // notifications to ask for manual observation or troubleshooting
+                    if (decision === PrimaryElectionStrategyResult.CannotDeterminePrimary) {
+                        this.proxy.logAsWarning(
+                            'Autoscale unable to determine the new primary device'
+                        );
+                        await this.sendAutoscaleNotifications(
+                            this.env.targetVm,
+                            'The Autoscale primary election strategy cannot automatically' +
+                                ' determine the new primary device using the device information.' +
+                                ' Manually configuring the primary device is needed.',
+                            'Autoscale unable to determine the new primary device'
+                        );
+                    }
+                    // NOTE: wait for the next round
+                    else if (decision === PrimaryElectionStrategyResult.SkipAndContinue) {
+                        // TODO: any action to take here?
+                        this.proxy.logAsInfo(
+                            'Primary election strategy suggests that election' +
+                                ' should skip this round and will restart in the next round.'
+                        );
+                    }
+                    // do not need to save the primary record
+                    action = 'noop';
+                    // should not reload the primary record
+                    reloadPrimaryRecord = false;
+                }
+            } catch (error) {
+                this.proxy.logForError('Primary election does not start. Error occurs.', error);
+                // do not need to save the primary record
+                action = 'noop';
+                // election isn't needed so new primary should be null
+                election.newPrimary = null;
+                election.newPrimaryRecord = null;
+                // should not reload the primary record
+                reloadPrimaryRecord = false;
             }
+        } else {
+            // election isn't needed so new primary should be null
+            election.newPrimary = null;
+            election.newPrimaryRecord = null;
+        }
+
+        if (action === 'save') {
+            // CAUTION: there may be race conditions when updating the primary record
+            try {
+                this.proxy.logAsInfo(
+                    'Saving the primary record. ',
+                    JSON.stringify(this.env.primaryRecord)
+                );
+                await this.platform.updatePrimaryRecord(this.env.primaryRecord);
+                // primary record is saved, need to reload it
+                reloadPrimaryRecord = true;
+            } catch (error) {
+                // primary record is not saved, need to reload it anyway
+                reloadPrimaryRecord = true;
+                this.proxy.logForError('Unable to save primary record. ', error);
+            }
+        }
+
+        if (reloadPrimaryRecord) {
+            this.env.primaryRecord = await this.platform.getPrimaryRecord();
+            this.env.primaryVm = await this.platform.getPrimaryVm();
         }
 
         this.proxy.logAsInfo('called handlePrimaryElection.');
         return election;
+    }
+    async handleStaleVm(): Promise<HealthCheckRecord[]> {
+        const [activeVms, healthcheckRecords] = await Promise.all([
+            this.platform.listAutoscaleVm(false, false),
+            this.platform.listHealthCheckRecord()
+        ]);
+        const activeVmIds = activeVms.map(vm => vm.id);
+        const activeHealthCheckRecords = healthcheckRecords.filter(rec =>
+            activeVmIds.includes(rec.vmId)
+        );
+        const staleHealthCheckRecords = healthcheckRecords.filter(
+            rec => !activeVmIds.includes(rec.vmId)
+        );
+        // delete those stale healthcheck records
+        await Promise.all(
+            staleHealthCheckRecords.map(rec => {
+                this.proxy.logAsInfo(
+                    `Deleting health check record of vm (id: ${rec.vmId}) ` +
+                        'that no longer exists.'
+                );
+                return this.platform.deleteHealthCheckRecord(rec);
+            })
+        );
+        return activeHealthCheckRecords;
     }
     async handleUnhealthyVm(vms: VirtualMachine[]): Promise<void> {
         this.proxy.logAsInfo('calling handleUnhealthyVm.');
@@ -500,6 +766,11 @@ export abstract class Autoscale implements AutoscaleCore {
             if (terminateUnhealthyVm) {
                 try {
                     await this.platform.deleteVmFromScalingGroup(vm.id);
+                    // delete corresponding health check record
+                    const healthcheckRecord = await this.platform.getHealthCheckRecord(vm.id);
+                    if (healthcheckRecord) {
+                        await this.platform.deleteHealthCheckRecord(healthcheckRecord);
+                    }
                     try {
                         message +=
                             'Autoscale is now terminating this device.\n' +

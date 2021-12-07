@@ -16,14 +16,6 @@ import { SecretClient } from '@azure/keyvault-secrets';
 import * as msRestNodeAuth from '@azure/ms-rest-nodeauth';
 import { BlobServiceClient, StorageSharedKeyCredential } from '@azure/storage-blob';
 import * as DBDef from '@fortinet/autoscale-core/db-definitions';
-import {
-    Blob,
-    jsonParseReviver,
-    jsonStringifyReplacer,
-    PlatformAdaptee,
-    SettingItem,
-    Settings
-} from '..';
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import fs from 'fs';
 import * as HttpStatusCodes from 'http-status-codes';
@@ -33,11 +25,18 @@ import {
     AzureFortiGateAutoscaleSetting,
     AzureSettings,
     AzureSettingsDbItem,
-    ConsistenyCheckType,
     CosmosDBQueryResult,
     CosmosDBQueryWhereClause,
     CosmosDbTableMetaData
 } from '.';
+import {
+    Blob,
+    jsonParseReviver,
+    jsonStringifyReplacer,
+    PlatformAdaptee,
+    SettingItem,
+    Settings
+} from '..';
 
 export enum requiredEnvVars {
     AUTOSCALE_DB_ACCOUNT = 'AUTOSCALE_DB_ACCOUNT',
@@ -107,8 +106,7 @@ export enum ApiCacheOption {
 const TTLS = {
     listInstances: 600,
     describeInstance: 600,
-    listNetworkInterfaces: 600,
-    loadSettings: 60
+    listNetworkInterfaces: 600
 };
 
 export class AzurePlatformAdaptee implements PlatformAdaptee {
@@ -176,32 +174,17 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         );
     }
 
-    async reloadSettings(invalidateCache: boolean): Promise<ApiCache<Settings>> {
-        const req: ApiCacheRequest = {
-            api: 'loadSettings',
-            parameters: [],
-            ttl: TTLS.loadSettings // expected time to live
-        };
-
-        const requestProcessor = async (): Promise<AzureSettingsDbItem[]> => {
-            const table = new AzureSettings();
-            const queryResult: CosmosDBQueryResult<AzureSettingsDbItem> = await this.listItemFromDb<
-                AzureSettingsDbItem
-            >(table);
-            return queryResult.result || [];
-        };
+    async reloadSettings(invalidateCache: boolean): Promise<Settings> {
+        const table = new AzureSettings();
+        const queryResult: CosmosDBQueryResult<AzureSettingsDbItem> = await this.listItemFromDb<
+            AzureSettingsDbItem
+        >(table);
+        const res = queryResult.result || [];
         if (invalidateCache) {
             this.settings = null;
         }
-        const res = await this.requestWithCaching<AzureSettingsDbItem[]>(
-            req,
-            invalidateCache ? ApiCacheOption.ReadCacheAndDelete : ApiCacheOption.ReadCacheFirst,
-            requestProcessor
-        );
         const records: Map<string, AzureSettingsDbItem> = new Map();
-        if (res && res.result) {
-            res.result.forEach(rec => records.set(rec.settingKey, rec));
-        }
+        res.forEach(rec => records.set(rec.settingKey, rec));
         const settings: Settings = new Map<string, SettingItem>();
         Object.values(AzureFortiGateAutoscaleSetting).forEach(value => {
             if (records.has(value)) {
@@ -216,13 +199,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                 settings.set(value, settingItem);
             }
         });
-        const cache: ApiCache<Settings> = {
-            result: settings,
-            hitCache: res.hitCache,
-            cacheTime: res.cacheTime,
-            ttl: res.ttl
-        };
-        return cache;
+        return settings;
     }
 
     async loadSettings(): Promise<Settings> {
@@ -230,7 +207,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
             return this.settings;
         }
         const data = await this.reloadSettings(false);
-        this.settings = data.result;
+        this.settings = data;
         return this.settings;
     }
 
@@ -312,19 +289,20 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         return queryResult;
     }
     /**
-     * save an item to db. When the optional parameter 'consistencyCheck' is provided, it will
+     * save an item to db. When the optional parameter 'dataIntegrityCheck' is provided, it will
      * perform a data consistency checking before saving.
      * The function compares each property of the item against the existing record
      * with the same primary key in the db table.
      * It saves the item only when one of the following conditions is met:
-     * condition 1: if parameter consistencyCheck is passed boolean true, it will
+     * condition 1: if parameter dataIntegrityCheck is passed boolean true, it will
      * only compare the _etag
-     * condition 2: if parameter consistencyCheck is passed an object of type T, it will
+     * condition 2: if parameter dataIntegrityCheck is passed a check function that accepts
+     * an input of type T, it will
      * strictly compare each defined (including null, false and empty value) property
      * @param  {Table<T>} table the instance of Table to save the item.
      * @param  {T} item the item to save
      * @param  {DBDef.SaveCondition} condition save condition
-     * @param  {boolean| object} consistencyCheck (optional) ensure data consistency to prevent
+     * @param  {boolean| function} dataIntegrityCheck (optional) ensure data integrity to prevent
      * saving outdated data.
      * @returns {Promise<T>} a promise of item of type T
      */
@@ -332,7 +310,14 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         table: DBDef.Table<T>,
         item: T,
         condition: DBDef.SaveCondition,
-        consistencyCheck: boolean | ConsistenyCheckType<T> = true
+        dataIntegrityCheck:
+            | boolean
+            | ((
+                  dbItemSnapshot: T
+              ) => Promise<{
+                  result: boolean;
+                  errorMessage: string;
+              }>) = true
     ): Promise<T> {
         // CAUTION: validate the db input (non meta data)
         table.validateInput<T>(item);
@@ -348,27 +333,19 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
 
         // if date with the same primary key already exists in the db table
         if (itemSnapshot) {
-            // NOTE: given an object for property comparison
-            if (typeof consistencyCheck !== 'boolean') {
-                const inconsistentData = Object.entries(consistencyCheck).filter(([k, v]) => {
-                    return itemSnapshot[k] !== v;
-                });
-                // throw error if inconsistent data found
-                if (inconsistentData.length > 0) {
-                    const inconsistentDataDetailString: string = inconsistentData
-                        .map(([k, v]) => {
-                            return `key: ${k}, expected: ${v}, existing: ${itemSnapshot[k]}`;
-                        })
-                        .join('; ');
+            // if a function is provided as dataIntegrityCheck, run the checker function
+            if (typeof dataIntegrityCheck === 'function') {
+                const checkerResult = await dataIntegrityCheck(itemSnapshot);
+                if (!checkerResult.result) {
                     throw new DBDef.DbSaveError(
                         DBDef.DbErrorCode.InconsistentData,
-                        'Inconsistent data. The following value not match:' +
-                            `${inconsistentDataDetailString}`
+                        `Data integrityCheck failed. ${checkerResult.errorMessage || ''}`
                     );
                 }
             }
-            // NOTE: if consistencyCheck, enforces this access condition
-            options = consistencyCheck && {
+
+            // NOTE: if dataIntegrityCheck, enforces this access condition
+            options = dataIntegrityCheck && {
                 accessCondition: {
                     type: 'IfMatch',
                     condition: itemSnapshot._etag
@@ -394,7 +371,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         // TODO: from the logic above, the condition probably be always false
         // can remove this block?
         if (
-            consistencyCheck &&
+            dataIntegrityCheck &&
             itemSnapshot &&
             item[table.primaryKey.name] !== itemSnapshot[table.primaryKey.name]
         ) {
@@ -403,7 +380,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                 'Inconsistent data.' +
                     ' Primary key values not match.' +
                     'Cannot save item back into db due to' +
-                    ' the restriction parameter consistencyCheck is on.'
+                    ' the restriction parameter dataIntegrityCheck is on.'
             );
         }
         // ASSERT: input validation and data consistency checking have passed.

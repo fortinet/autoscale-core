@@ -1,6 +1,6 @@
 {
     "name": "@fortinet/fortigate-autoscale",
-    "version": "3.3.1",
+    "version": "3.3.2",
     "description": "Fortinet Autoscale project(s), fortigate autoscale module.",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
@@ -28,7 +28,7 @@
         "@azure/ms-rest-js": "^2.2.1",
         "@azure/ms-rest-nodeauth": "^3.0.10",
         "@azure/storage-blob": "^12.4.1",
-        "axios": "^0.21.1",
+        "axios": "^0.21.2",
         "express": "^4.17.1"
     },
     "devDependencies": {

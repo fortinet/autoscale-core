@@ -32,7 +32,6 @@ import {
     NoopNicAttachmentStrategy,
     NoopRoutingEgressTrafficStrategy,
     NoopVpnAttachmentStrategy,
-    PreferredGroupPrimaryElection,
     ReusableLicensingStrategy,
     VirtualMachine,
     VirtualMachineState,
@@ -40,7 +39,8 @@ import {
     VpnAttachmentStrategyResult,
     waitFor,
     WaitForConditionChecker,
-    WaitForPromiseEmitter
+    WaitForPromiseEmitter,
+    WeightedScorePreferredGroupPrimaryElection
 } from '..';
 
 /** ./aws-fortigate-autoscale-lambda-invocable
@@ -64,7 +64,9 @@ export class AwsFortiGateAutoscale<TReq, TContext, TRes>
         // use AWS Hybrid scaling group strategy
         this.setScalingGroupStrategy(new AwsHybridScalingGroupStrategy(platform, proxy));
         // use peferred group primary election for Hybrid licensing model
-        this.setPrimaryElectionStrategy(new PreferredGroupPrimaryElection(platform, proxy));
+        this.setPrimaryElectionStrategy(
+            new WeightedScorePreferredGroupPrimaryElection(platform, proxy)
+        );
         // use a constant interval heartbeat sync strategy
         this.setHeartbeatSyncStrategy(new ConstantIntervalHeartbeatSyncStrategy(platform, proxy));
         // use AWS resource tagging strategy
