@@ -369,12 +369,12 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
         for (const rec of allHealthCheckRecords) {
             let points = scores.get(rec.vmId);
             // apply weighting methods
-            points += this.weightMethod1(rec);
-            points += this.weightMethod2(rec, allHealthCheckRecords);
-            points += this.weightMethod3(rec, allHealthCheckRecords);
-            points += this.weightMethod4(rec);
-            points += this.weightMethod5(rec, allHealthCheckRecords);
-            points += this.weightMethod6(rec, allHealthCheckRecords);
+            points += this.haveChecksumWeight(rec);
+            points += this.sharedChecksumWeight(rec, allHealthCheckRecords);
+            points += this.groupedChecksumWeight(rec, allHealthCheckRecords);
+            points += this.primaryDeviceWeight(rec);
+            points += this.lateslGroupChecksumWeight(rec, allHealthCheckRecords);
+            points += this.latestSynctimeWeight(rec, allHealthCheckRecords);
             scores.set(rec.vmId, points);
         }
 
@@ -405,7 +405,7 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
         // in this case whichever has the oldest send_time will be the election primary
         // run the method to find the one
         if (!electedPrimaryHealthCheckRecord) {
-            electedPrimaryId = this.weightMethodSpecial(scores, allHealthCheckRecords);
+            electedPrimaryId = this.fairWeight(scores, allHealthCheckRecords);
             [electedPrimaryHealthCheckRecord] = allHealthCheckRecords.filter(
                 rec => rec.vmId === electedPrimaryId
             );
@@ -439,12 +439,12 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
     }
 
     /**
-     * get (1) point if a record has non-numm checksum
+     * get (1) point if a record has non-null checksum
      * @param {HealthCheckRecord} rec the healthcheck record to earn points
      * @returns {number} point
      */
-    weightMethod1(rec: HealthCheckRecord): number {
-        return (rec.deviceChecksum !== null && 1) || 0;
+    haveChecksumWeight(rec: HealthCheckRecord): number {
+        return rec.deviceChecksum ? 1 : 0;
     }
     /**
      * get (2) points if the record shares the same checksum (non-null) with at least one other VM in the group
@@ -452,7 +452,7 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
      * @param {HealthCheckRecord[]} groups the group of healthcheck records
      * @returns {number} point
      */
-    weightMethod2(rec: HealthCheckRecord, groups: HealthCheckRecord[]): number {
+    sharedChecksumWeight(rec: HealthCheckRecord, groups: HealthCheckRecord[]): number {
         const sameChecksums = groups.filter(
             g =>
                 g.vmId !== rec.vmId &&
@@ -487,7 +487,7 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
      * @param {HealthCheckRecord[]} groups the group of healthcheck records
      * @returns {number} point
      */
-    weightMethod3(rec: HealthCheckRecord, groups: HealthCheckRecord[]): number {
+    groupedChecksumWeight(rec: HealthCheckRecord, groups: HealthCheckRecord[]): number {
         const checksumGroups: Map<string, string[]> = this.groupByChecksum(groups);
         let largestCount = 1;
         let multipleGroupOfSameCount = false;
@@ -515,7 +515,7 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
      * @param {HealthCheckRecord[]} groups the group of healthcheck records
      * @returns {number} point
      */
-    weightMethod6(rec: HealthCheckRecord, groups: HealthCheckRecord[]): number {
+    latestSynctimeWeight(rec: HealthCheckRecord, groups: HealthCheckRecord[]): number {
         // if rec has null sync time then it gets 0 point
         if (rec.deviceSyncTime === null) {
             return 0;
@@ -549,7 +549,7 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
      * @param {HealthCheckRecord[]} groups the group of healthcheck records
      * @returns {number} point
      */
-    weightMethod5(rec: HealthCheckRecord, groups: HealthCheckRecord[]): number {
+    lateslGroupChecksumWeight(rec: HealthCheckRecord, groups: HealthCheckRecord[]): number {
         const syncTimeGroups: Map<string, Date> = new Map(); // get sort out the latest sync time of each checksum
         groups
             .filter(grec => grec.deviceSyncTime !== null)
@@ -585,7 +585,7 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
      * @param {HealthCheckRecord} rec the healthcheck record to earn points
      * @returns {number} point
      */
-    weightMethod4(rec: HealthCheckRecord): number {
+    primaryDeviceWeight(rec: HealthCheckRecord): number {
         return rec.deviceIsPrimary ? 64 : 0;
     }
     /**
@@ -599,7 +599,7 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
      * @param {HealthCheckRecord[]} groups the group of healthcheck records
      * @returns {string} vmId who will get the bonus
      */
-    weightMethodSpecial(scores: Map<string, number>, groups: HealthCheckRecord[]): string {
+    fairWeight(scores: Map<string, number>, groups: HealthCheckRecord[]): string {
         // check mutually exclusive and find non-null sync_time
         let foundNonNullSyncTime = false;
         const checksumCount: Map<string, number> = new Map();

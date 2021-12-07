@@ -473,7 +473,7 @@ export abstract class Autoscale implements AutoscaleCore {
         // the action for updating primary record
         let action: 'save' | 'delete' | 'noop' = 'noop';
         let redoElection = false;
-        let reloadPrimarRecord = false;
+        let reloadPrimaryRecord = false;
 
         // in general, possible primary election results include:
         // 1. ineligible candidate, no existing election, no reference to the new primary vm, no reference to the old primary vm
@@ -491,7 +491,7 @@ export abstract class Autoscale implements AutoscaleCore {
             // need to redo election
             redoElection = true;
             // should reload the primary record
-            reloadPrimarRecord = true;
+            reloadPrimaryRecord = true;
         }
         // else, primary record exists
         else {
@@ -524,7 +524,7 @@ export abstract class Autoscale implements AutoscaleCore {
                         // do not need to redo election
                         redoElection = false;
                         // should reload the primary record
-                        reloadPrimarRecord = true;
+                        reloadPrimaryRecord = true;
                     }
                     // vm is unhealthy
                     else {
@@ -534,7 +534,7 @@ export abstract class Autoscale implements AutoscaleCore {
                         // do not need to redo election
                         redoElection = false;
                         // should reload the primary record
-                        reloadPrimarRecord = true;
+                        reloadPrimaryRecord = true;
                     }
                 }
                 // the target vm isn't the pending primary
@@ -546,7 +546,7 @@ export abstract class Autoscale implements AutoscaleCore {
                     // do not need to redo election
                     redoElection = false;
                     // should not reload primary record
-                    reloadPrimarRecord = false;
+                    reloadPrimaryRecord = false;
                 }
             }
             // vote state: timeout
@@ -559,7 +559,7 @@ export abstract class Autoscale implements AutoscaleCore {
                 // should redo the primary election
                 redoElection = true;
                 // should reload the primary record
-                reloadPrimarRecord = true;
+                reloadPrimaryRecord = true;
             }
             // vote state: done
             else if (this.env.primaryRecord.voteState === PrimaryRecordVoteState.Done) {
@@ -581,7 +581,7 @@ export abstract class Autoscale implements AutoscaleCore {
                     // do not need to redo election
                     redoElection = false;
                     // should not reload the primary record
-                    reloadPrimarRecord = false;
+                    reloadPrimaryRecord = false;
                 }
                 // otherwise,
                 else {
@@ -593,7 +593,7 @@ export abstract class Autoscale implements AutoscaleCore {
                     // should redo the primary election
                     redoElection = true;
                     // should reload the primary record
-                    reloadPrimarRecord = true;
+                    reloadPrimaryRecord = true;
                 }
             }
         }
@@ -650,7 +650,7 @@ export abstract class Autoscale implements AutoscaleCore {
                     }
                     action = 'save';
                     // should reload primary record
-                    reloadPrimarRecord = true;
+                    reloadPrimaryRecord = true;
                 } else {
                     // if primary election is needed but no primary can be elected, should send
                     // notifications to ask for manual observation or troubleshooting
@@ -677,7 +677,7 @@ export abstract class Autoscale implements AutoscaleCore {
                     // do not need to save the primary record
                     action = 'noop';
                     // should not reload the primary record
-                    reloadPrimarRecord = false;
+                    reloadPrimaryRecord = false;
                 }
             } catch (error) {
                 this.proxy.logForError('Primary election does not start. Error occurs.', error);
@@ -687,7 +687,7 @@ export abstract class Autoscale implements AutoscaleCore {
                 election.newPrimary = null;
                 election.newPrimaryRecord = null;
                 // should not reload the primary record
-                reloadPrimarRecord = false;
+                reloadPrimaryRecord = false;
             }
         } else {
             // election isn't needed so new primary should be null
@@ -704,15 +704,15 @@ export abstract class Autoscale implements AutoscaleCore {
                 );
                 await this.platform.updatePrimaryRecord(this.env.primaryRecord);
                 // primary record is saved, need to reload it
-                reloadPrimarRecord = true;
+                reloadPrimaryRecord = true;
             } catch (error) {
                 // primary record is not saved, need to reload it anyway
-                reloadPrimarRecord = true;
+                reloadPrimaryRecord = true;
                 this.proxy.logForError('Unable to save primary record. ', error);
             }
         }
 
-        if (reloadPrimarRecord) {
+        if (reloadPrimaryRecord) {
             this.env.primaryRecord = await this.platform.getPrimaryRecord();
             this.env.primaryVm = await this.platform.getPrimaryVm();
         }
