@@ -7,21 +7,14 @@ import {
     LicenseUsageRecord,
     PlatformAdapter
 } from '../platform-adapter';
-import { HealthCheckSyncState } from '../primary-election';
-import { VirtualMachine } from '../virtual-machine';
+import { VirtualMachine, VirtualMachineState } from '../virtual-machine';
 
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum LicensingStrategyResult {
     LicenseAssigned = 'license-assigned',
     LicenseOutOfStock = 'license-out-of-stock',
     LicenseNotRequired = 'license-not-required'
-}
-
-/**
- * To provide Licensing model related logics such as license assignment.
- */
-export interface LicensingModelContext {
-    setLicensingStrategy(strategy: LicensingStrategy): void;
-    handleLicenseAssignment(productName: string): Promise<string>;
 }
 
 export interface LicensingStrategy {
@@ -33,6 +26,16 @@ export interface LicensingStrategy {
     ): Promise<void>;
     apply(): Promise<LicensingStrategyResult>;
     getLicenseContent(): Promise<string>;
+}
+
+/**
+ * To provide Licensing model related logics such as license assignment.
+ */
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
+export interface LicensingModelContext {
+    setLicensingStrategy(strategy: LicensingStrategy): void;
+    handleLicenseAssignment(productName: string): Promise<string>;
 }
 
 export class NoopLicensingStrategy implements LicensingStrategy {
@@ -193,11 +196,9 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
     protected async syncVmStatusToUsageRecords(usageRecords: LicenseUsageRecord[]): Promise<void> {
         const updatedRecordArray = await Promise.all(
             usageRecords.map(async u => {
-                const healthCheckRecord = await this.platform.getHealthCheckRecord(u.vmId);
+                const vm = await this.platform.getVmById(u.vmId);
                 const item: LicenseUsageRecord = { ...u };
-                item.vmInSync = !!(
-                    healthCheckRecord && healthCheckRecord.syncState === HealthCheckSyncState.InSync
-                );
+                item.vmInSync = !!(vm && vm.state === VirtualMachineState.Running);
                 return { item: item, reference: u };
             })
         );
@@ -226,7 +227,11 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
     protected async listOutOfSyncRecord(sync?: boolean): Promise<LicenseUsageRecord[]> {
         let outOfSyncArray: LicenseUsageRecord[];
         if (sync) {
-            await this.syncVmStatusToUsageRecords(this.usageRecords);
+            await this.syncVmStatusToUsageRecords(this.usageRecords).catch(() => {
+                this.proxy.logAsWarning(
+                    'Ignore errors when sync VM status to license usage records.'
+                );
+            });
             this.usageRecords = Array.from(
                 (await this.platform.listLicenseUsage(this.productName)).values()
             );

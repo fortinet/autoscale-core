@@ -262,7 +262,7 @@ export abstract class FortiGateBootstrapConfigStrategy implements BootstrapConfi
      * @param {{}} sourceData a given object containing sorcce data to be used.
      * @returns {string} a processed config sets in string type.
      */
-    protected processConfig(config: string, sourceData?: {}): string {
+    protected processConfig(config: string, sourceData?: unknown): string {
         if (sourceData) {
             config = this.processConfigV2(config, sourceData);
         }
@@ -332,7 +332,7 @@ export abstract class FortiGateBootstrapConfigStrategy implements BootstrapConfi
      * @param {{}} sourceData a given object containing sorcce data to be used.
      * @returns {string} a processed config sets in string type.
      */
-    protected processConfigV2(config: string, sourceData: {}): string {
+    protected processConfigV2(config: string, sourceData: unknown): string {
         const resourceMap = {};
         Object.assign(resourceMap, sourceData);
         let conf = config;

@@ -8,38 +8,35 @@ import {
     HealthCheckResult,
     HealthCheckResultDetail,
     HealthCheckSyncState as HeartbeatSyncState,
-    PrimaryElection,
     PrimaryRecord,
     PrimaryRecordVoteState
 } from '../primary-election';
 import { VirtualMachine } from '../virtual-machine';
 
-/**
- * To provide Autoscale basic logics
- */
-export interface AutoscaleContext {
-    setPrimaryElectionStrategy(strategy: PrimaryElectionStrategy): void;
-    handlePrimaryElection(): Promise<PrimaryElection | null>;
-    setHeartbeatSyncStrategy(strategy: HeartbeatSyncStrategy): void;
-    handleHeartbeatSync(): Promise<string>;
-    setTaggingAutoscaleVmStrategy(strategy: TaggingVmStrategy): void;
-    handleTaggingAutoscaleVm(taggings: VmTagging[]): Promise<void>;
-    setRoutingEgressTrafficStrategy(strategy: RoutingEgressTrafficStrategy): void;
-    handleEgressTrafficRoute(): Promise<void>;
-    onVmFullyConfigured(): Promise<void>;
+export interface PrimaryElection {
+    oldPrimary?: VirtualMachine;
+    oldPrimaryRecord?: PrimaryRecord;
+    newPrimary: VirtualMachine;
+    newPrimaryRecord: PrimaryRecord;
+    candidate: VirtualMachine;
+    candidateHealthCheck?: HealthCheckRecord;
+    preferredScalingGroup?: string;
+    electionDuration?: number;
+    signature: string; // to identify a primary election
 }
 
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
+export enum PrimaryElectionStrategyResult {
+    CannotDeterminePrimary = 'CannotDeterminePrimary',
+    CompleteAndContinue = 'CompleteAndContinue',
+    SkipAndContinue = 'SkipAndContinue'
+}
 export interface PrimaryElectionStrategy {
     prepare(election: PrimaryElection): Promise<void>;
     result(): Promise<PrimaryElection>;
     apply(): Promise<PrimaryElectionStrategyResult>;
     readonly applied: boolean;
-}
-
-export enum PrimaryElectionStrategyResult {
-    CannotDeterminePrimary = 'CannotDeterminePrimary',
-    CompleteAndContinue = 'CompleteAndContinue',
-    SkipAndContinue = 'SkipAndContinue'
 }
 
 export interface HeartbeatSyncStrategy {
@@ -55,6 +52,37 @@ export interface HeartbeatSyncStrategy {
     readonly healthCheckResult: HealthCheckResult;
     readonly healthCheckResultDetail: HealthCheckResultDetail;
     readonly targetVmFirstHeartbeat: boolean;
+}
+
+export interface VmTagging {
+    vmId: string;
+    newVm?: boolean;
+    newPrimaryRole?: boolean;
+    clear?: boolean;
+}
+
+export interface TaggingVmStrategy {
+    prepare(taggings: VmTagging[]): Promise<void>;
+    apply(): Promise<void>;
+}
+
+export interface RoutingEgressTrafficStrategy {
+    apply(): Promise<void>;
+}
+
+/**
+ * To provide Autoscale basic logics
+ */
+export interface AutoscaleContext {
+    setPrimaryElectionStrategy(strategy: PrimaryElectionStrategy): void;
+    handlePrimaryElection(): Promise<PrimaryElection | null>;
+    setHeartbeatSyncStrategy(strategy: HeartbeatSyncStrategy): void;
+    handleHeartbeatSync(): Promise<string>;
+    setTaggingAutoscaleVmStrategy(strategy: TaggingVmStrategy): void;
+    handleTaggingAutoscaleVm(taggings: VmTagging[]): Promise<void>;
+    setRoutingEgressTrafficStrategy(strategy: RoutingEgressTrafficStrategy): void;
+    handleEgressTrafficRoute(): Promise<void>;
+    onVmFullyConfigured(): Promise<void>;
 }
 
 export class PreferredGroupPrimaryElection implements PrimaryElectionStrategy {
@@ -1049,22 +1077,6 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
             return false;
         }
     }
-}
-
-export interface VmTagging {
-    vmId: string;
-    newVm?: boolean;
-    newPrimaryRole?: boolean;
-    clear?: boolean;
-}
-
-export interface TaggingVmStrategy {
-    prepare(taggings: VmTagging[]): Promise<void>;
-    apply(): Promise<void>;
-}
-
-export interface RoutingEgressTrafficStrategy {
-    apply(): Promise<void>;
 }
 
 export class NoopTaggingVmStrategy implements TaggingVmStrategy {

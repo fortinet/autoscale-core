@@ -1,7 +1,7 @@
-import { JSONable } from '..';
 import { CloudFormationCustomResourceEvent, Context } from 'aws-lambda';
 import https from 'https';
 import url from 'url';
+import { JSONable } from '..';
 
 /*
    This file is a Fortinet-modified version of the original source file from AWS.
@@ -22,6 +22,8 @@ import url from 'url';
    License.
 */
 
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum ResponseStatus {
     SUCCESS = 'SUCCESS',
     FAILED = 'FAILED'

@@ -48,7 +48,11 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     getRequestAsString(): Promise<string> {
         return Promise.resolve('fake-req-as-string');
     }
-    formatResponse(httpStatusCode: number, body: CloudFunctionResponseBody, headers: {}): {} {
+    formatResponse(
+        httpStatusCode: number,
+        body: CloudFunctionResponseBody,
+        headers: unknown
+    ): unknown {
         throw new Error('Method not implemented.');
     }
     log(message: string, level: LogLevel): void {

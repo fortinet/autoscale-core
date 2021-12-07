@@ -38,7 +38,9 @@ import {
     Settings
 } from '..';
 
-export enum requiredEnvVars {
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
+export enum RequiredEnvVars {
     AUTOSCALE_DB_ACCOUNT = 'AUTOSCALE_DB_ACCOUNT',
     AUTOSCALE_DB_NAME = 'AUTOSCALE_DB_NAME',
     AUTOSCALE_DB_PRIMARY_KEY = 'AUTOSCALE_DB_PRIMARY_KEY',
@@ -79,6 +81,8 @@ export interface ApiCache<T> {
  * Api Cache options
  * @enum
  */
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum ApiCacheOption {
     /**
      * @member {string} ReadApiFirst always request data from api then save data to cache.
@@ -127,7 +131,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
      */
     constructor() {
         // validation
-        const missingEnvVars = Object.keys({ ...requiredEnvVars }).filter(key => !process.env[key]);
+        const missingEnvVars = Object.keys({ ...RequiredEnvVars }).filter(key => !process.env[key]);
         if (missingEnvVars.length > 0) {
             throw new Error(
                 `Missing the following environment variables: ${missingEnvVars.join()}.`
@@ -701,7 +705,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
 
         const requestProcessor = async (): Promise<VirtualMachineScaleSetVM[]> => {
             const response = await this.azureCompute.virtualMachineScaleSetVMs.list(
-                process.env[requiredEnvVars.RESOURCE_GROUP],
+                process.env[RequiredEnvVars.RESOURCE_GROUP],
                 scalingGroupName
             );
             return (response && response._response.parsedBody) || null;
@@ -761,7 +765,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         };
         const requestProcessor = async (): Promise<typeof data> => {
             const response = await this.azureCompute.virtualMachineScaleSetVMs.get(
-                process.env[requiredEnvVars.RESOURCE_GROUP],
+                process.env[RequiredEnvVars.RESOURCE_GROUP],
                 scalingGroupName,
                 instanceId,
                 {
@@ -801,7 +805,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
 
         // ASSERT: all related caches are deleted. can delete the vm now
         const response = await this.azureCompute.virtualMachineScaleSetVMs.deleteMethod(
-            process.env[requiredEnvVars.RESOURCE_GROUP],
+            process.env[RequiredEnvVars.RESOURCE_GROUP],
             scalingGroupName,
             String(instanceId)
         );
@@ -838,7 +842,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         };
         const requestProcessor = async (): Promise<NetworkInterface[]> => {
             const response = await this.azureNetwork.networkInterfaces.listVirtualMachineScaleSetVMNetworkInterfaces(
-                process.env[requiredEnvVars.RESOURCE_GROUP],
+                process.env[RequiredEnvVars.RESOURCE_GROUP],
                 scalingGroupName,
                 String(id)
             );

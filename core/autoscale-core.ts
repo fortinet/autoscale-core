@@ -5,6 +5,7 @@ import { CloudFunctionProxy, CloudFunctionProxyAdapter } from './cloud-function-
 import {
     AutoscaleContext,
     HeartbeatSyncStrategy,
+    PrimaryElection,
     PrimaryElectionStrategy,
     PrimaryElectionStrategyResult,
     RoutingEgressTrafficStrategy,
@@ -26,7 +27,6 @@ import {
     HealthCheckRecord,
     HealthCheckResult,
     HealthCheckSyncState,
-    PrimaryElection,
     PrimaryRecordVoteState
 } from './primary-election';
 import { VirtualMachine } from './virtual-machine';

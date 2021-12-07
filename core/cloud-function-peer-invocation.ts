@@ -1,17 +1,16 @@
 import { JSONable } from './jsonable';
 
-export interface CloudFunctionPeerInvocation<TProxy, TPlatform> {
-    proxy: TProxy;
-    platform: TPlatform;
-    executeInvocable(payload: CloudFunctionInvocationPayload, invocable: string): Promise<void>;
-    handlePeerInvocation(functionEndpoint: string): Promise<void>;
-}
-
 export interface CloudFunctionInvocationPayload extends JSONable {
     stringifiedData: string;
     invocable: string;
     invocationSecretKey: string;
     executionTime?: number;
+}
+export interface CloudFunctionPeerInvocation<TProxy, TPlatform> {
+    proxy: TProxy;
+    platform: TPlatform;
+    executeInvocable(payload: CloudFunctionInvocationPayload, invocable: string): Promise<void>;
+    handlePeerInvocation(functionEndpoint: string): Promise<void>;
 }
 
 export class CloudFunctionInvocationTimeOutError extends Error {

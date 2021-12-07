@@ -4,6 +4,7 @@ import { ReqType } from './cloud-function-proxy';
 import { NicAttachmentRecord } from './context-strategy/nic-attachment-context';
 import { KeyValue } from './db-definitions';
 import { JSONable } from './jsonable';
+import { PlatformAdaptee } from './platform-adaptee';
 import { HealthCheckRecord, PrimaryRecord } from './primary-election';
 import { NetworkInterface, VirtualMachine } from './virtual-machine';
 
@@ -111,7 +112,7 @@ export interface TgwVpnAttachmentRecord {
 }
 
 export interface PlatformAdapter {
-    adaptee: {};
+    adaptee: PlatformAdaptee;
     readonly createTime: number;
     // checkRequestIntegrity(): void;
     init(): Promise<void>;

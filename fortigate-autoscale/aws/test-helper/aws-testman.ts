@@ -36,7 +36,7 @@ export interface ApiResult {
     promise(): Promise<any>;
 }
 
-export function CreateApiResult(f: () => any): ApiResult {
+export function createApiResult(f: () => any): ApiResult {
     return {
         promise: () => {
             return Promise.resolve(f());
@@ -325,7 +325,7 @@ export class MockS3 extends TestFixture {
     }
 
     listObjectsV2(request: S3.ListObjectsV2Request): ApiResult {
-        return CreateApiResult(async () => {
+        return createApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
                 [request.Bucket, ...request.Prefix.split('/'), this.subCall.subPath]
@@ -352,7 +352,7 @@ export class MockS3 extends TestFixture {
     }
 
     getObject(request: S3.GetObjectAclRequest): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             const filePath = path.resolve(
                 this.rootDir,
                 [request.Bucket, ...request.Key.split('/'), this.subCall.subPath]
@@ -503,7 +503,7 @@ export class MockEC2 extends TestFixture {
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     describeInstances(request: any): ApiResult {
-        return CreateApiResult(async () => {
+        return createApiResult(async () => {
             const [sampleName] =
                 request.Filters &&
                 request.Filters.filter(f => {
@@ -522,7 +522,7 @@ export class MockEC2 extends TestFixture {
     }
 
     createNetworkInterface(request: any): ApiResult {
-        return CreateApiResult(async () => {
+        return createApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
                 ['create-network-interface', this.subCall.subPath].filter(v => v).join('-')
@@ -539,13 +539,13 @@ export class MockEC2 extends TestFixture {
     }
 
     deleteNetworkInterface(request: any): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return;
         });
     }
 
     describeNetworkInterfaces(request: any): ApiResult {
-        return CreateApiResult(async () => {
+        return createApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
                 ['describe-network-interfaces', this.subCall.subPath].filter(v => v).join('-')
@@ -557,7 +557,7 @@ export class MockEC2 extends TestFixture {
     }
 
     attachNetworkInterface(request: EC2.AttachNetworkInterfaceRequest): ApiResult {
-        return CreateApiResult(async () => {
+        return createApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
                 [
@@ -576,7 +576,7 @@ export class MockEC2 extends TestFixture {
     }
 
     detachNetworkInterface(request: EC2.DetachNetworkInterfaceRequest): ApiResult {
-        return CreateApiResult(async () => {
+        return createApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
                 ['detach-network-interface', request.AttachmentId].filter(v => v).join('-')
@@ -587,22 +587,22 @@ export class MockEC2 extends TestFixture {
         });
     }
     createTags(request: EC2.CreateTagsRequest): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return;
         });
     }
     deleteTags(request: EC2.DeleteTagsRequest): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return;
         });
     }
     modifyInstanceAttribute(request: EC2.ModifyInstanceAttributeRequest): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return;
         });
     }
     createCustomerGateway(request: EC2.CreateCustomerGatewayRequest): ApiResult {
-        return CreateApiResult(async () => {
+        return createApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
                 ['create-customer-gateway', request.PublicIp, request.BgpAsn, this.subCall.subPath]
@@ -615,12 +615,12 @@ export class MockEC2 extends TestFixture {
         });
     }
     deleteCustomerGateway(request: EC2.DeleteCustomerGatewayRequest): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return;
         });
     }
     createVpnConnection(request: EC2.CreateVpnConnectionRequest): ApiResult {
-        return CreateApiResult(async () => {
+        return createApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
                 [
@@ -638,12 +638,12 @@ export class MockEC2 extends TestFixture {
         });
     }
     deleteVpnConnection(request: EC2.DeleteVpnConnectionRequest): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return;
         });
     }
     describeVpnConnection(request: EC2.DescribeVpnConnectionsRequest): ApiResult {
-        return CreateApiResult(async () => {
+        return createApiResult(async () => {
             const vpnconnectionId: string = request.VpnConnectionIds[0];
             const filePath = path.resolve(
                 this.rootDir,
@@ -659,7 +659,7 @@ export class MockEC2 extends TestFixture {
     describeTransitGatewayAttachments(
         request: EC2.DescribeTransitGatewayAttachmentsRequest
     ): ApiResult {
-        return CreateApiResult(async () => {
+        return createApiResult(async () => {
             let transitGatewayId: string;
             let resourceId: string;
             request.Filters.forEach(f => {
@@ -688,7 +688,7 @@ export class MockEC2 extends TestFixture {
     enableTransitGatewayRouteTablePropagation(
         request: EC2.EnableTransitGatewayRouteTablePropagationRequest
     ): ApiResult {
-        return CreateApiResult(async () => {
+        return createApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
                 [
@@ -708,7 +708,7 @@ export class MockEC2 extends TestFixture {
     associateTransitGatewayRouteTable(
         request: EC2.AssociateTransitGatewayRouteTableRequest
     ): ApiResult {
-        return CreateApiResult(async () => {
+        return createApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
                 [
@@ -726,19 +726,19 @@ export class MockEC2 extends TestFixture {
         });
     }
     createRoute(request: EC2.CreateRouteRequest): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return;
         });
     }
     replaceRoute(request: EC2.ReplaceRouteRequest): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return true;
         });
     }
     modifyNetworkInterfaceAttribute(
         request: EC2.ModifyNetworkInterfaceAttributeRequest
     ): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return true;
         });
     }
@@ -790,7 +790,7 @@ export class MockAutoScaling extends TestFixture {
     }
 
     describeAutoScalingGroups(request: AutoScaling.AutoScalingGroupNamesType): ApiResult {
-        return CreateApiResult(async () => {
+        return createApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
                 [
@@ -808,7 +808,7 @@ export class MockAutoScaling extends TestFixture {
     }
 
     completeLifecycleAction(request: AutoScaling.CompleteLifecycleActionType): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return;
         });
     }
@@ -816,13 +816,13 @@ export class MockAutoScaling extends TestFixture {
     terminateInstanceInAutoScalingGroup(
         request: AutoScaling.TerminateInstanceInAutoScalingGroupType
     ): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return;
         });
     }
 
     updateAutoScalingGroup(request: AutoScaling.UpdateAutoScalingGroupType): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return;
         });
     }
@@ -852,13 +852,13 @@ export class MockElbv2 extends TestFixture {
     }
 
     registerTargets(request: ELBv2.Types.RegisterTargetsInput): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return;
         });
     }
 
     deregisterTargets(request: ELBv2.Types.DeregisterTargetsInput): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return;
         });
     }
@@ -883,7 +883,7 @@ export class MockLambda extends TestFixture {
     }
 
     invoke(request: InvocationRequest): ApiResult {
-        return CreateApiResult(async () => {
+        return createApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
                 ['invoke', request.FunctionName, this.subCall.subPath].filter(v => v).join('-')
@@ -934,7 +934,7 @@ export class MockDocClient extends TestFixture {
     }
 
     scan(request: DocumentClient.ScanInput): ApiResult {
-        return CreateApiResult(async () => {
+        return createApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
                 ['scan', request.TableName.toLowerCase(), this.subCall.subPath]
@@ -953,7 +953,7 @@ export class MockDocClient extends TestFixture {
     }
 
     get(request: DocumentClient.GetItemInput): ApiResult {
-        return CreateApiResult(async () => {
+        return createApiResult(async () => {
             const filePath = path.resolve(
                 this.rootDir,
                 [
@@ -972,19 +972,19 @@ export class MockDocClient extends TestFixture {
     }
 
     put(request: DocumentClient.PutItemInput): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return;
         });
     }
 
     update(request: DocumentClient.UpdateItemInput): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return;
         });
     }
 
     delete(request: DocumentClient.DeleteItemInput): ApiResult {
-        return CreateApiResult(() => {
+        return createApiResult(() => {
             return;
         });
     }

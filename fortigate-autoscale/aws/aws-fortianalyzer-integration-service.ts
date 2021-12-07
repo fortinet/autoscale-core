@@ -1,9 +1,15 @@
-import { AutoscaleServiceProvider, FortiGateAutoscaleServiceRequestSource, ReqType } from '..';
 import { Context, ScheduledEvent } from 'aws-lambda';
 import { AwsFortiGateAutoscale, AwsPlatformAdapter, AwsScheduledEventProxy } from '.';
+import { AutoscaleServiceProvider, FortiGateAutoscaleServiceRequestSource, ReqType } from '..';
+
+export type AwsFazAuthorizationServiceType = 'triggerFazDeviceAuth' | string;
+export type AwsFazAuthorizationEventSource = 'fortinet.autoscale' | string;
+export type AwsFazAuthorizationEventDetailType = 'FortiAnalyzer Authorization Request' | string;
 
 export interface AwsFazAuthorizationServiceDetail {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     ServiceType: AwsFazAuthorizationServiceType;
+    // eslint-disable-next-line @typescript-eslint/naming-convention
     ServiceToken: string;
 }
 
@@ -12,10 +18,6 @@ export interface AwsFazAuthorizationServiceEvent {
     'detail-type': AwsFazAuthorizationEventDetailType;
     detail: AwsFazAuthorizationServiceDetail;
 }
-
-export type AwsFazAuthorizationServiceType = 'triggerFazDeviceAuth' | string;
-export type AwsFazAuthorizationEventSource = 'fortinet.autoscale' | string;
-export type AwsFazAuthorizationEventDetailType = 'FortiAnalyzer Authorization Request' | string;
 
 export class AwsFortiGateAutoscaleFortiGateAutoscaleServiceProvider
     implements AutoscaleServiceProvider<AwsFazAuthorizationServiceEvent, void> {

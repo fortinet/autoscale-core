@@ -136,12 +136,12 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
                 ExpressionAttributeNames: attributeNames
             };
 
-            if (conditionExp.Expression) {
-                updateItemInput.ConditionExpression = conditionExp.Expression;
-                if (conditionExp.ExpressionAttributeValues) {
-                    Object.keys(conditionExp.ExpressionAttributeValues).forEach(key => {
+            if (conditionExp.expression) {
+                updateItemInput.ConditionExpression = conditionExp.expression;
+                if (conditionExp.expressionAttributeValues) {
+                    Object.keys(conditionExp.expressionAttributeValues).forEach(key => {
                         updateItemInput.ExpressionAttributeValues[key] =
-                            conditionExp.ExpressionAttributeValues[key];
+                            conditionExp.expressionAttributeValues[key];
                     });
                 }
             }
@@ -153,9 +153,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
             const putItemInput: DocumentClient.PutItemInput = {
                 TableName: table.name,
                 Item: item,
-                ConditionExpression: (conditionExp && conditionExp.Expression) || undefined,
+                ConditionExpression: (conditionExp && conditionExp.expression) || undefined,
                 ExpressionAttributeValues:
-                    (conditionExp && conditionExp.ExpressionAttributeValues) || undefined
+                    (conditionExp && conditionExp.expressionAttributeValues) || undefined
             };
             const logger1 = getTimeLogger('saveItemToDb: docClient.put');
             await this.docClient.put(putItemInput).promise();
@@ -203,9 +203,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         const deleteItemInput: DocumentClient.DeleteItemInput = {
             TableName: table.name,
             Key: keys,
-            ConditionExpression: (condition && condition.Expression) || undefined,
+            ConditionExpression: (condition && condition.expression) || undefined,
             ExpressionAttributeValues:
-                (condition && condition.ExpressionAttributeValues) || undefined
+                (condition && condition.expressionAttributeValues) || undefined
         };
         const logger = getTimeLogger('deleteItemFromDb: docClient.delete');
         await this.docClient.delete(deleteItemInput).promise();
@@ -228,9 +228,9 @@ export class AwsPlatformAdaptee implements PlatformAdaptee {
         }
         const scanInput: DocumentClient.ScanInput = {
             TableName: table.name,
-            FilterExpression: (filterExp && filterExp.Expression) || undefined,
+            FilterExpression: (filterExp && filterExp.expression) || undefined,
             ExpressionAttributeValues:
-                (filterExp && filterExp.ExpressionAttributeValues) || undefined,
+                (filterExp && filterExp.expressionAttributeValues) || undefined,
             Limit: (limit > 0 && limit) || undefined
         };
 

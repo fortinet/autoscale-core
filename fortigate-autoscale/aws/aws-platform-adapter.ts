@@ -48,16 +48,20 @@ export const TAG_KEY_RESOURCE_GROUP = 'ResourceGroup';
 export const TAG_KEY_AUTOSCALE_ROLE = 'AutoscaleRole';
 
 export interface AwsDdbOperations {
-    Expression: string;
-    ExpressionAttributeValues?: { [key: string]: string | number | boolean };
+    expression: string;
+    expressionAttributeValues?: { [key: string]: string | number | boolean };
     type?: DBDef.SaveCondition;
 }
 
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum LifecycleActionResult {
     Continue = 'CONTINUE',
     Abandon = 'ABANDON'
 }
 
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum LifecycleState {
     Launching = 'launching',
     Launched = 'launched',
@@ -75,6 +79,8 @@ export interface LifecycleItem {
     timestamp: number;
 }
 
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum ScalingGroupState {
     InService,
     InTransition,
@@ -223,7 +229,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             editable: editable
         };
         const conditionExp: AwsDdbOperations = {
-            Expression: '',
+            expression: '',
             type: DBDef.SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<DBDef.SettingsDbItem>(table, item, conditionExp);
@@ -601,10 +607,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
         const filterExp: AwsDdbOperations = {
-            Expression: ''
+            expression: ''
         };
         if (filters) {
-            filterExp.Expression = filters.map(kv => `${kv.key} = :${kv.value}`).join(' AND ');
+            filterExp.expression = filters.map(kv => `${kv.key} = :${kv.value}`).join(' AND ');
         }
         // ASSERT: there's only 1 matching primary record or no matching record.
         const [record] = await this.adaptee.listItemFromDb<DBDef.PrimaryElectionDbItem>(
@@ -681,7 +687,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             deviceChecksum: rec.deviceChecksum
         };
         const conditionExp: AwsDdbOperations = {
-            Expression: '',
+            expression: '',
             type: DBDef.SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<DBDef.AutoscaleDbItem>(table, item, conditionExp);
@@ -737,11 +743,11 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         // NOTE: strictly update the record when the sequence to update is not less
         // than the seq in the db to ensure data not to fall back to old value in race conditions
         const conditionExp: AwsDdbOperations = {
-            Expression:
+            expression:
                 'attribute_not_exists(vmId)' +
                 ' OR attribute_exists(vmId) AND (seq <= :seq' +
                 ' OR (seq > :seq AND sendTime <= :sendTime))',
-            ExpressionAttributeValues: {
+            expressionAttributeValues: {
                 ':seq': rec.seq,
                 ':sendTime': rec.sendTime === null ? new Date().toISOString() : rec.sendTime
             },
@@ -815,14 +821,14 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             // save record only if record for a certain scaling group name not exists, or
             // if it exists but timeout
             const conditionExp: AwsDdbOperations = {
-                Expression: 'attribute_not_exists(scalingGroupName)',
+                expression: 'attribute_not_exists(scalingGroupName)',
                 type: DBDef.SaveCondition.InsertOnly
             };
             // if specified an old rec to purge, use a strict conditional expression to replace.
             if (oldRec) {
                 this.proxy.logAsInfo(`purging existing record (id: ${oldRec.id})`);
-                conditionExp.Expression = 'attribute_exists(scalingGroupName) AND id = :id';
-                conditionExp.ExpressionAttributeValues = {
+                conditionExp.expression = 'attribute_exists(scalingGroupName) AND id = :id';
+                conditionExp.expressionAttributeValues = {
                     ':id': oldRec.id
                 };
             }
@@ -856,13 +862,13 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             };
             // save record only if the keys in rec match the keys in db
             const conditionExp: AwsDdbOperations = {
-                Expression:
+                expression:
                     'attribute_not_exists(scalingGroupName) OR ' +
                     'attribute_exists(scalingGroupName) AND ' +
                     'id = :id AND ' +
                     'voteState = :voteState AND ' +
                     'voteEndTime > :nowTime',
-                ExpressionAttributeValues: {
+                expressionAttributeValues: {
                     ':id': item.id,
                     ':voteState': PrimaryRecordVoteState.Pending,
                     ':nowTime': Date.now()
@@ -895,19 +901,19 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         // delete record only if the keys in rec match the keys in db
         // of if a full match is needed
         const conditionExp: AwsDdbOperations = {
-            Expression: 'id = :id',
-            ExpressionAttributeValues: {
+            expression: 'id = :id',
+            expressionAttributeValues: {
                 ':id': item.id
             }
         };
         if (fullMatch) {
-            conditionExp.ExpressionAttributeValues = {};
+            conditionExp.expressionAttributeValues = {};
             const expressionArray = [];
             Object.entries(item).forEach(([key, value]) => {
                 expressionArray.push(`${key} = :${key}`);
-                conditionExp.ExpressionAttributeValues[`:${key}`] = value;
+                conditionExp.expressionAttributeValues[`:${key}`] = value;
             });
-            conditionExp.Expression = expressionArray.join(' AND ');
+            conditionExp.expression = expressionArray.join(' AND ');
         }
         await this.adaptee.deleteItemFromDb<DBDef.PrimaryElectionDbItem>(table, item, conditionExp);
 
@@ -1077,7 +1083,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     productName: record.productName
                 };
                 const conditionExp: AwsDdbOperations = {
-                    Expression: ''
+                    expression: ''
                 };
                 let typeText: string;
                 // recrod exists, update it
@@ -1151,7 +1157,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     vmInSync: rec.item.vmInSync
                 };
                 const conditionExp: AwsDdbOperations = {
-                    Expression: ''
+                    expression: ''
                 };
                 let typeText: string;
                 // update if record exists
@@ -1170,13 +1176,13 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                         return Promise.resolve();
                     }
                     conditionExp.type = DBDef.SaveCondition.UpdateOnly;
-                    conditionExp.Expression =
+                    conditionExp.expression =
                         'attribute_exists(checksum) AND vmId = :oldVmId' +
                         ' AND scalingGroupName = :oldScalingGroupName' +
                         ' AND productName = :oldProductName' +
                         ' AND algorithm = :oldAlgorithm' +
                         ' AND assignedTime = :oldAssignedTime';
-                    conditionExp.ExpressionAttributeValues = {
+                    conditionExp.expressionAttributeValues = {
                         ':oldVmId': rec.reference.vmId,
                         ':oldScalingGroupName': rec.reference.scalingGroupName,
                         ':oldProductName': rec.reference.productName,
@@ -1210,7 +1216,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 else {
                     conditionExp.type = DBDef.SaveCondition.Upsert;
                     // the conditional expression ensures the consistency of the DB system (ACID)
-                    conditionExp.Expression = 'attribute_not_exists(checksum)';
+                    conditionExp.expression = 'attribute_not_exists(checksum)';
                     typeText =
                         `create new item (checksum: ${item.checksum})` +
                         `New values (filename: ${item.fileName}, vmId: ${item.vmId}, ` +
@@ -1275,7 +1281,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 attachmentState: status
             };
             const conditionExp: AwsDdbOperations = {
-                Expression: '',
+                expression: '',
                 type: DBDef.SaveCondition.Upsert
             };
             await this.adaptee.saveItemToDb<DBDef.NicAttachmentDbItem>(table, item, conditionExp);
@@ -1573,7 +1579,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             timestamp: item.timestamp
         };
         const conditionExp: AwsDdbOperations = {
-            Expression: '',
+            expression: '',
             type: DBDef.SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<LifecycleItemDbItem>(table, dbItem, conditionExp);
@@ -1596,7 +1602,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             timestamp: item.timestamp
         };
         const conditionExp: AwsDdbOperations = {
-            Expression: '',
+            expression: '',
             type: DBDef.SaveCondition.UpdateOnly
         };
         await this.adaptee.saveItemToDb<LifecycleItemDbItem>(table, dbItem, conditionExp);
@@ -1806,7 +1812,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             vpnConnectionId: vpnConnectionId
         };
         const conditionExp: AwsDdbOperations = {
-            Expression: '',
+            expression: '',
             type: DBDef.SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<DBDef.VpnAttachmentDbItem>(table, dbItem, conditionExp);
@@ -2123,7 +2129,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             vip: vip
         };
         const conditionExp: AwsDdbOperations = {
-            Expression: '',
+            expression: '',
             type: DBDef.SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<DBDef.FortiAnalyzerDbItem>(table, item, conditionExp);
