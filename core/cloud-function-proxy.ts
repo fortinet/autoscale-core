@@ -1,3 +1,5 @@
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum LogLevel {
     Log = 'Log',
     Info = 'Info',
@@ -5,12 +7,14 @@ export enum LogLevel {
     Error = 'Error',
     Debug = 'Debug'
 }
-
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum DebugMode {
     True = 'true',
     DebugOnly = 'DebugOnly'
 }
-
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum ReqType {
     BootstrapConfig = 'BootstrapConfig',
     ByolLicense = 'ByolLicense',
@@ -25,7 +29,8 @@ export enum ReqType {
     TerminatingVm = 'TerminatingVm',
     VmNotLaunched = 'VmNotLaunched'
 }
-
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum ReqMethod {
     GET,
     POST,
@@ -64,13 +69,17 @@ export interface ReqHeaders {
 
 export type CloudFunctionResponseBody =
     | string
-    | {}
     | {
           [key: string]: unknown;
-      };
+      }
+    | unknown;
 
 export interface CloudFunctionProxyAdapter {
-    formatResponse(httpStatusCode: number, body: CloudFunctionResponseBody, headers: {}): {};
+    formatResponse(
+        httpStatusCode: number,
+        body: CloudFunctionResponseBody,
+        headers: unknown
+    ): unknown;
     log(message: string, level: LogLevel, ...others: unknown[]): void;
     logAsDebug(message: string | DebugMode, ...others: unknown[]): void;
     logAsInfo(message: string, ...others: unknown[]): void;
@@ -181,7 +190,7 @@ export abstract class CloudFunctionProxy<TReq, TContext, TRes>
     abstract formatResponse(
         httpStatusCode: number,
         body: CloudFunctionResponseBody,
-        headers: {}
+        headers: unknown
     ): TRes;
     abstract getRequestAsString(): Promise<string>;
     abstract getRemainingExecutionTime(): Promise<number>;

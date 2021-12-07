@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/naming-convention */
 import * as DBDef from '../db-definitions';
 
 // NOTE: Azure Cosmos DB Data modeling concepts
@@ -555,11 +556,11 @@ export interface AzureApiRequestCacheDbItem
 export class AzureApiRequestCache extends DBDef.Table<AzureApiRequestCacheDbItem>
     implements
         DBDef.BidirectionalCastable<DBDef.ApiRequestCacheDbItem, AzureApiRequestCacheDbItem> {
-    static __attributes: DBDef.Attribute[] = [
+    static ownStaticAttributes: DBDef.Attribute[] = [
         ...CosmosDbTableMetaDataAttributes, // NOTE: add addtional Azure CosmosDB table meta data attributes
         // NOTE: use the same attributes of a sibling class, attributes with the same key will
         // those in ...CosmosDbTableMetaDataAttributes
-        ...DBDef.ApiRequestCache.__attributes
+        ...DBDef.ApiRequestCache.ownStaticAttributes
     ];
     private siblingClass: DBDef.ApiRequestCache;
     constructor(namePrefix = '', nameSuffix = '') {
@@ -572,7 +573,7 @@ export class AzureApiRequestCache extends DBDef.Table<AzureApiRequestCacheDbItem
         // CAUTION: don't forget to set a correct name.
         this.setName(this.siblingClass.name);
         // CAUTION: don't forget to add attributes
-        AzureApiRequestCache.__attributes.forEach(def => {
+        AzureApiRequestCache.ownStaticAttributes.forEach(def => {
             this.addAttribute(def);
         });
     }

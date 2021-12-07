@@ -1,5 +1,5 @@
-import { VirtualMachine } from './virtual-machine';
-
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum HealthCheckSyncState {
     InSync = 'in-sync',
     OutOfSync = 'out-of-sync'
@@ -17,13 +17,23 @@ export interface HealthCheckRecord {
     seq: number;
     healthy: boolean;
     upToDate: boolean;
+    sendTime: string;
+    deviceSyncTime: string;
+    deviceSyncFailTime: string;
+    deviceSyncStatus: boolean | null;
+    deviceIsPrimary: boolean | null;
+    deviceChecksum: string;
 }
 
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum HealthCheckResult {
     OnTime = 'on-time',
     Late = 'late',
     TooLate = 'too-late',
-    Dropped = 'dropped'
+    Dropped = 'dropped',
+    Recovering = 'recovering',
+    Recovered = 'recovered'
 }
 
 export interface HealthCheckResultDetail {
@@ -39,8 +49,11 @@ export interface HealthCheckResultDetail {
     heartbeatLossCount: number;
     maxHeartbeatLossCount: number;
     syncRecoveryCount: number;
+    maxSyncRecoveryCount: number;
 }
 
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum PrimaryRecordVoteState {
     Pending = 'pending',
     Done = 'done',
@@ -56,16 +69,4 @@ export interface PrimaryRecord {
     subnetId: string;
     voteEndTime: number;
     voteState: PrimaryRecordVoteState;
-}
-
-export interface PrimaryElection {
-    oldPrimary?: VirtualMachine;
-    oldPrimaryRecord?: PrimaryRecord;
-    newPrimary: VirtualMachine;
-    newPrimaryRecord: PrimaryRecord;
-    candidate: VirtualMachine;
-    candidateHealthCheck?: HealthCheckRecord;
-    preferredScalingGroup?: string;
-    electionDuration?: number;
-    signature: string; // to identify a primary election
 }

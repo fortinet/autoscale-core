@@ -29,6 +29,7 @@ import {
     Blob,
     CloudFunctionInvocationPayload,
     constructInvocationPayload,
+    DeviceSyncInfo,
     FortiGateAutoscaleServiceRequestSource,
     genChecksum,
     HealthCheckRecord,
@@ -232,18 +233,37 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             throw new Error(`Unsupported CloudFunctionProxy: ${JSON.stringify(this.proxy)}`);
         }
     }
+    async getReqDeviceSyncInfo(): Promise<DeviceSyncInfo> {
+        const reqType: ReqType = await this.getRequestType();
+        if (reqType === ReqType.HeartbeatSync || reqType === ReqType.StatusMessage) {
+            const body = await this.proxy.getReqBody();
+            const deviceSyncInfo: DeviceSyncInfo = {
+                // always available
+                instance: (body.instance && String(body.instance)) || null,
+                interval: (body.interval && Number(body.interval)) || NaN,
+                // partially available in some request types
+                status: (body.status && String(body.status)) || undefined,
+                // NOTE: partially available in some device versions
+                sequence: (body.sequence && Number(body.sequence)) || NaN,
+                time: (body.time && String(body.time)) || null,
+                syncTime: (body.sync_time && String(body.sync_time)) || null,
+                syncFailTime: (body.sync_fail_time && String(body.sync_fail_time)) || null,
+                syncStatus: (body.sync_status !== null && Boolean(body.sync_status)) || null,
+                isPrimary: (body.is_primary !== null && Boolean(body.is_primary)) || null,
+                checksum: (body.checksum !== null && String(body.checksum)) || null
+            };
+            return deviceSyncInfo;
+        } else {
+            return null;
+        }
+    }
     /**
      * Get the heartbeat interval passing by the request called by a FortiGate
      * @returns {Promise} heartbeat interval
      */
     async getReqHeartbeatInterval(): Promise<number> {
-        const reqType: ReqType = await this.getRequestType();
-        if (reqType === ReqType.HeartbeatSync) {
-            const body = await this.proxy.getReqBody();
-            return (body.interval && Number(body.interval)) || NaN;
-        } else {
-            return NaN;
-        }
+        const deviceSyncInfo = await this.getReqDeviceSyncInfo();
+        return (deviceSyncInfo && deviceSyncInfo.interval) || NaN;
     }
     /**
      * Get the vm id passing by the request called by a FortiGate.
@@ -476,6 +496,29 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called getPrimaryVm');
         return vm;
     }
+
+    async getVmById(vmId: string, scalingGroupName: string): Promise<VirtualMachine> {
+        this.proxy.logAsInfo('calling getVmById');
+        if (!scalingGroupName) {
+            this.proxy.logAsInfo('called getVmById');
+            return null;
+        }
+        const describeInstanceResult = await this.adaptee.describeInstance(scalingGroupName, vmId);
+        let vm: VirtualMachine;
+        if (describeInstanceResult.result) {
+            // get network interfaces
+            const listNetworkInterfacesResult = await this.adaptee.listNetworkInterfaces(
+                scalingGroupName,
+                Number(describeInstanceResult.result.instanceId),
+                ApiCacheOption.ReadCacheFirst,
+                describeInstanceResult.ttl
+            );
+            const nics = listNetworkInterfacesResult.result;
+            vm = this.mapVm(describeInstanceResult.result, scalingGroupName, nics);
+        }
+        this.proxy.logAsInfo('called getVmById');
+        return vm;
+    }
     /**
      * List all vm instances of a certain scaling group
      * @param  {string} scalingGroupName the scaling group name to list
@@ -549,6 +592,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
      */
     async getHealthCheckRecord(vmId: string): Promise<HealthCheckRecord> {
         this.proxy.logAsInfo('calling getHealthCheckRecord');
+        const settings = await this.getSettings();
         const table = new AzureAutoscale();
         const dbItem = await this.adaptee.getItemFromDb<AzureAutoscaleDbItem>(table, [
             {
@@ -558,10 +602,22 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         ]);
 
         let record: HealthCheckRecord;
-        const heartbeatDelayAllowanceSettingItem = this.settings.get(
+
+        if (dbItem) {
+            record = this.parseHealthCheckRecord(dbItem, settings);
+        }
+        this.proxy.logAsInfo('called getHealthCheckRecord');
+        return record;
+    }
+
+    private parseHealthCheckRecord(
+        dbItem: DBDef.AutoscaleDbItem,
+        settings: Settings
+    ): HealthCheckRecord {
+        const heartbeatDelayAllowanceSettingItem = settings.get(
             AzureFortiGateAutoscaleSetting.HeartbeatDelayAllowance
         );
-        const maxHeartbeatLossCountSettingItem = this.settings.get(
+        const maxHeartbeatLossCountSettingItem = settings.get(
             AzureFortiGateAutoscaleSetting.HeartbeatLossCount
         );
 
@@ -573,42 +629,62 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         const maxHeartbeatLossCount: number =
             (maxHeartbeatLossCountSettingItem && Number(maxHeartbeatLossCountSettingItem.value)) ||
             0;
+        // if heartbeatDelay is <= 0, it means hb arrives early or ontime
+        const heartbeatDelay = this.createTime - dbItem.nextHeartBeatTime - delayAllowance;
 
-        if (dbItem) {
-            // if heartbeatDelay is <= 0, it means hb arrives early or ontime
-            const heartbeatDelay = this.createTime - dbItem.nextHeartBeatTime - delayAllowance;
+        const [syncState] = Object.entries(HealthCheckSyncState)
+            .filter(([, value]) => {
+                return dbItem.syncState === value;
+            })
+            .map(([, v]) => v);
 
-            const [syncState] = Object.entries(HealthCheckSyncState)
-                .filter(([, value]) => {
-                    return dbItem.syncState === value;
-                })
-                .map(([, v]) => v);
+        const nextHeartbeatLossCount = dbItem.heartBeatLossCount + ((heartbeatDelay > 0 && 1) || 0);
 
-            const nextHeartbeatLossCount =
-                dbItem.heartBeatLossCount + ((heartbeatDelay > 0 && 1) || 0);
+        // healthy reason: next heartbeat loss count is smaller than max allowed value.
+        const isHealthy = nextHeartbeatLossCount < maxHeartbeatLossCount;
 
-            // healthy reason: next heartbeat loss count is smaller than max allowed value.
-            const isHealthy = nextHeartbeatLossCount < maxHeartbeatLossCount;
-
-            record = {
-                vmId: vmId,
-                scalingGroupName: dbItem.scalingGroupName,
-                ip: dbItem.ip,
-                primaryIp: dbItem.primaryIp,
-                heartbeatInterval: dbItem.heartBeatInterval,
-                heartbeatLossCount: dbItem.heartBeatLossCount,
-                nextHeartbeatTime: dbItem.nextHeartBeatTime,
-                syncState: syncState,
-                // if the prop doesn't exist in item set it to 0 by default
-                syncRecoveryCount: dbItem.syncRecoveryCount || 0,
-                seq: dbItem.seq,
-                healthy: isHealthy,
-                upToDate: true
-            };
-        }
-        this.proxy.logAsInfo('called getHealthCheckRecord');
-        return record;
+        return {
+            vmId: dbItem.vmId,
+            scalingGroupName: dbItem.scalingGroupName,
+            ip: dbItem.ip,
+            primaryIp: dbItem.primaryIp,
+            heartbeatInterval: dbItem.heartBeatInterval,
+            heartbeatLossCount: dbItem.heartBeatLossCount,
+            nextHeartbeatTime: dbItem.nextHeartBeatTime,
+            syncState: syncState,
+            // if the prop doesn't exist in item set it to 0 by default
+            syncRecoveryCount: dbItem.syncRecoveryCount || 0,
+            seq: dbItem.seq,
+            healthy: isHealthy,
+            upToDate: true,
+            // the following properities are only available in some device versions
+            // convert string 'null' to null
+            sendTime: (dbItem.sendTime === 'null' && null) || dbItem.sendTime,
+            deviceSyncTime: (dbItem.deviceSyncTime === 'null' && null) || dbItem.deviceSyncTime,
+            deviceSyncFailTime:
+                (dbItem.deviceSyncFailTime === 'null' && null) || dbItem.deviceSyncFailTime,
+            deviceSyncStatus:
+                (dbItem.deviceSyncStatus === 'null' && null) || dbItem.deviceSyncStatus === 'true',
+            deviceIsPrimary:
+                (dbItem.deviceIsPrimary === 'null' && null) || dbItem.deviceIsPrimary === 'true',
+            deviceChecksum: (dbItem.deviceChecksum === 'null' && null) || dbItem.deviceChecksum
+        };
     }
+
+    async listHealthCheckRecord(): Promise<HealthCheckRecord[]> {
+        this.proxy.logAsInfo('calling listHealthCheckRecord');
+        const settings = await this.getSettings();
+        const table = new AzureAutoscale();
+        const queryResult = await this.adaptee.listItemFromDb<DBDef.AutoscaleDbItem>(table);
+        const dbItems = queryResult.result || [];
+        const records: HealthCheckRecord[] = dbItems.map(dbItem => {
+            return this.parseHealthCheckRecord(dbItem, settings);
+        });
+
+        this.proxy.logAsInfo('called listHealthCheckRecord');
+        return records;
+    }
+
     /**
      * Get the Autoscale health check record of the elected primary vm
      * @param  {DBDef.KeyValue[]} filters optional filter to match the record or null if not match
@@ -697,7 +773,21 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             nextHeartBeatTime: rec.nextHeartbeatTime,
             syncState: syncStateString,
             syncRecoveryCount: rec.syncRecoveryCount,
-            seq: rec.seq
+            seq: rec.seq,
+            sendTime: rec.sendTime,
+            deviceSyncTime: rec.deviceSyncTime,
+            deviceSyncFailTime: rec.deviceSyncFailTime,
+            // store boolean | null
+            deviceSyncStatus:
+                (rec.deviceSyncStatus === null && 'null') ||
+                (rec.deviceSyncStatus && 'true') ||
+                'false',
+            // store boolean | null
+            deviceIsPrimary:
+                (rec.deviceIsPrimary === null && 'null') ||
+                (rec.deviceIsPrimary && 'true') ||
+                'false',
+            deviceChecksum: rec.deviceChecksum
         });
         // NOTE: when create a db record, do not need to check data consistency.
         await this.adaptee.saveItemToDb<typeof item>(
@@ -731,20 +821,93 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             nextHeartBeatTime: rec.nextHeartbeatTime,
             syncState: syncStateString,
             syncRecoveryCount: rec.syncRecoveryCount,
-            seq: rec.seq
+            seq: rec.seq,
+            sendTime: rec.sendTime,
+            deviceSyncTime: rec.deviceSyncTime,
+            deviceSyncFailTime: rec.deviceSyncFailTime,
+            // store boolean | null
+            deviceSyncStatus:
+                (rec.deviceSyncStatus === null && 'null') ||
+                (rec.deviceSyncStatus && 'true') ||
+                'false',
+            // store boolean | null
+            deviceIsPrimary:
+                (rec.deviceIsPrimary === null && 'null') ||
+                (rec.deviceIsPrimary && 'true') ||
+                'false',
+            deviceChecksum: rec.deviceChecksum
         });
-        const check: ConsistenyCheckType<typeof item> = {
-            vmId: rec.vmId,
-            scalingGroupName: rec.scalingGroupName,
-            ip: rec.ip
+
+        const checker = (
+            snapshot: typeof item
+        ): Promise<{ result: boolean; errorMessage: string }> => {
+            let errorMessage = this.dataConsistencyCheck(
+                {
+                    vmId: rec.vmId,
+                    scalingGroupName: rec.vmId,
+                    ip: rec.vmId
+                },
+                snapshot
+            );
+            // NOTE: strictly update the record when the sequence to update is equal to or greater
+            // than the seq in the db to ensure data not to fall back to old value in race conditions
+            let result: boolean = errorMessage.length === 0;
+            if (rec.seq < snapshot.seq) {
+                result = false;
+                errorMessage =
+                    `A smaller seq is not allowed. seq to save: ${rec.seq}, seq in db: ` +
+                    `${snapshot.seq}. ${errorMessage}`;
+            }
+            return Promise.resolve({
+                result: result,
+                errorMessage: errorMessage
+            });
         };
         await this.adaptee.saveItemToDb<typeof item>(
             table,
             item,
             DBDef.SaveCondition.UpdateOnly,
-            check
+            checker
         );
         this.proxy.logAsInfo('called updateHealthCheckRecord');
+    }
+    async deleteHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
+        this.proxy.logAsInfo('calling deleteHealthCheckRecord');
+        const table = new AzureAutoscale();
+        const [syncStateString] = Object.entries(HealthCheckSyncState)
+            .filter(([, value]) => {
+                return rec.syncState === value;
+            })
+            .map(([, v]) => v);
+        const item = table.downcast({
+            vmId: rec.vmId,
+            scalingGroupName: rec.scalingGroupName,
+            ip: rec.ip,
+            primaryIp: rec.primaryIp,
+            heartBeatInterval: rec.heartbeatInterval,
+            heartBeatLossCount: rec.heartbeatLossCount,
+            nextHeartBeatTime: rec.nextHeartbeatTime,
+            syncState: syncStateString,
+            syncRecoveryCount: rec.syncRecoveryCount,
+            seq: rec.seq,
+            sendTime: rec.sendTime,
+            deviceSyncTime: rec.deviceSyncTime,
+            deviceSyncFailTime: rec.deviceSyncFailTime,
+            // store boolean | null
+            deviceSyncStatus:
+                (rec.deviceSyncStatus === null && 'null') ||
+                (rec.deviceSyncStatus && 'true') ||
+                'false',
+            // store boolean | null
+            deviceIsPrimary:
+                (rec.deviceIsPrimary === null && 'null') ||
+                (rec.deviceIsPrimary && 'true') ||
+                'false',
+            deviceChecksum: rec.deviceChecksum
+        });
+
+        await this.adaptee.deleteItemFromDb<typeof item>(table, item);
+        this.proxy.logAsInfo('called deleteHealthCheckRecord');
     }
     /**
      * insert a primary record, not overwrite one with the same primary key.
@@ -878,9 +1041,20 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             }
         }
 
-        const check: ConsistenyCheckType<typeof item> = {
-            id: item.id,
-            scalingGroupName: item.scalingGroupName
+        const checker = (
+            snapshot: typeof item
+        ): Promise<{ result: boolean; errorMessage: string }> => {
+            const inconsistentDataDetailString = this.dataConsistencyCheck(
+                {
+                    id: item.id,
+                    scalingGroupName: item.vmId
+                },
+                snapshot
+            );
+            return Promise.resolve({
+                result: inconsistentDataDetailString.length === 0,
+                errorMessage: inconsistentDataDetailString
+            });
         };
 
         // upsert
@@ -888,8 +1062,26 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             table,
             item,
             DBDef.SaveCondition.Upsert,
-            check
+            checker
         );
+        this.proxy.logAsInfo('called updatePrimaryRecord.');
+    }
+
+    async deletePrimaryRecord(rec: PrimaryRecord, fullMatch?: boolean): Promise<void> {
+        this.proxy.logAsInfo('calling updatePrimaryRecord.');
+        const table = new AzurePrimaryElection();
+        const item = table.downcast({
+            id: rec.id,
+            scalingGroupName: rec.scalingGroupName,
+            ip: rec.ip,
+            vmId: rec.vmId,
+            virtualNetworkId: rec.virtualNetworkId,
+            subnetId: rec.subnetId,
+            voteEndTime: rec.voteEndTime,
+            voteState: rec.voteState
+        });
+
+        await this.adaptee.deleteItemFromDb<typeof item>(table, item, fullMatch);
         this.proxy.logAsInfo('called updatePrimaryRecord.');
     }
     /**
@@ -1159,7 +1351,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                 // NOTE: for updating an existing record, it requires a reference of the existing
                 // record as a snapshot of db data. Only when the record data at the time of updating
                 // matches exactly the same as the snapshot, the update succeeds. Otherwise, the
-                // record is considerred changed, and inconsistent anymore, thus not allowing updating.
+                // record is considered changed, and inconsistent anymore, thus not allowing updating.
                 if (items.has(rec.item.checksum)) {
                     // ASSERT: it must have a referenced record to replace. otherwise, if should fail
                     if (!rec.reference) {
@@ -1172,11 +1364,22 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                     }
                     saveCondition = DBDef.SaveCondition.UpdateOnly;
 
-                    const check: ConsistenyCheckType<typeof item> = {
-                        vmId: rec.reference.vmId,
-                        scalingGroupName: rec.reference.scalingGroupName,
-                        productName: rec.reference.productName,
-                        algorithm: rec.reference.algorithm
+                    const checker = (
+                        snapshot: typeof item
+                    ): Promise<{ result: boolean; errorMessage: string }> => {
+                        const inconsistentDataDetailString = this.dataConsistencyCheck(
+                            {
+                                vmId: rec.reference.vmId,
+                                scalingGroupName: rec.reference.vmId,
+                                productName: rec.reference.productName,
+                                algorithm: rec.reference.algorithm
+                            },
+                            snapshot
+                        );
+                        return Promise.resolve({
+                            result: inconsistentDataDetailString.length === 0,
+                            errorMessage: inconsistentDataDetailString
+                        });
                     };
                     typeText =
                         `update existing item (checksum: ${rec.reference.checksum}). ` +
@@ -1192,7 +1395,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                     // NOTE: must ensure the consistency because the updating of the usage record
                     // is expected to happen with a race condition.
                     return this.adaptee
-                        .saveItemToDb<AzureLicenseUsageDbItem>(table, item, saveCondition, check)
+                        .saveItemToDb<AzureLicenseUsageDbItem>(table, item, saveCondition, checker)
                         .then(() => {
                             this.proxy.logAsInfo(typeText);
                         })
@@ -1468,5 +1671,17 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         } catch (error) {
             this.proxy.logForError('Error in saving logs to CustomLog', error);
         }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    dataConsistencyCheck(dataA: { [key: string]: any }, dataB: { [key: string]: any }): string {
+        let inconsistentDataDetailString = '';
+
+        Object.entries(dataA).forEach(([k, v]) => {
+            if (dataB[k] !== v) {
+                inconsistentDataDetailString = `${inconsistentDataDetailString}key: ${k}, expected: ${v}, existing: ${dataB[k]}; `;
+            }
+        });
+        return inconsistentDataDetailString;
     }
 }

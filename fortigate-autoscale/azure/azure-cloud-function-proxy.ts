@@ -75,7 +75,7 @@ export abstract class AzureCloudFunctionProxy<TReq> extends CloudFunctionProxy<
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         body: CloudFunctionResponseBody,
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        headers: {}
+        headers: unknown
     ): AzureFunctionResponse {
         // NOTE: if enable queued log output, output log here
         if (process.env.DEBUG_LOGGER_OUTPUT_QUEUE_ENABLED === 'true') {
@@ -177,7 +177,7 @@ export class AzureFunctionHttpTriggerProxy extends AzureCloudFunctionProxy<HttpR
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         body: CloudFunctionResponseBody,
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        headers: {}
+        headers: unknown
     ): AzureFunctionResponse {
         super.formatResponse(httpStatusCode, body, headers);
         return {

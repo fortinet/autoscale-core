@@ -36,6 +36,8 @@ export type WaitForConditionChecker<TInput> = (
     ...args
 ) => Promise<boolean>;
 
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum WaitForMaxCount {
     NoMaxCount = 0,
     Count30 = 30

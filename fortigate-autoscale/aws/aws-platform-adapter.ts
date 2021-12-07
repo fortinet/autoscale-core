@@ -17,6 +17,7 @@ import {
     CloudFunctionInvocationPayload,
     CloudFunctionProxyAdapter,
     constructInvocationPayload,
+    DeviceSyncInfo,
     FortiGateAutoscaleServiceRequestSource,
     genChecksum,
     HealthCheckRecord,
@@ -47,16 +48,20 @@ export const TAG_KEY_RESOURCE_GROUP = 'ResourceGroup';
 export const TAG_KEY_AUTOSCALE_ROLE = 'AutoscaleRole';
 
 export interface AwsDdbOperations {
-    Expression: string;
-    ExpressionAttributeValues?: { [key: string]: string | number | boolean };
+    expression: string;
+    expressionAttributeValues?: { [key: string]: string | number | boolean };
     type?: DBDef.SaveCondition;
 }
 
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum LifecycleActionResult {
     Continue = 'CONTINUE',
     Abandon = 'ABANDON'
 }
 
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum LifecycleState {
     Launching = 'launching',
     Launched = 'launched',
@@ -74,6 +79,8 @@ export interface LifecycleItem {
     timestamp: number;
 }
 
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum ScalingGroupState {
     InService,
     InTransition,
@@ -222,7 +229,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             editable: editable
         };
         const conditionExp: AwsDdbOperations = {
-            Expression: '',
+            expression: '',
             type: DBDef.SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<DBDef.SettingsDbItem>(table, item, conditionExp);
@@ -252,13 +259,32 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             throw new Error('Cannot get vm id in unsupported request.');
         }
     }
-    async getReqHeartbeatInterval(): Promise<number> {
+    async getReqDeviceSyncInfo(): Promise<DeviceSyncInfo> {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {
             const body = await this.proxy.getReqBody();
-            return (body.interval && Number(body.interval)) || NaN;
+            const deviceSyncInfo: DeviceSyncInfo = {
+                // always available
+                instance: (body.instance && String(body.instance)) || null,
+                interval: (body.interval && Number(body.interval)) || NaN,
+                // partially available in some request types
+                status: (body.status && String(body.status)) || undefined,
+                // NOTE: partially available in some device versions
+                sequence: (body.sequence && Number(body.sequence)) || NaN,
+                time: (body.time && String(body.time)) || null,
+                syncTime: (body.sync_time && String(body.sync_time)) || null,
+                syncFailTime: (body.sync_fail_time && String(body.sync_fail_time)) || null,
+                syncStatus: (body.sync_status !== null && Boolean(body.sync_status)) || null,
+                isPrimary: (body.is_primary !== null && Boolean(body.is_primary)) || null,
+                checksum: (body.checksum !== null && String(body.checksum)) || null
+            };
+            return deviceSyncInfo;
         } else {
-            return NaN;
+            return null;
         }
+    }
+    async getReqHeartbeatInterval(): Promise<number> {
+        const deviceSyncInfo = await this.getReqDeviceSyncInfo();
+        return (deviceSyncInfo && deviceSyncInfo.interval) || NaN;
     }
     getReqAsString(): Promise<string> {
         if (this.proxy instanceof AwsApiGatewayEventProxy) {
@@ -394,6 +420,27 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         return vm;
     }
 
+    async getVmById(vmId: string, scalingGroupName?: string): Promise<VirtualMachine> {
+        this.proxy.logAsInfo('calling getVmById');
+        this.proxy.logAsDebug(`vmId: ${vmId}, scaling group name: ${scalingGroupName}`);
+        const instance = await this.adaptee.describeInstance(vmId);
+        let vm: VirtualMachine;
+        let scalingGroup = scalingGroupName;
+        if (instance) {
+            if (!scalingGroup) {
+                const scalingGroupMap = await this.adaptee.identifyInstanceScalingGroup([vmId]);
+                scalingGroup = scalingGroupMap.get(vmId) || null;
+            }
+            vm = this.instanceToVm(instance, scalingGroup, instance.NetworkInterfaces);
+            // NOTE: vm in terminated state can be still described. We should consider such vm as unavailable
+            if (vm.state === VirtualMachineState.Terminated) {
+                vm = null;
+            }
+        }
+        this.proxy.logAsInfo('called getVmById');
+        return vm;
+    }
+
     async listAutoscaleVm(
         identifyScalingGroup?: boolean,
         listNic?: boolean
@@ -430,7 +477,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 nicMap.get(instance.InstanceId)
             );
         });
-        return vms;
+        return vms.filter(vm =>
+            [VirtualMachineState.Running, VirtualMachineState.Standby].includes(vm.state)
+        );
     }
 
     async listPrimaryRoleVmId(): Promise<string[]> {
@@ -475,49 +524,82 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         let record: HealthCheckRecord;
 
         if (dbItem) {
-            // if heartbeatDelay is <= 0, it means hb arrives early or ontime
-            const heartbeatDelay =
-                this.createTime -
-                dbItem.nextHeartBeatTime -
-                Number(
-                    this.settings.get(AwsFortiGateAutoscaleSetting.HeartbeatDelayAllowance).value
-                );
-
-            const maxHeartbeatLossCount = Number(
-                this.settings.get(AwsFortiGateAutoscaleSetting.HeartbeatLossCount).value
-            );
-
-            const [syncState] = Object.entries(HealthCheckSyncState)
-                .filter(([, value]) => {
-                    return dbItem.syncState === value;
-                })
-                .map(([, v]) => v);
-
-            const nextHeartbeatLossCount =
-                dbItem.heartBeatLossCount + ((heartbeatDelay > 0 && 1) || 0);
-
-            // healthy reason: next heartbeat loss count is smaller than max allowed value.
-            const isHealthy = nextHeartbeatLossCount < maxHeartbeatLossCount;
-
-            record = {
-                vmId: vmId,
-                scalingGroupName: dbItem.scalingGroupName,
-                ip: dbItem.ip,
-                primaryIp: dbItem.primaryIp,
-                heartbeatInterval: dbItem.heartBeatInterval,
-                heartbeatLossCount: dbItem.heartBeatLossCount,
-                nextHeartbeatTime: dbItem.nextHeartBeatTime,
-                syncState: syncState,
-                // if the prop doesn't exist in item set it to 0 by default
-                syncRecoveryCount: dbItem.syncRecoveryCount || 0,
-                seq: dbItem.seq,
-                healthy: isHealthy,
-                upToDate: true
-            };
+            record = this.parseHealthCheckRecord(dbItem, settings);
         }
         this.proxy.logAsInfo('called getHealthCheckRecord');
         return record;
     }
+
+    private parseHealthCheckRecord(
+        dbItem: DBDef.AutoscaleDbItem,
+        settings: Settings
+    ): HealthCheckRecord {
+        // if heartbeatDelay is <= 0, it means hb arrives early or ontime
+        const heartbeatDelay =
+            this.createTime -
+            dbItem.nextHeartBeatTime -
+            Number(settings.get(AwsFortiGateAutoscaleSetting.HeartbeatDelayAllowance).value);
+
+        const maxHeartbeatLossCount = Number(
+            settings.get(AwsFortiGateAutoscaleSetting.HeartbeatLossCount).value
+        );
+
+        const [syncState] = Object.entries(HealthCheckSyncState)
+            .filter(([, value]) => {
+                return dbItem.syncState === value;
+            })
+            .map(([, v]) => v);
+
+        const nextHeartbeatLossCount = dbItem.heartBeatLossCount + ((heartbeatDelay > 0 && 1) || 0);
+
+        // healthy reason: next heartbeat loss count is smaller than max allowed value.
+        const isHealthy = nextHeartbeatLossCount < maxHeartbeatLossCount;
+
+        return {
+            vmId: dbItem.vmId,
+            scalingGroupName: dbItem.scalingGroupName,
+            ip: dbItem.ip,
+            primaryIp: dbItem.primaryIp,
+            heartbeatInterval: dbItem.heartBeatInterval,
+            heartbeatLossCount: dbItem.heartBeatLossCount,
+            nextHeartbeatTime: dbItem.nextHeartBeatTime,
+            syncState: syncState,
+            // if the prop doesn't exist in item set it to 0 by default
+            syncRecoveryCount: dbItem.syncRecoveryCount || 0,
+            seq: dbItem.seq,
+            healthy: isHealthy,
+            upToDate: true,
+            // the following properities are only available in some device versions
+            // convert string 'null' to null
+            sendTime: (dbItem.sendTime === 'null' && null) || dbItem.sendTime,
+            deviceSyncTime: (dbItem.deviceSyncTime === 'null' && null) || dbItem.deviceSyncTime,
+            deviceSyncFailTime:
+                (dbItem.deviceSyncFailTime === 'null' && null) || dbItem.deviceSyncFailTime,
+            deviceSyncStatus:
+                (dbItem.deviceSyncStatus === 'null' && null) || dbItem.deviceSyncStatus === 'true',
+            deviceIsPrimary:
+                (dbItem.deviceIsPrimary === 'null' && null) || dbItem.deviceIsPrimary === 'true',
+            deviceChecksum: (dbItem.deviceChecksum === 'null' && null) || dbItem.deviceChecksum
+        };
+    }
+
+    async listHealthCheckRecord(): Promise<HealthCheckRecord[]> {
+        this.proxy.logAsInfo('calling listHealthCheckRecord');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsAutoscale(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+        );
+
+        const dbItems = await this.adaptee.listItemFromDb<DBDef.AutoscaleDbItem>(table);
+
+        const records: HealthCheckRecord[] = dbItems.map(dbItem => {
+            return this.parseHealthCheckRecord(dbItem, settings);
+        });
+
+        this.proxy.logAsInfo('called listHealthCheckRecord');
+        return records;
+    }
+
     async getPrimaryRecord(filters?: DBDef.KeyValue[]): Promise<PrimaryRecord> {
         this.proxy.logAsInfo('calling getPrimaryRecord');
         const settings = await this.getSettings();
@@ -525,10 +607,10 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
         );
         const filterExp: AwsDdbOperations = {
-            Expression: ''
+            expression: ''
         };
         if (filters) {
-            filterExp.Expression = filters.map(kv => `${kv.key} = :${kv.value}`).join(' AND ');
+            filterExp.expression = filters.map(kv => `${kv.key} = :${kv.value}`).join(' AND ');
         }
         // ASSERT: there's only 1 matching primary record or no matching record.
         const [record] = await this.adaptee.listItemFromDb<DBDef.PrimaryElectionDbItem>(
@@ -588,10 +670,24 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             nextHeartBeatTime: rec.nextHeartbeatTime,
             syncState: syncStateString,
             syncRecoveryCount: rec.syncRecoveryCount,
-            seq: rec.seq
+            seq: rec.seq,
+            sendTime: rec.sendTime,
+            deviceSyncTime: rec.deviceSyncTime,
+            deviceSyncFailTime: rec.deviceSyncFailTime,
+            // store boolean | null
+            deviceSyncStatus:
+                (rec.deviceSyncStatus === null && 'null') ||
+                (rec.deviceSyncStatus && 'true') ||
+                'false',
+            // store boolean | null
+            deviceIsPrimary:
+                (rec.deviceIsPrimary === null && 'null') ||
+                (rec.deviceIsPrimary && 'true') ||
+                'false',
+            deviceChecksum: rec.deviceChecksum
         };
         const conditionExp: AwsDdbOperations = {
-            Expression: '',
+            expression: '',
             type: DBDef.SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<DBDef.AutoscaleDbItem>(table, item, conditionExp);
@@ -608,6 +704,22 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 return rec.syncState === value;
             })
             .map(([, v]) => v);
+        let deviceSyncStatus: string;
+        if (rec.deviceSyncStatus === null) {
+            deviceSyncStatus = 'null';
+        } else if (rec.deviceSyncStatus) {
+            deviceSyncStatus = 'true';
+        } else {
+            deviceSyncStatus = 'false';
+        }
+        let deviceIsPrimary: string;
+        if (rec.deviceIsPrimary === null) {
+            deviceIsPrimary = 'null';
+        } else if (rec.deviceIsPrimary) {
+            deviceIsPrimary = 'true';
+        } else {
+            deviceIsPrimary = 'false';
+        }
         const item: DBDef.AutoscaleDbItem = {
             vmId: rec.vmId,
             scalingGroupName: rec.scalingGroupName,
@@ -618,14 +730,76 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             nextHeartBeatTime: rec.nextHeartbeatTime,
             syncState: syncStateString,
             syncRecoveryCount: rec.syncRecoveryCount,
-            seq: rec.seq
+            seq: rec.seq,
+            sendTime: rec.sendTime,
+            deviceSyncTime: rec.deviceSyncTime,
+            deviceSyncFailTime: rec.deviceSyncFailTime,
+            // store boolean | null
+            deviceSyncStatus: deviceSyncStatus,
+            // store boolean | null
+            deviceIsPrimary: deviceIsPrimary,
+            deviceChecksum: rec.deviceChecksum
         };
+        // NOTE: strictly update the record when the sequence to update is not less
+        // than the seq in the db to ensure data not to fall back to old value in race conditions
         const conditionExp: AwsDdbOperations = {
-            Expression: '',
-            type: DBDef.SaveCondition.UpdateOnly
+            expression:
+                'attribute_not_exists(vmId)' +
+                ' OR attribute_exists(vmId) AND (seq <= :seq' +
+                ' OR (seq > :seq AND sendTime <= :sendTime))',
+            expressionAttributeValues: {
+                ':seq': rec.seq,
+                ':sendTime': rec.sendTime === null ? new Date().toISOString() : rec.sendTime
+            },
+            type: DBDef.SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<DBDef.AutoscaleDbItem>(table, item, conditionExp);
         this.proxy.logAsInfo('called updateHealthCheckRecord');
+    }
+    async deleteHealthCheckRecord(rec: HealthCheckRecord): Promise<void> {
+        this.proxy.logAsInfo('calling deleteHealthCheckRecord.');
+        try {
+            const settings = await this.getSettings();
+            const table = new AwsDBDef.AwsAutoscale(
+                settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value || ''
+            );
+            const [syncStateString] = Object.entries(HealthCheckSyncState)
+                .filter(([, value]) => {
+                    return rec.syncState === value;
+                })
+                .map(([, v]) => v);
+            const item: DBDef.AutoscaleDbItem = {
+                vmId: rec.vmId,
+                scalingGroupName: rec.scalingGroupName,
+                ip: rec.ip,
+                primaryIp: rec.primaryIp,
+                heartBeatInterval: rec.heartbeatInterval,
+                heartBeatLossCount: rec.heartbeatLossCount,
+                nextHeartBeatTime: rec.nextHeartbeatTime,
+                syncState: syncStateString,
+                syncRecoveryCount: rec.syncRecoveryCount,
+                seq: rec.seq,
+                sendTime: rec.sendTime,
+                deviceSyncTime: rec.deviceSyncTime,
+                deviceSyncFailTime: rec.deviceSyncFailTime,
+                // store boolean | null
+                deviceSyncStatus:
+                    (rec.deviceSyncStatus === null && 'null') ||
+                    (rec.deviceSyncStatus && 'true') ||
+                    'false',
+                // store boolean | null
+                deviceIsPrimary:
+                    (rec.deviceIsPrimary === null && 'null') ||
+                    (rec.deviceIsPrimary && 'true') ||
+                    'false',
+                deviceChecksum: rec.deviceChecksum
+            };
+            await this.adaptee.deleteItemFromDb<DBDef.AutoscaleDbItem>(table, item);
+        } catch (error) {
+            this.proxy.logAsError(`cannot delete health check record (vmId: ${rec.vmId})`);
+            throw error;
+        }
+        this.proxy.logAsInfo('called deleteHealthCheckRecord.');
     }
     async createPrimaryRecord(rec: PrimaryRecord, oldRec: PrimaryRecord | null): Promise<void> {
         this.proxy.logAsInfo('calling createPrimaryRecord.');
@@ -647,14 +821,14 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             // save record only if record for a certain scaling group name not exists, or
             // if it exists but timeout
             const conditionExp: AwsDdbOperations = {
-                Expression: 'attribute_not_exists(scalingGroupName)',
+                expression: 'attribute_not_exists(scalingGroupName)',
                 type: DBDef.SaveCondition.InsertOnly
             };
             // if specified an old rec to purge, use a strict conditional expression to replace.
             if (oldRec) {
                 this.proxy.logAsInfo(`purging existing record (id: ${oldRec.id})`);
-                conditionExp.Expression = 'attribute_exists(scalingGroupName) AND id = :id';
-                conditionExp.ExpressionAttributeValues = {
+                conditionExp.expression = 'attribute_exists(scalingGroupName) AND id = :id';
+                conditionExp.expressionAttributeValues = {
                     ':id': oldRec.id
                 };
             }
@@ -688,12 +862,14 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             };
             // save record only if the keys in rec match the keys in db
             const conditionExp: AwsDdbOperations = {
-                Expression:
+                expression:
                     'attribute_not_exists(scalingGroupName) OR ' +
                     'attribute_exists(scalingGroupName) AND ' +
+                    'id = :id AND ' +
                     'voteState = :voteState AND ' +
                     'voteEndTime > :nowTime',
-                ExpressionAttributeValues: {
+                expressionAttributeValues: {
+                    ':id': item.id,
                     ':voteState': PrimaryRecordVoteState.Pending,
                     ':nowTime': Date.now()
                 }
@@ -704,6 +880,44 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             this.proxy.logForError('called updatePrimaryRecord.', error);
             throw error;
         }
+    }
+
+    async deletePrimaryRecord(rec: PrimaryRecord, fullMatch?: boolean): Promise<void> {
+        this.proxy.logAsInfo('calling deletePrimaryRecord');
+        const settings = await this.getSettings();
+        const table = new AwsDBDef.AwsPrimaryElection(
+            settings.get(AwsFortiGateAutoscaleSetting.ResourceTagPrefix).value
+        );
+        const item: DBDef.PrimaryElectionDbItem = {
+            id: rec.id,
+            scalingGroupName: rec.scalingGroupName,
+            ip: rec.ip,
+            vmId: rec.vmId,
+            virtualNetworkId: rec.virtualNetworkId,
+            subnetId: rec.subnetId,
+            voteEndTime: rec.voteEndTime,
+            voteState: rec.voteState
+        };
+        // delete record only if the keys in rec match the keys in db
+        // of if a full match is needed
+        const conditionExp: AwsDdbOperations = {
+            expression: 'id = :id',
+            expressionAttributeValues: {
+                ':id': item.id
+            }
+        };
+        if (fullMatch) {
+            conditionExp.expressionAttributeValues = {};
+            const expressionArray = [];
+            Object.entries(item).forEach(([key, value]) => {
+                expressionArray.push(`${key} = :${key}`);
+                conditionExp.expressionAttributeValues[`:${key}`] = value;
+            });
+            conditionExp.expression = expressionArray.join(' AND ');
+        }
+        await this.adaptee.deleteItemFromDb<DBDef.PrimaryElectionDbItem>(table, item, conditionExp);
+
+        this.proxy.logAsInfo('called deletePrimaryRecord');
     }
     /**
      * Load a configset file from blob storage
@@ -869,7 +1083,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     productName: record.productName
                 };
                 const conditionExp: AwsDdbOperations = {
-                    Expression: ''
+                    expression: ''
                 };
                 let typeText: string;
                 // recrod exists, update it
@@ -943,14 +1157,14 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     vmInSync: rec.item.vmInSync
                 };
                 const conditionExp: AwsDdbOperations = {
-                    Expression: ''
+                    expression: ''
                 };
                 let typeText: string;
                 // update if record exists
                 // NOTE: for updating an existing record, it requires a reference of the existing
                 // record as a snapshot of db data. Only when the record data at the time of updating
                 // matches exactly the same as the snapshot, the update succeeds. Otherwise, the
-                // record is considerred changed, and inconsistent anymore, thus not allowing updating.
+                // record is considered changed, and inconsistent anymore, thus not allowing updating.
                 if (items.has(rec.item.checksum)) {
                     // ASSERT: it must have a referenced record to replace. otherwise, if should fail
                     if (!rec.reference) {
@@ -962,19 +1176,20 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                         return Promise.resolve();
                     }
                     conditionExp.type = DBDef.SaveCondition.UpdateOnly;
-                    // the conditional expression ensures the consistency of the DB system (ACID)
-                    conditionExp.Expression =
-                        'attribute_exists(checksum) AND vmId = :vmId' +
-                        ' scalingGroupName = :scalingGroupName' +
-                        ' AND productName = :productName' +
-                        ' AND algorithm = :algorithm' +
-                        ' AND assignedTime = :assignedTime';
-                    conditionExp.ExpressionAttributeValues = {
-                        ':vmId': rec.reference.vmId,
-                        ':scalingGroupName': rec.reference.scalingGroupName,
-                        ':productName': rec.reference.productName,
-                        ':algorithm': rec.reference.algorithm,
-                        ':assignedTime': rec.reference.assignedTime ? rec.reference.assignedTime : 0
+                    conditionExp.expression =
+                        'attribute_exists(checksum) AND vmId = :oldVmId' +
+                        ' AND scalingGroupName = :oldScalingGroupName' +
+                        ' AND productName = :oldProductName' +
+                        ' AND algorithm = :oldAlgorithm' +
+                        ' AND assignedTime = :oldAssignedTime';
+                    conditionExp.expressionAttributeValues = {
+                        ':oldVmId': rec.reference.vmId,
+                        ':oldScalingGroupName': rec.reference.scalingGroupName,
+                        ':oldProductName': rec.reference.productName,
+                        ':oldAlgorithm': rec.reference.algorithm,
+                        ':oldAssignedTime': rec.reference.assignedTime
+                            ? rec.reference.assignedTime
+                            : 0
                     };
                     typeText =
                         `update existing item (checksum: ${rec.reference.checksum}). ` +
@@ -1001,7 +1216,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 else {
                     conditionExp.type = DBDef.SaveCondition.Upsert;
                     // the conditional expression ensures the consistency of the DB system (ACID)
-                    conditionExp.Expression = 'attribute_not_exists(checksum)';
+                    conditionExp.expression = 'attribute_not_exists(checksum)';
                     typeText =
                         `create new item (checksum: ${item.checksum})` +
                         `New values (filename: ${item.fileName}, vmId: ${item.vmId}, ` +
@@ -1066,7 +1281,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 attachmentState: status
             };
             const conditionExp: AwsDdbOperations = {
-                Expression: '',
+                expression: '',
                 type: DBDef.SaveCondition.Upsert
             };
             await this.adaptee.saveItemToDb<DBDef.NicAttachmentDbItem>(table, item, conditionExp);
@@ -1364,7 +1579,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             timestamp: item.timestamp
         };
         const conditionExp: AwsDdbOperations = {
-            Expression: '',
+            expression: '',
             type: DBDef.SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<LifecycleItemDbItem>(table, dbItem, conditionExp);
@@ -1387,7 +1602,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             timestamp: item.timestamp
         };
         const conditionExp: AwsDdbOperations = {
-            Expression: '',
+            expression: '',
             type: DBDef.SaveCondition.UpdateOnly
         };
         await this.adaptee.saveItemToDb<LifecycleItemDbItem>(table, dbItem, conditionExp);
@@ -1597,7 +1812,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             vpnConnectionId: vpnConnectionId
         };
         const conditionExp: AwsDdbOperations = {
-            Expression: '',
+            expression: '',
             type: DBDef.SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<DBDef.VpnAttachmentDbItem>(table, dbItem, conditionExp);
@@ -1914,7 +2129,7 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             vip: vip
         };
         const conditionExp: AwsDdbOperations = {
-            Expression: '',
+            expression: '',
             type: DBDef.SaveCondition.Upsert
         };
         await this.adaptee.saveItemToDb<DBDef.FortiAnalyzerDbItem>(table, item, conditionExp);

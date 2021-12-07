@@ -25,7 +25,6 @@ import {
     AzureFortiGateAutoscaleSetting,
     AzureSettings,
     AzureSettingsDbItem,
-    ConsistenyCheckType,
     CosmosDBQueryResult,
     CosmosDBQueryWhereClause,
     CosmosDbTableMetaData
@@ -39,7 +38,9 @@ import {
     Settings
 } from '..';
 
-export enum requiredEnvVars {
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
+export enum RequiredEnvVars {
     AUTOSCALE_DB_ACCOUNT = 'AUTOSCALE_DB_ACCOUNT',
     AUTOSCALE_DB_NAME = 'AUTOSCALE_DB_NAME',
     AUTOSCALE_DB_PRIMARY_KEY = 'AUTOSCALE_DB_PRIMARY_KEY',
@@ -80,6 +81,8 @@ export interface ApiCache<T> {
  * Api Cache options
  * @enum
  */
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum ApiCacheOption {
     /**
      * @member {string} ReadApiFirst always request data from api then save data to cache.
@@ -128,7 +131,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
      */
     constructor() {
         // validation
-        const missingEnvVars = Object.keys({ ...requiredEnvVars }).filter(key => !process.env[key]);
+        const missingEnvVars = Object.keys({ ...RequiredEnvVars }).filter(key => !process.env[key]);
         if (missingEnvVars.length > 0) {
             throw new Error(
                 `Missing the following environment variables: ${missingEnvVars.join()}.`
@@ -290,19 +293,20 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         return queryResult;
     }
     /**
-     * save an item to db. When the optional parameter 'consistencyCheck' is provided, it will
+     * save an item to db. When the optional parameter 'dataIntegrityCheck' is provided, it will
      * perform a data consistency checking before saving.
      * The function compares each property of the item against the existing record
      * with the same primary key in the db table.
      * It saves the item only when one of the following conditions is met:
-     * condition 1: if parameter consistencyCheck is passed boolean true, it will
+     * condition 1: if parameter dataIntegrityCheck is passed boolean true, it will
      * only compare the _etag
-     * condition 2: if parameter consistencyCheck is passed an object of type T, it will
+     * condition 2: if parameter dataIntegrityCheck is passed a check function that accepts
+     * an input of type T, it will
      * strictly compare each defined (including null, false and empty value) property
      * @param  {Table<T>} table the instance of Table to save the item.
      * @param  {T} item the item to save
      * @param  {DBDef.SaveCondition} condition save condition
-     * @param  {boolean| object} consistencyCheck (optional) ensure data consistency to prevent
+     * @param  {boolean| function} dataIntegrityCheck (optional) ensure data integrity to prevent
      * saving outdated data.
      * @returns {Promise<T>} a promise of item of type T
      */
@@ -310,7 +314,14 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         table: DBDef.Table<T>,
         item: T,
         condition: DBDef.SaveCondition,
-        consistencyCheck: boolean | ConsistenyCheckType<T> = true
+        dataIntegrityCheck:
+            | boolean
+            | ((
+                  dbItemSnapshot: T
+              ) => Promise<{
+                  result: boolean;
+                  errorMessage: string;
+              }>) = true
     ): Promise<T> {
         // CAUTION: validate the db input (non meta data)
         table.validateInput<T>(item);
@@ -326,27 +337,19 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
 
         // if date with the same primary key already exists in the db table
         if (itemSnapshot) {
-            // NOTE: given an object for property comparison
-            if (typeof consistencyCheck !== 'boolean') {
-                const inconsistentData = Object.entries(consistencyCheck).filter(([k, v]) => {
-                    return itemSnapshot[k] !== v;
-                });
-                // throw error if inconsistent data found
-                if (inconsistentData.length > 0) {
-                    const inconsistentDataDetailString: string = inconsistentData
-                        .map(([k, v]) => {
-                            return `key: ${k}, expected: ${v}, existing: ${itemSnapshot[k]}`;
-                        })
-                        .join('; ');
+            // if a function is provided as dataIntegrityCheck, run the checker function
+            if (typeof dataIntegrityCheck === 'function') {
+                const checkerResult = await dataIntegrityCheck(itemSnapshot);
+                if (!checkerResult.result) {
                     throw new DBDef.DbSaveError(
                         DBDef.DbErrorCode.InconsistentData,
-                        'Inconsistent data. The following value not match:' +
-                            `${inconsistentDataDetailString}`
+                        `Data integrityCheck failed. ${checkerResult.errorMessage || ''}`
                     );
                 }
             }
-            // NOTE: if consistencyCheck, enforces this access condition
-            options = consistencyCheck && {
+
+            // NOTE: if dataIntegrityCheck, enforces this access condition
+            options = dataIntegrityCheck && {
                 accessCondition: {
                     type: 'IfMatch',
                     condition: itemSnapshot._etag
@@ -372,7 +375,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         // TODO: from the logic above, the condition probably be always false
         // can remove this block?
         if (
-            consistencyCheck &&
+            dataIntegrityCheck &&
             itemSnapshot &&
             item[table.primaryKey.name] !== itemSnapshot[table.primaryKey.name]
         ) {
@@ -381,7 +384,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                 'Inconsistent data.' +
                     ' Primary key values not match.' +
                     'Cannot save item back into db due to' +
-                    ' the restriction parameter consistencyCheck is on.'
+                    ' the restriction parameter dataIntegrityCheck is on.'
             );
         }
         // ASSERT: input validation and data consistency checking have passed.
@@ -702,7 +705,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
 
         const requestProcessor = async (): Promise<VirtualMachineScaleSetVM[]> => {
             const response = await this.azureCompute.virtualMachineScaleSetVMs.list(
-                process.env[requiredEnvVars.RESOURCE_GROUP],
+                process.env[RequiredEnvVars.RESOURCE_GROUP],
                 scalingGroupName
             );
             return (response && response._response.parsedBody) || null;
@@ -762,7 +765,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         };
         const requestProcessor = async (): Promise<typeof data> => {
             const response = await this.azureCompute.virtualMachineScaleSetVMs.get(
-                process.env[requiredEnvVars.RESOURCE_GROUP],
+                process.env[RequiredEnvVars.RESOURCE_GROUP],
                 scalingGroupName,
                 instanceId,
                 {
@@ -802,7 +805,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
 
         // ASSERT: all related caches are deleted. can delete the vm now
         const response = await this.azureCompute.virtualMachineScaleSetVMs.deleteMethod(
-            process.env[requiredEnvVars.RESOURCE_GROUP],
+            process.env[RequiredEnvVars.RESOURCE_GROUP],
             scalingGroupName,
             String(instanceId)
         );
@@ -839,7 +842,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         };
         const requestProcessor = async (): Promise<NetworkInterface[]> => {
             const response = await this.azureNetwork.networkInterfaces.listVirtualMachineScaleSetVMNetworkInterfaces(
-                process.env[requiredEnvVars.RESOURCE_GROUP],
+                process.env[RequiredEnvVars.RESOURCE_GROUP],
                 scalingGroupName,
                 String(id)
             );

@@ -1,3 +1,5 @@
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum AutoscaleServiceType {
     SaveAutoscaleSettings = 'saveSettings',
     StartAutoscale = 'startAutoscale',

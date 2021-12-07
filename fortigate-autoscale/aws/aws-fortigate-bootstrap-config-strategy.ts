@@ -1,3 +1,5 @@
+import { parseStringPromise as xml2jsParserPromise } from 'xml2js';
+import { AwsFortiGateAutoscaleSetting, AwsPlatformAdapter } from '.';
 import {
     AutoscaleEnvironment,
     CloudFunctionProxyAdapter,
@@ -5,8 +7,6 @@ import {
     JSONable,
     VirtualMachine
 } from '..';
-import { parseStringPromise as xml2jsParserPromise } from 'xml2js';
-import { AwsFortiGateAutoscaleSetting, AwsPlatformAdapter } from '.';
 
 export class AwsFortiGateBootstrapStrategy extends FortiGateBootstrapConfigStrategy {
     constructor(
@@ -61,7 +61,9 @@ export class AwsFortiGateBootstrapTgwStrategy extends AwsFortiGateBootstrapStrat
                 }
             }
             return await this.processConfig(config, {
+                // the @ symbol is placed on purposes
                 '@device': targetVm,
+                // eslint-disable-next-line @typescript-eslint/naming-convention
                 '@vpn_connection': customerGatewayConfiguration.vpn_connection
             });
         } catch (error) {

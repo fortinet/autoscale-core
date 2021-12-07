@@ -1,3 +1,5 @@
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum VirtualMachineState {
     // NOTE: transitioning state. in provisioning, not attached to the host, not receiving traffic.
     Creating = 'Creating',
@@ -24,20 +26,6 @@ export enum VirtualMachineState {
     // NOTE: a general state for any reason not set the state yet so it remains unkown.
     Unknown = 'Unknown'
 }
-export interface VirtualMachine {
-    id: string;
-    scalingGroupName: string;
-    productName?: string;
-    primaryPrivateIpAddress: string;
-    primaryPublicIpAddress?: string;
-    virtualNetworkId: string;
-    subnetId: string;
-    securityGroups?: SecurityGroup[];
-    networkInterfaces?: NetworkInterface[];
-    networkInterfaceIds?: string[];
-    sourceData?: { [key: string]: unknown };
-    state: VirtualMachineState;
-}
 
 export interface NetworkInterface {
     id: string;
@@ -52,4 +40,21 @@ export interface NetworkInterface {
 export interface SecurityGroup {
     id: string;
     name?: string;
+}
+
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
+export interface VirtualMachine {
+    id: string;
+    scalingGroupName: string;
+    productName?: string;
+    primaryPrivateIpAddress: string;
+    primaryPublicIpAddress?: string;
+    virtualNetworkId: string;
+    subnetId: string;
+    securityGroups?: SecurityGroup[];
+    networkInterfaces?: NetworkInterface[];
+    networkInterfaceIds?: string[];
+    sourceData?: { [key: string]: unknown };
+    state: VirtualMachineState;
 }

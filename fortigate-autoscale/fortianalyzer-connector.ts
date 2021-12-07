@@ -5,8 +5,7 @@ import https from 'https';
 // disable the following eslint rules:
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/camelcase */
-
+/* eslint-disable @typescript-eslint/naming-convention */
 export interface ConnectingDevice {
     adm_user: string;
     adm_pass: string;

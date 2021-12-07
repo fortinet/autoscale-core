@@ -9,8 +9,7 @@ import {
     LicensingModelContext,
     PlatformAdapter,
     ReqType,
-    VirtualMachine,
-    VmTagging
+    VirtualMachine
 } from '@fortinet/autoscale-core';
 import * as HttpStatusCodes from 'http-status-codes';
 import { FortiGateAutoscaleSetting } from '.';
@@ -156,34 +155,15 @@ export abstract class FortiGateAutoscale<TReq, TContext, TRes> extends Autoscale
             // get primary record
             this.env.primaryRecord =
                 this.env.primaryRecord || (await this.platform.getPrimaryRecord());
-            // handle primary election. the expected result should be one of:
-            // primary election is triggered
-            // primary election is finalized
-            // primary election isn't needed
-            const primaryElection = await this.handlePrimaryElection();
 
-            // assert primary record should be available now
-            // get primary record again
-            this.env.primaryVm = primaryElection.newPrimary || primaryElection.oldPrimary;
-            this.env.primaryRecord =
-                primaryElection.newPrimaryRecord || primaryElection.oldPrimaryRecord;
-
-            // tag the new vm
-            const vmTagging: VmTagging = {
-                vmId: this.env.targetVm.id,
-                newVm: true, // ASSERT: vm in boostraping is a new vm
-                newPrimaryRole:
-                    (primaryElection.newPrimary &&
-                        this.platform.vmEquals(this.env.targetVm, this.env.primaryVm)) ||
-                    false
-            };
-            await this.handleTaggingAutoscaleVm([vmTagging]);
-
-            // need to update egress traffic route when primary role has changed.
-            // egress traffic route table is set in in EgressTrafficRouteTableList
-            if (primaryElection.newPrimary) {
-                await this.handleEgressTrafficRoute();
-            }
+            // NOTE: from FortiGate Autoscale 3.4.0, the primary election will not be handled
+            // on the bootstrap stage.
+            // Each VM will be initially launched as a secondary role until it becomes in-service
+            // and has a healthcheck record in the DB.
+            // As the result, the following processing will not be triggered here
+            // handlePrimaryElection()
+            // handleTaggingAutoscaleVm()
+            // handleEgressTrafficRoute()
         }
 
         // get the bootstrap configuration

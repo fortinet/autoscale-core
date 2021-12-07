@@ -2,15 +2,8 @@ import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
 import { PlatformAdapter } from '../platform-adapter';
 import { VirtualMachine } from '../virtual-machine';
 
-/**
- * To provide VPN connection attachment related logics
- */
-export interface VpnAttachmentContext {
-    handleVpnAttachment(): Promise<VpnAttachmentStrategyResult>;
-    handleVpnDetachment(): Promise<VpnAttachmentStrategyResult>;
-    setVpnAttachmentStrategy(strategy: VpnAttachmentStrategy): void;
-}
-
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum VpnAttachmentStrategyResult {
     Success = 'success',
     Failed = 'failed',
@@ -23,6 +16,15 @@ export interface VpnAttachmentStrategy {
     attach(): Promise<VpnAttachmentStrategyResult>;
     detach(): Promise<VpnAttachmentStrategyResult>;
     cleanup(): Promise<number>;
+}
+
+/**
+ * To provide VPN connection attachment related logics
+ */
+export interface VpnAttachmentContext {
+    handleVpnAttachment(): Promise<VpnAttachmentStrategyResult>;
+    handleVpnDetachment(): Promise<VpnAttachmentStrategyResult>;
+    setVpnAttachmentStrategy(strategy: VpnAttachmentStrategy): void;
 }
 
 export class NoopVpnAttachmentStrategy implements VpnAttachmentStrategy {
