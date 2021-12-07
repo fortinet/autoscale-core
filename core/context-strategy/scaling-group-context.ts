@@ -1,6 +1,16 @@
 import { CloudFunctionProxyAdapter } from '../cloud-function-proxy';
 import { PlatformAdapter } from '../platform-adapter';
 
+export interface ScalingGroupStrategy {
+    onLaunchingVm(): Promise<string>;
+    onLaunchedVm(): Promise<string>;
+    onTerminatingVm(): Promise<string>;
+    onTerminatedVm(): Promise<string>;
+    onVmNotLaunched(): Promise<string>;
+    completeLaunching(success?: boolean): Promise<string>;
+    completeTerminating(success?: boolean): Promise<string>;
+}
+
 /**
  * To provide auto scaling group related logics such as scaling out, scaling in.
  */
@@ -11,16 +21,6 @@ export interface ScalingGroupContext {
     handleTerminatingVm(): Promise<string>;
     handleTerminatedVm(): Promise<string>;
     handleVmNotLaunched(): Promise<string>;
-}
-
-export interface ScalingGroupStrategy {
-    onLaunchingVm(): Promise<string>;
-    onLaunchedVm(): Promise<string>;
-    onTerminatingVm(): Promise<string>;
-    onTerminatedVm(): Promise<string>;
-    onVmNotLaunched(): Promise<string>;
-    completeLaunching(success?: boolean): Promise<string>;
-    completeTerminating(success?: boolean): Promise<string>;
 }
 
 export class NoopScalingGroupStrategy implements ScalingGroupStrategy {

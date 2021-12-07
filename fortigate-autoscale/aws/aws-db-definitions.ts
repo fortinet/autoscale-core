@@ -102,7 +102,7 @@ export interface LifecycleItemDbItem {
 
 // additional tables
 export class AwsLifecycleItem extends DBDef.Table<LifecycleItemDbItem> {
-    static __attributes: DBDef.Attribute[] = [
+    static ownStaticAttributes: DBDef.Attribute[] = [
         {
             name: 'vmId',
             attrType: DBDef.TypeRef.StringType,
@@ -144,7 +144,7 @@ export class AwsLifecycleItem extends DBDef.Table<LifecycleItemDbItem> {
         super(new DynamoDBTypeConverter(), namePrefix, nameSuffix);
         // Caution: don't forget to set a correct name.
         this.setName('LifecycleItem');
-        AwsLifecycleItem.__attributes.forEach(def => {
+        AwsLifecycleItem.ownStaticAttributes.forEach(def => {
             this.addAttribute(def);
         });
         // NOTE: use AWS DynamoDB type refs

@@ -25,6 +25,7 @@ import {
     NoopRoutingEgressTrafficStrategy,
     NoopScalingGroupStrategy,
     NoopTaggingVmStrategy,
+    PlatformAdaptee,
     PlatformAdapter,
     PrimaryElection,
     PrimaryElectionStrategy,
@@ -182,16 +183,6 @@ const TEST_DEVICE_SYNC_INFO: DeviceSyncInfo = {
     checksum: 'fake-checksum'
 };
 
-class TestAutoscale extends Autoscale {
-    constructor(
-        readonly platform: TestPlatformAdapter,
-        readonly env: AutoscaleEnvironment,
-        readonly proxy: CloudFunctionProxyAdapter
-    ) {
-        super();
-    }
-}
-
 class TestPlatformAdapter implements PlatformAdapter {
     invokeAutoscaleFunction(
         payload: unknown,
@@ -307,7 +298,7 @@ class TestPlatformAdapter implements PlatformAdapter {
     loadConfigSet(name: string): Promise<string> {
         throw new Error('Method not implemented.');
     }
-    adaptee: {};
+    adaptee: PlatformAdaptee;
     init(): Promise<void> {
         throw new Error('Method not implemented.');
     }
@@ -376,6 +367,16 @@ class TestPlatformAdapter implements PlatformAdapter {
     }
 }
 
+class TestAutoscale extends Autoscale {
+    constructor(
+        readonly platform: TestPlatformAdapter,
+        readonly env: AutoscaleEnvironment,
+        readonly proxy: CloudFunctionProxyAdapter
+    ) {
+        super();
+    }
+}
+
 class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     private executionStartTime: number;
     constructor() {
@@ -391,7 +392,11 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     getRequestAsString(): Promise<string> {
         return Promise.resolve('fake-req-as-string');
     }
-    formatResponse(httpStatusCode: number, body: CloudFunctionResponseBody, headers: {}): {} {
+    formatResponse(
+        httpStatusCode: number,
+        body: CloudFunctionResponseBody,
+        headers: unknown
+    ): unknown {
         throw new Error('Method not implemented.');
     }
     log(message: string, level: LogLevel): void {

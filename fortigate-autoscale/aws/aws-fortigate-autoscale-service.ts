@@ -1,10 +1,3 @@
-import {
-    AutoscaleServiceProvider,
-    FortiGateAutoscaleServiceType,
-    NicAttachmentStrategyResult,
-    ReqType,
-    VpnAttachmentStrategyResult
-} from '..';
 import { CloudFormationCustomResourceEvent, Context } from 'aws-lambda';
 import {
     AwsCloudFormationCustomResourceEventProxy,
@@ -13,11 +6,72 @@ import {
     AwsFortiGateAutoscaleSettingItemDictionary,
     AwsPlatformAdapter
 } from '.';
+import {
+    AutoscaleServiceProvider,
+    FortiGateAutoscaleServiceType,
+    NicAttachmentStrategyResult,
+    ReqType,
+    VpnAttachmentStrategyResult
+} from '..';
 
 export const AwsFortiGateAutoscaleServiceType = {
     ...FortiGateAutoscaleServiceType,
     InitiateAutoscale: 'initiateAutoscale'
 };
+export interface AwsFortiGateAutoscaleServiceEventBase {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    ServiceToken: string;
+}
+
+export interface AwsFortiGateAutoscaleServiceEventStartAutoscale
+    extends AwsFortiGateAutoscaleServiceEventBase {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    ServiceType: 'initiateAutoscale' | 'startAutoscale';
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    DesireCapacity?: number;
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    MinSize?: number;
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    MaxSize?: number;
+}
+
+export interface AwsFortiGateAutoscaleServiceEventStopAutoscale
+    extends AwsFortiGateAutoscaleServiceEventBase {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    ServiceType: 'stopAutoscale';
+}
+
+export interface AwsFortiGateAutoscaleServiceEventSaveSettings
+    extends AwsFortiGateAutoscaleServiceEventBase {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    ServiceType: 'saveSettings';
+    [key: string]: string;
+}
+
+export interface AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer
+    extends AwsFortiGateAutoscaleServiceEventBase {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    ServiceType: 'registerFortiAnalyzer';
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    InstanceId?: string;
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    PrivateIp?: string;
+}
+
+export interface AwsFortiGateAutoscaleServiceEventTriggerFazDeviceAuth
+    extends AwsFortiGateAutoscaleServiceEventBase {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    ServiceType: 'triggerFazDeviceAuth';
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    InstanceId?: string;
+}
+
+export interface AwsFortiGateAutoscaleServiceEventUnknown
+    extends AwsFortiGateAutoscaleServiceEventBase {
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    ServiceType: undefined;
+    [key: string]: string;
+}
 
 export type AwsFortiGateAutoscaleServiceEvent =
     | AwsFortiGateAutoscaleServiceEventStartAutoscale
@@ -26,47 +80,6 @@ export type AwsFortiGateAutoscaleServiceEvent =
     | AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer
     | AwsFortiGateAutoscaleServiceEventTriggerFazDeviceAuth
     | AwsFortiGateAutoscaleServiceEventUnknown;
-export interface AwsFortiGateAutoscaleServiceEventBase {
-    ServiceToken: string;
-}
-
-export interface AwsFortiGateAutoscaleServiceEventStartAutoscale
-    extends AwsFortiGateAutoscaleServiceEventBase {
-    ServiceType: 'initiateAutoscale' | 'startAutoscale';
-    DesireCapacity?: number;
-    MinSize?: number;
-    MaxSize?: number;
-}
-
-export interface AwsFortiGateAutoscaleServiceEventStopAutoscale
-    extends AwsFortiGateAutoscaleServiceEventBase {
-    ServiceType: 'stopAutoscale';
-}
-
-export interface AwsFortiGateAutoscaleServiceEventSaveSettings
-    extends AwsFortiGateAutoscaleServiceEventBase {
-    ServiceType: 'saveSettings';
-    [key: string]: string;
-}
-
-export interface AwsFortiGateAutoscaleServiceEventRegisterFortiAnalyzer
-    extends AwsFortiGateAutoscaleServiceEventBase {
-    ServiceType: 'registerFortiAnalyzer';
-    InstanceId?: string;
-    PrivateIp?: string;
-}
-
-export interface AwsFortiGateAutoscaleServiceEventTriggerFazDeviceAuth
-    extends AwsFortiGateAutoscaleServiceEventBase {
-    ServiceType: 'triggerFazDeviceAuth';
-    InstanceId?: string;
-}
-
-export interface AwsFortiGateAutoscaleServiceEventUnknown
-    extends AwsFortiGateAutoscaleServiceEventBase {
-    ServiceType: undefined;
-    [key: string]: string;
-}
 
 export class AwsFortiGateAutoscaleCfnServiceProvider
     implements AutoscaleServiceProvider<CloudFormationCustomResourceEvent, void> {

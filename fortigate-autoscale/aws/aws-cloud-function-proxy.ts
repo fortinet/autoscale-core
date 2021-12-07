@@ -1,4 +1,12 @@
 import {
+    APIGatewayProxyEvent,
+    APIGatewayProxyResult,
+    CloudFormationCustomResourceEvent,
+    Context,
+    ScheduledEvent
+} from 'aws-lambda';
+import { AwsCfnResponse } from '.';
+import {
     CloudFunctionProxy,
     CloudFunctionResponseBody,
     JSONable,
@@ -8,14 +16,6 @@ import {
     ReqHeaders,
     ReqMethod
 } from '..';
-import {
-    APIGatewayProxyEvent,
-    APIGatewayProxyResult,
-    CloudFormationCustomResourceEvent,
-    Context,
-    ScheduledEvent
-} from 'aws-lambda';
-import { AwsCfnResponse } from '.';
 
 export class AwsScheduledEventProxy extends CloudFunctionProxy<
     ScheduledEvent,
@@ -56,9 +56,9 @@ export class AwsScheduledEventProxy extends CloudFunctionProxy<
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         body: CloudFunctionResponseBody,
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        headers: {}
-    ): { [key: string]: unknown } {
-        return {};
+        headers: unknown
+    ): { [key: string]: string } {
+        return null;
     }
     getReqBody(): Promise<ScheduledEvent> {
         return Promise.resolve(this.request);
@@ -158,13 +158,15 @@ export class AwsApiGatewayEventProxy extends CloudFunctionProxy<
     }
 }
 
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum AwsCloudFormationCustomResourceEventResponseStatus {
     SUCCESS = 'SUCCESS',
     FAILED = 'FAILED'
 }
 export interface AwsCloudFormationCustomResourceEventResponse {
     status: AwsCloudFormationCustomResourceEventResponseStatus;
-    data: {};
+    data: unknown;
 }
 export class AwsCloudFormationCustomResourceEventProxy extends CloudFunctionProxy<
     CloudFormationCustomResourceEvent,
@@ -211,7 +213,7 @@ export class AwsCloudFormationCustomResourceEventProxy extends CloudFunctionProx
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         body: CloudFunctionResponseBody,
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        headers: {}
+        headers: unknown
     ): AwsCloudFormationCustomResourceEventResponse {
         throw new Error('Not supposed to call the formatResponse method in this implementation.');
     }
@@ -287,8 +289,8 @@ export class AwsLambdaInvocationProxy extends CloudFunctionProxy<JSONable, Conte
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         body: CloudFunctionResponseBody,
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        headers: {}
-    ): {} {
+        headers: unknown
+    ): void {
         throw new Error('Not supposed to call the formatResponse method in this implementation.');
     }
 

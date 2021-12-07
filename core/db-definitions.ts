@@ -1,13 +1,16 @@
-export interface Attribute {
-    name: string;
-    attrType: TypeRef | string;
-    isKey: boolean;
-    keyType?: TypeRef | string;
-}
-
 export interface KeyValue {
     key: string;
     value: string;
+}
+
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
+export enum TypeRef {
+    StringType = 'AutoscaleStringType',
+    NumberType = 'AutoscaleStringType',
+    BooleanType = 'AutoscaleBooleanType',
+    PrimaryKey = 'AutoscaleStringType',
+    SecondaryKey = 'AutoscaleStringType'
 }
 
 export interface SchemaElement {
@@ -16,12 +19,11 @@ export interface SchemaElement {
 }
 export type TypeRefMap = Map<TypeRef, string>;
 
-export enum TypeRef {
-    StringType = 'AutoscaleStringType',
-    NumberType = 'AutoscaleStringType',
-    BooleanType = 'AutoscaleBooleanType',
-    PrimaryKey = 'AutoscaleStringType',
-    SecondaryKey = 'AutoscaleStringType'
+export interface Attribute {
+    name: string;
+    attrType: TypeRef | string;
+    isKey: boolean;
+    keyType?: TypeRef | string;
 }
 
 export interface Record {
@@ -32,6 +34,8 @@ export interface Record {
  * DB save data condition
  * @enum {string}
  */
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum SaveCondition {
     /**
      * @member {string} InsertOnly strictly insert only if not exists
@@ -104,6 +108,8 @@ export class DbError extends Error {
     }
 }
 
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum DbErrorCode {
     NotFound = 'NotFound',
     KeyConflict = 'KeyConflict',
@@ -136,10 +142,10 @@ export abstract class Table<T> {
     }
     /**
      * validate the input before putting into the database
-     * @param {T} input the input object to be validated
+     * @param {TI} input the input object to be validated
      * @throws an Error object
      */
-    validateInput<T>(input: T): void {
+    validateInput<TI>(input: TI): void {
         const keys = Object.keys(input);
         this.attributes.forEach(attrName => {
             if (!keys.includes) {
@@ -306,7 +312,7 @@ export interface AutoscaleDbItem extends Record {
 }
 
 export class Autoscale extends Table<AutoscaleDbItem> {
-    static __attributes: Attribute[] = [
+    static ownStaticAttributes: Attribute[] = [
         {
             name: 'vmId',
             attrType: TypeRef.StringType,
@@ -393,7 +399,7 @@ export class Autoscale extends Table<AutoscaleDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('Autoscale');
-        Autoscale.__attributes.forEach(def => {
+        Autoscale.ownStaticAttributes.forEach(def => {
             this.addAttribute(def);
         });
     }
@@ -430,7 +436,7 @@ export interface PrimaryElectionDbItem extends Record {
     voteState: string;
 }
 export class PrimaryElection extends Table<PrimaryElectionDbItem> {
-    static __attributes: Attribute[] = [
+    static ownStaticAttributes: Attribute[] = [
         {
             name: 'id',
             attrType: TypeRef.StringType,
@@ -477,7 +483,7 @@ export class PrimaryElection extends Table<PrimaryElectionDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('PrimaryElection');
-        PrimaryElection.__attributes.forEach(def => {
+        PrimaryElection.ownStaticAttributes.forEach(def => {
             this.addAttribute(def);
         });
     }
@@ -503,7 +509,7 @@ export interface FortiAnalyzerDbItem extends Record {
 }
 
 export class FortiAnalyzer extends Table<FortiAnalyzerDbItem> {
-    static __attributes: Attribute[] = [
+    static ownStaticAttributes: Attribute[] = [
         {
             name: 'vmId',
             attrType: TypeRef.StringType,
@@ -530,7 +536,7 @@ export class FortiAnalyzer extends Table<FortiAnalyzerDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('FortiAnalyzer');
-        FortiAnalyzer.__attributes.forEach(def => {
+        FortiAnalyzer.ownStaticAttributes.forEach(def => {
             this.addAttribute(def);
         });
     }
@@ -552,7 +558,7 @@ export interface SettingsDbItem extends Record {
     editable: boolean;
 }
 export class Settings extends Table<SettingsDbItem> {
-    static __attributes: Attribute[] = [
+    static ownStaticAttributes: Attribute[] = [
         {
             name: 'settingKey',
             attrType: TypeRef.StringType,
@@ -584,7 +590,7 @@ export class Settings extends Table<SettingsDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('Settings');
-        Settings.__attributes.forEach(def => {
+        Settings.ownStaticAttributes.forEach(def => {
             this.addAttribute(def);
         });
     }
@@ -605,7 +611,7 @@ export interface NicAttachmentDbItem extends Record {
     attachmentState: string;
 }
 export class NicAttachment extends Table<NicAttachmentDbItem> {
-    static __attributes: Attribute[] = [
+    static ownStaticAttributes: Attribute[] = [
         {
             name: 'vmId',
             attrType: TypeRef.StringType,
@@ -627,7 +633,7 @@ export class NicAttachment extends Table<NicAttachmentDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('NicAttachment');
-        NicAttachment.__attributes.forEach(def => {
+        NicAttachment.ownStaticAttributes.forEach(def => {
             this.addAttribute(def);
         });
     }
@@ -651,7 +657,7 @@ export interface VmInfoCacheDbItem extends Record {
     expireTime: number;
 }
 export class VmInfoCache extends Table<VmInfoCacheDbItem> {
-    static __attributes: Attribute[] = [
+    static ownStaticAttributes: Attribute[] = [
         {
             name: 'id',
             attrType: TypeRef.StringType,
@@ -693,7 +699,7 @@ export class VmInfoCache extends Table<VmInfoCacheDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('VmInfoCache');
-        VmInfoCache.__attributes.forEach(def => {
+        VmInfoCache.ownStaticAttributes.forEach(def => {
             this.addAttribute(def);
         });
     }
@@ -718,7 +724,7 @@ export interface LicenseStockDbItem extends Record {
     productName: string;
 }
 export class LicenseStock extends Table<LicenseStockDbItem> {
-    static __attributes: Attribute[] = [
+    static ownStaticAttributes: Attribute[] = [
         {
             name: 'checksum',
             attrType: TypeRef.StringType,
@@ -745,7 +751,7 @@ export class LicenseStock extends Table<LicenseStockDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('LicenseStock');
-        LicenseStock.__attributes.forEach(def => {
+        LicenseStock.ownStaticAttributes.forEach(def => {
             this.addAttribute(def);
         });
     }
@@ -771,7 +777,7 @@ export interface LicenseUsageDbItem extends Record {
     vmInSync: boolean;
 }
 export class LicenseUsage extends Table<LicenseUsageDbItem> {
-    static __attributes: Attribute[] = [
+    static ownStaticAttributes: Attribute[] = [
         {
             name: 'checksum',
             attrType: TypeRef.StringType,
@@ -818,7 +824,7 @@ export class LicenseUsage extends Table<LicenseUsageDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('LicenseUsage');
-        LicenseUsage.__attributes.forEach(def => {
+        LicenseUsage.ownStaticAttributes.forEach(def => {
             this.addAttribute(def);
         });
     }
@@ -843,7 +849,7 @@ export interface CustomLogDbItem extends Record {
     logContent: string;
 }
 export class CustomLog extends Table<CustomLogDbItem> {
-    static __attributes: Attribute[] = [
+    static ownStaticAttributes: Attribute[] = [
         {
             name: 'id',
             attrType: TypeRef.StringType,
@@ -866,7 +872,7 @@ export class CustomLog extends Table<CustomLogDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('CustomLog');
-        CustomLog.__attributes.forEach(def => {
+        CustomLog.ownStaticAttributes.forEach(def => {
             this.addAttribute(def);
         });
     }
@@ -886,7 +892,7 @@ export interface VpnAttachmentDbItem extends Record {
     vpnConnectionId: string;
 }
 export class VpnAttachment extends Table<VpnAttachmentDbItem> {
-    static __attributes: Attribute[] = [
+    static ownStaticAttributes: Attribute[] = [
         {
             name: 'vmId',
             attrType: TypeRef.StringType,
@@ -909,7 +915,7 @@ export class VpnAttachment extends Table<VpnAttachmentDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('VpnAttachment');
-        VpnAttachment.__attributes.forEach(def => {
+        VpnAttachment.ownStaticAttributes.forEach(def => {
             this.addAttribute(def);
         });
     }
@@ -930,7 +936,7 @@ export interface ApiRequestCacheDbItem extends Record {
     ttl: number;
 }
 export class ApiRequestCache extends Table<ApiRequestCacheDbItem> {
-    static __attributes: Attribute[] = [
+    static ownStaticAttributes: Attribute[] = [
         {
             name: 'id',
             attrType: TypeRef.StringType,
@@ -957,7 +963,7 @@ export class ApiRequestCache extends Table<ApiRequestCacheDbItem> {
         super(typeConvert, namePrefix, nameSuffix);
         // CAUTION: don't forget to set a correct name.
         this.setName('ApiRequestCache');
-        ApiRequestCache.__attributes.forEach(def => {
+        ApiRequestCache.ownStaticAttributes.forEach(def => {
             this.addAttribute(def);
         });
     }

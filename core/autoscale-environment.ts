@@ -12,5 +12,5 @@ export interface AutoscaleEnvironment {
     targetVm?: VirtualMachine;
     targetScalingGroup?: string;
     targetHealthCheckRecord?: HealthCheckRecord;
-    [key: string]: {};
+    [key: string]: unknown;
 }

@@ -7,6 +7,8 @@ export type TransitGatewayContext = VpnAttachmentContext;
 /**
  * created based on aws ec2 TransitGatewayPropagationState
  */
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum AwsTgwVpnPropagationState {
     Enabled = 'enabled',
     Enabling = 'enabling',
@@ -14,6 +16,8 @@ export enum AwsTgwVpnPropagationState {
     Disabling = 'disabling'
 }
 
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum AwsVpnAttachmentState {
     Available = 'available',
     Deleting = 'deleting',

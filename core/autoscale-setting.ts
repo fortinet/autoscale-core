@@ -6,6 +6,8 @@ import { JSONable } from './jsonable';
  * @export
  * @enum {number}
  */
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum AutoscaleSetting {
     AdditionalConfigSetNameList = 'additional-configset-name-list',
     AutoscaleFunctionExtendExecution = 'autoscale-function-extend-execution',
@@ -54,6 +56,8 @@ export interface SubnetPair {
     pairIdList: string[];
 }
 
+// the no-shadow rule errored in the next line may be just a false alarm
+// eslint-disable-next-line no-shadow
 export enum SubnetPairIndex {
     Service,
     Management

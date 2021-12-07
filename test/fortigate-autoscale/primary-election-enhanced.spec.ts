@@ -24,6 +24,7 @@ import {
     NoopRoutingEgressTrafficStrategy,
     NoopScalingGroupStrategy,
     NoopTaggingVmStrategy,
+    PlatformAdaptee,
     PlatformAdapter,
     PrimaryElectionStrategy,
     PrimaryRecord,
@@ -153,16 +154,6 @@ const TEST_DEVICE_SYNC_INFO_ENHANCED: DeviceSyncInfo = {
     checksum: 'fake-checksum'
 };
 
-class TestAutoscale extends Autoscale {
-    constructor(
-        readonly platform: TestPlatformAdapter,
-        readonly env: AutoscaleEnvironment,
-        readonly proxy: CloudFunctionProxyAdapter
-    ) {
-        super();
-    }
-}
-
 class TestPlatformAdapter implements PlatformAdapter {
     invokeAutoscaleFunction(
         payload: unknown,
@@ -278,7 +269,7 @@ class TestPlatformAdapter implements PlatformAdapter {
     loadConfigSet(name: string): Promise<string> {
         throw new Error('Method not implemented.');
     }
-    adaptee: {};
+    adaptee: PlatformAdaptee;
     init(): Promise<void> {
         throw new Error('Method not implemented.');
     }
@@ -346,6 +337,16 @@ class TestPlatformAdapter implements PlatformAdapter {
     }
 }
 
+class TestAutoscale extends Autoscale {
+    constructor(
+        readonly platform: TestPlatformAdapter,
+        readonly env: AutoscaleEnvironment,
+        readonly proxy: CloudFunctionProxyAdapter
+    ) {
+        super();
+    }
+}
+
 class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     private executionStartTime: number;
     constructor() {
@@ -361,7 +362,11 @@ class TestCloudFunctionProxyAdapter implements CloudFunctionProxyAdapter {
     getRequestAsString(): Promise<string> {
         throw new Error('Method not implemented.');
     }
-    formatResponse(httpStatusCode: number, body: CloudFunctionResponseBody, headers: {}): {} {
+    formatResponse(
+        httpStatusCode: number,
+        body: CloudFunctionResponseBody,
+        headers: unknown
+    ): unknown {
         throw new Error('Method not implemented.');
     }
     log(message: string, level: LogLevel): void {
@@ -403,26 +408,26 @@ function createAutoscale(
     fis?: FazIntegrationStrategy
 ) {
     const autoscale = new TestAutoscale(p, e, x);
-    const _pes = pes || new WeightedScorePreferredGroupPrimaryElection(p, x);
-    const _hss = hss || new ConstantIntervalHeartbeatSyncStrategy(p, x);
-    const _sgs = sgs || new NoopScalingGroupStrategy(p, x);
-    const _rets = rets || new NoopRoutingEgressTrafficStrategy(p, x);
-    const _tavs = tavs || new NoopTaggingVmStrategy(p, x);
-    const _fis = fis || new NoopFazIntegrationStrategy(p, x);
-    autoscale.setPrimaryElectionStrategy(_pes);
-    autoscale.setHeartbeatSyncStrategy(_hss);
-    autoscale.setScalingGroupStrategy(_sgs);
-    autoscale.setRoutingEgressTrafficStrategy(_rets);
-    autoscale.setTaggingAutoscaleVmStrategy(_tavs);
-    autoscale.setFazIntegrationStrategy(_fis);
+    const newPes = pes || new WeightedScorePreferredGroupPrimaryElection(p, x);
+    const newHss = hss || new ConstantIntervalHeartbeatSyncStrategy(p, x);
+    const newSgs = sgs || new NoopScalingGroupStrategy(p, x);
+    const newRets = rets || new NoopRoutingEgressTrafficStrategy(p, x);
+    const newTavs = tavs || new NoopTaggingVmStrategy(p, x);
+    const newFis = fis || new NoopFazIntegrationStrategy(p, x);
+    autoscale.setPrimaryElectionStrategy(newPes);
+    autoscale.setHeartbeatSyncStrategy(newHss);
+    autoscale.setScalingGroupStrategy(newSgs);
+    autoscale.setRoutingEgressTrafficStrategy(newRets);
+    autoscale.setTaggingAutoscaleVmStrategy(newTavs);
+    autoscale.setFazIntegrationStrategy(newFis);
     return {
         autoscale: autoscale,
-        pes: _pes,
-        hss: _hss,
-        sgs: _sgs,
-        rets: _rets,
-        tavs: _tavs,
-        fis: _fis
+        pes: newPes,
+        hss: newHss,
+        sgs: newSgs,
+        rets: newRets,
+        tavs: newTavs,
+        fis: newFis
     };
 }
 
@@ -1154,7 +1159,6 @@ describe('Enhanced primary election.', () => {
                 it('Case 1 (case detail see code comments)', async function() {
                     // prepare the 6 vm as the table above
                     let i = 0;
-                    /* eslint-disable prettier/prettier */
                     TEMP_TEST_HCR_1 = createTestHCR(
                         TEMP_TEST_HCR,
                         `-duplicate-${++i}`,
@@ -1203,7 +1207,6 @@ describe('Enhanced primary election.', () => {
                         null,
                         false
                     );
-                    /* eslint-enable prettier/prettier */
 
                     // by the test data of this test case VM1 will be weighted the highest score
                     TEMP_ELECTED_PRIMARY_VM.id = TEMP_TEST_HCR_1.vmId;
@@ -1230,7 +1233,6 @@ describe('Enhanced primary election.', () => {
                 it('Case 2 (case detail see code comments)', async function() {
                     // prepare the 6 vm as the table above
                     let i = 0;
-                    /* eslint-disable prettier/prettier */
                     TEMP_TEST_HCR_1 = createTestHCR(
                         TEMP_TEST_HCR,
                         `-duplicate-${++i}`,
@@ -1279,7 +1281,6 @@ describe('Enhanced primary election.', () => {
                         'cccc',
                         false
                     );
-                    /* eslint-enable prettier/prettier */
 
                     // by the test data of this test case VM1 will be weighted the highest score
                     TEMP_ELECTED_PRIMARY_VM.id = TEMP_TEST_HCR_1.vmId;
@@ -1306,7 +1307,6 @@ describe('Enhanced primary election.', () => {
                 it('Case 3 (case detail see code comments)', async function() {
                     // prepare the 6 vm as the table above
                     let i = 0;
-                    /* eslint-disable prettier/prettier */
                     TEMP_TEST_HCR_1 = createTestHCR(
                         TEMP_TEST_HCR,
                         `-duplicate-${++i}`,
@@ -1355,7 +1355,6 @@ describe('Enhanced primary election.', () => {
                         'cccc',
                         false
                     );
-                    /* eslint-enable prettier/prettier */
 
                     // by the test data of this test case VM1 will be weighted the highest score
                     TEMP_ELECTED_PRIMARY_VM.id = TEMP_TEST_HCR_1.vmId;
@@ -1382,7 +1381,6 @@ describe('Enhanced primary election.', () => {
                 it('Case 4 (case detail see code comments)', async function() {
                     // prepare the 6 vm as the table above
                     let i = 0;
-                    /* eslint-disable prettier/prettier */
                     TEMP_TEST_HCR_1 = createTestHCR(
                         TEMP_TEST_HCR,
                         `-duplicate-${++i}`,
@@ -1431,7 +1429,6 @@ describe('Enhanced primary election.', () => {
                         'bbbb',
                         false
                     );
-                    /* eslint-enable prettier/prettier */
 
                     // by the test data of this test case VM1 will be weighted the highest score
                     TEMP_ELECTED_PRIMARY_VM.id = TEMP_TEST_HCR_1.vmId;
@@ -1458,7 +1455,6 @@ describe('Enhanced primary election.', () => {
                 it('Case 5 (case detail see code comments)', async function() {
                     // prepare the 6 vm as the table above
                     let i = 0;
-                    /* eslint-disable prettier/prettier */
                     TEMP_TEST_HCR_1 = createTestHCR(
                         TEMP_TEST_HCR,
                         `-duplicate-${++i}`,
@@ -1507,7 +1503,6 @@ describe('Enhanced primary election.', () => {
                         'cccc',
                         false
                     );
-                    /* eslint-enable prettier/prettier */
 
                     // by the test data of this test case VM4 will be weighted the highest score
                     TEMP_ELECTED_PRIMARY_VM.id = TEMP_TEST_HCR_4.vmId;
@@ -1534,7 +1529,6 @@ describe('Enhanced primary election.', () => {
                 it('Case 6 (case detail see code comments)', async function() {
                     // prepare the 6 vm as the table above
                     let i = 0;
-                    /* eslint-disable prettier/prettier */
                     TEMP_TEST_HCR_1 = createTestHCR(
                         TEMP_TEST_HCR,
                         `-duplicate-${++i}`,
@@ -1583,7 +1577,6 @@ describe('Enhanced primary election.', () => {
                         'cccc',
                         false
                     );
-                    /* eslint-enable prettier/prettier */
 
                     // by the test data of this test case VM3 will be weighted the highest score
                     TEMP_ELECTED_PRIMARY_VM.id = TEMP_TEST_HCR_3.vmId;
@@ -1610,7 +1603,6 @@ describe('Enhanced primary election.', () => {
                 it('Case 7 (case detail see code comments)', async function() {
                     // prepare the 6 vm as the table above
                     let i = 0;
-                    /* eslint-disable prettier/prettier */
                     TEMP_TEST_HCR_1 = createTestHCR(
                         TEMP_TEST_HCR,
                         `-duplicate-${++i}`,
@@ -1659,7 +1651,6 @@ describe('Enhanced primary election.', () => {
                         null,
                         null
                     );
-                    /* eslint-enable prettier/prettier */
 
                     // by the test data of this test case VM2 will be weighted the highest score
                     TEMP_ELECTED_PRIMARY_VM.id = TEMP_TEST_HCR_2.vmId;
@@ -1686,7 +1677,6 @@ describe('Enhanced primary election.', () => {
                 it('Case 8 (case detail see code comments)', async function() {
                     // prepare the 6 vm as the table above
                     let i = 0;
-                    /* eslint-disable prettier/prettier */
                     TEMP_TEST_HCR_1 = createTestHCR(
                         TEMP_TEST_HCR,
                         `-duplicate-${++i}`,
@@ -1735,7 +1725,6 @@ describe('Enhanced primary election.', () => {
                         'ffff',
                         null
                     );
-                    /* eslint-enable prettier/prettier */
 
                     // by the test data of this test case each VM has the same score so the special
                     // method will be applied to elect a the new primary
@@ -1763,7 +1752,6 @@ describe('Enhanced primary election.', () => {
                 it('Case 9 (case detail see code comments)', async function() {
                     // prepare the 6 vm as the table above
                     let i = 0;
-                    /* eslint-disable prettier/prettier */
                     TEMP_TEST_HCR_1 = createTestHCR(
                         TEMP_TEST_HCR,
                         `-duplicate-${++i}`,
@@ -1812,7 +1800,6 @@ describe('Enhanced primary election.', () => {
                         'cccc',
                         null
                     );
-                    /* eslint-enable prettier/prettier */
 
                     // by the test data of this test case each VM has the same score so no primary can be determined
                     // run autoscale
