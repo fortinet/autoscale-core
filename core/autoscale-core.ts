@@ -648,6 +648,14 @@ export abstract class Autoscale implements AutoscaleCore {
                         election.newPrimaryRecord.voteEndTime = Date.now(); // election ends immediately
                         election.newPrimaryRecord.voteState = PrimaryRecordVoteState.Done;
                     }
+                    // send notification
+                    await this.sendAutoscaleNotifications(
+                        this.env.targetVm,
+                        'An Autoscale primary election was just completed successfully.\n' +
+                            `The new primary is: vmId: ${election.newPrimaryRecord.vmId},` +
+                            ` ip: ${election.newPrimaryRecord.ip}.`,
+                        'Autoscale Primary Election Occurred (Sucess)'
+                    );
                     action = 'save';
                     // should reload primary record
                     reloadPrimaryRecord = true;
