@@ -34,6 +34,9 @@ jobs:
     runs-on: ubuntu-latest
     name: main job
     steps:
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '14.17.0'
       - name: create version branch
         id: create-branch
         uses: fortinet/github-action-version-branch@1.1.2
