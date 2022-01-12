@@ -452,7 +452,7 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
         this.res.newPrimary = primaryVm || null;
 
         const primaryRecord: PrimaryRecord = {
-            id: `${electedPrimaryHealthCheckRecord.scalingGroupName}:${electedPrimaryHealthCheckRecord.vmId}`,
+            id: electedPrimaryHealthCheckRecord.scalingGroupName,
             ip: electedPrimaryHealthCheckRecord.ip,
             vmId: electedPrimaryHealthCheckRecord.vmId,
             scalingGroupName: electedPrimaryHealthCheckRecord.scalingGroupName,
