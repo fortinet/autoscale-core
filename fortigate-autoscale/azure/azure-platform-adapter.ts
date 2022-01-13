@@ -855,8 +855,8 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             let errorMessage = this.dataConsistencyCheck(
                 {
                     vmId: rec.vmId,
-                    scalingGroupName: rec.vmId,
-                    ip: rec.vmId
+                    scalingGroupName: rec.scalingGroupName,
+                    ip: rec.ip
                 },
                 snapshot
             );
@@ -1068,7 +1068,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             const inconsistentDataDetailString = this.dataConsistencyCheck(
                 {
                     id: item.id,
-                    scalingGroupName: item.vmId
+                    scalingGroupName: item.scalingGroupName
                 },
                 snapshot
             );
@@ -1391,7 +1391,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                         const inconsistentDataDetailString = this.dataConsistencyCheck(
                             {
                                 vmId: rec.reference.vmId,
-                                scalingGroupName: rec.reference.vmId,
+                                scalingGroupName: rec.reference.scalingGroupName,
                                 productName: rec.reference.productName,
                                 algorithm: rec.reference.algorithm
                             },
