@@ -585,6 +585,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called listAutoscaleVm');
         return vms;
     }
+
     /**
      * Get the Autoscale health check record of a vm with the given vmId
      * @param  {string} vmId the vmId property of the vm.
@@ -811,6 +812,22 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                 return rec.syncState === value;
             })
             .map(([, v]) => v);
+        let deviceSyncStatus: string;
+        if (rec.deviceSyncStatus === null) {
+            deviceSyncStatus = 'null';
+        } else if (rec.deviceSyncStatus) {
+            deviceSyncStatus = 'true';
+        } else {
+            deviceSyncStatus = 'false';
+        }
+        let deviceIsPrimary: string;
+        if (rec.deviceIsPrimary === null) {
+            deviceIsPrimary = 'null';
+        } else if (rec.deviceIsPrimary) {
+            deviceIsPrimary = 'true';
+        } else {
+            deviceIsPrimary = 'false';
+        }
         const item = table.downcast({
             vmId: rec.vmId,
             scalingGroupName: rec.scalingGroupName,
@@ -826,15 +843,9 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             deviceSyncTime: rec.deviceSyncTime,
             deviceSyncFailTime: rec.deviceSyncFailTime,
             // store boolean | null
-            deviceSyncStatus:
-                (rec.deviceSyncStatus === null && 'null') ||
-                (rec.deviceSyncStatus && 'true') ||
-                'false',
+            deviceSyncStatus: deviceSyncStatus,
             // store boolean | null
-            deviceIsPrimary:
-                (rec.deviceIsPrimary === null && 'null') ||
-                (rec.deviceIsPrimary && 'true') ||
-                'false',
+            deviceIsPrimary: deviceIsPrimary,
             deviceChecksum: rec.deviceChecksum
         });
 
@@ -844,8 +855,8 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             let errorMessage = this.dataConsistencyCheck(
                 {
                     vmId: rec.vmId,
-                    scalingGroupName: rec.vmId,
-                    ip: rec.vmId
+                    scalingGroupName: rec.scalingGroupName,
+                    ip: rec.ip
                 },
                 snapshot
             );
@@ -879,6 +890,22 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                 return rec.syncState === value;
             })
             .map(([, v]) => v);
+        let deviceSyncStatus: string;
+        if (rec.deviceSyncStatus === null) {
+            deviceSyncStatus = 'null';
+        } else if (rec.deviceSyncStatus) {
+            deviceSyncStatus = 'true';
+        } else {
+            deviceSyncStatus = 'false';
+        }
+        let deviceIsPrimary: string;
+        if (rec.deviceIsPrimary === null) {
+            deviceIsPrimary = 'null';
+        } else if (rec.deviceIsPrimary) {
+            deviceIsPrimary = 'true';
+        } else {
+            deviceIsPrimary = 'false';
+        }
         const item = table.downcast({
             vmId: rec.vmId,
             scalingGroupName: rec.scalingGroupName,
@@ -894,15 +921,9 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             deviceSyncTime: rec.deviceSyncTime,
             deviceSyncFailTime: rec.deviceSyncFailTime,
             // store boolean | null
-            deviceSyncStatus:
-                (rec.deviceSyncStatus === null && 'null') ||
-                (rec.deviceSyncStatus && 'true') ||
-                'false',
+            deviceSyncStatus: deviceSyncStatus,
             // store boolean | null
-            deviceIsPrimary:
-                (rec.deviceIsPrimary === null && 'null') ||
-                (rec.deviceIsPrimary && 'true') ||
-                'false',
+            deviceIsPrimary: deviceIsPrimary,
             deviceChecksum: rec.deviceChecksum
         });
 
@@ -1047,7 +1068,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             const inconsistentDataDetailString = this.dataConsistencyCheck(
                 {
                     id: item.id,
-                    scalingGroupName: item.vmId
+                    scalingGroupName: item.scalingGroupName
                 },
                 snapshot
             );
@@ -1370,7 +1391,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                         const inconsistentDataDetailString = this.dataConsistencyCheck(
                             {
                                 vmId: rec.reference.vmId,
-                                scalingGroupName: rec.reference.vmId,
+                                scalingGroupName: rec.reference.scalingGroupName,
                                 productName: rec.reference.productName,
                                 algorithm: rec.reference.algorithm
                             },
