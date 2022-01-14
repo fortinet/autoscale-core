@@ -710,6 +710,7 @@ export abstract class Autoscale implements AutoscaleCore {
                     'Saving the primary record. ',
                     JSON.stringify(this.env.primaryRecord)
                 );
+                // NOTE: this is an upsert operation
                 await this.platform.updatePrimaryRecord(this.env.primaryRecord);
                 // primary record is saved, need to reload it
                 reloadPrimaryRecord = true;
