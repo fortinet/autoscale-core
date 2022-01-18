@@ -446,7 +446,10 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
             return PrimaryElectionStrategyResult.CannotDeterminePrimary;
         }
 
-        const primaryVm = await this.platform.getVmById(electedPrimaryHealthCheckRecord.vmId);
+        const primaryVm = await this.platform.getVmById(
+            electedPrimaryHealthCheckRecord.vmId,
+            electedPrimaryHealthCheckRecord.scalingGroupName
+        );
 
         // if cannot find the vm, which is rare, do not set this.env.newPrimary
         this.res.newPrimary = primaryVm || null;

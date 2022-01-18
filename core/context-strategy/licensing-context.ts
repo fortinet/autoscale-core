@@ -196,7 +196,7 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
     protected async syncVmStatusToUsageRecords(usageRecords: LicenseUsageRecord[]): Promise<void> {
         const updatedRecordArray = await Promise.all(
             usageRecords.map(async u => {
-                const vm = await this.platform.getVmById(u.vmId);
+                const vm = await this.platform.getVmById(u.vmId, u.scalingGroupName);
                 const item: LicenseUsageRecord = { ...u };
                 item.vmInSync = !!(vm && vm.state === VirtualMachineState.Running);
                 return { item: item, reference: u };
