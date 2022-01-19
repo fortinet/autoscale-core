@@ -128,6 +128,14 @@ export class ReusableLicensingStrategy implements LicensingStrategy {
             return record.vmId === this.vm.id;
         }) || [null];
 
+        // if the usage record array contains a license that is physically deleted,
+        // should remove such record from the usage record array so that the license files used
+        // in the usage records are always valid.
+        const stockLicenseChecksum = this.stockRecords.map(stock => stock.checksum);
+        this.usageRecords = this.usageRecords.filter(usage =>
+            stockLicenseChecksum.includes(usage.checksum)
+        );
+
         try {
             // get an available license
             if (this.licenseFiles.length > 0 && !this.licenseRecord) {
