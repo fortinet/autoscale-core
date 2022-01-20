@@ -710,6 +710,7 @@ export abstract class Autoscale implements AutoscaleCore {
                     'Saving the primary record. ',
                     JSON.stringify(this.env.primaryRecord)
                 );
+                // NOTE: this is an upsert operation
                 await this.platform.updatePrimaryRecord(this.env.primaryRecord);
                 // primary record is saved, need to reload it
                 reloadPrimaryRecord = true;
@@ -875,6 +876,16 @@ export abstract class Autoscale implements AutoscaleCore {
                 `license isn't required for this vm (id: ${this.env.targetVm.id})`
             );
         } else if (result === LicensingStrategyResult.LicenseOutOfStock) {
+            const notificationSubject = 'FortiGate Autoscale license assignment error';
+            const notificationMessage =
+                `FortiGate (id: ${this.env.targetVm.id}) cannot be assigned a license` +
+                " because there isn't enough license available." +
+                ' Please check the Autoscale handler function logs for more details.';
+            await this.sendAutoscaleNotifications(
+                this.env.targetVm,
+                notificationMessage,
+                notificationSubject
+            );
             this.proxy.logAsError(
                 'License out of stock. ' +
                     `No license is assigned to this vm (id: ${this.env.targetVm.id})`

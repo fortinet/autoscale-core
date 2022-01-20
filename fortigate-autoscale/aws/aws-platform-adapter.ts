@@ -768,6 +768,22 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                     return rec.syncState === value;
                 })
                 .map(([, v]) => v);
+            let deviceSyncStatus: string;
+            if (rec.deviceSyncStatus === null) {
+                deviceSyncStatus = 'null';
+            } else if (rec.deviceSyncStatus) {
+                deviceSyncStatus = 'true';
+            } else {
+                deviceSyncStatus = 'false';
+            }
+            let deviceIsPrimary: string;
+            if (rec.deviceIsPrimary === null) {
+                deviceIsPrimary = 'null';
+            } else if (rec.deviceIsPrimary) {
+                deviceIsPrimary = 'true';
+            } else {
+                deviceIsPrimary = 'false';
+            }
             const item: DBDef.AutoscaleDbItem = {
                 vmId: rec.vmId,
                 scalingGroupName: rec.scalingGroupName,
@@ -783,15 +799,9 @@ export class AwsPlatformAdapter implements PlatformAdapter {
                 deviceSyncTime: rec.deviceSyncTime,
                 deviceSyncFailTime: rec.deviceSyncFailTime,
                 // store boolean | null
-                deviceSyncStatus:
-                    (rec.deviceSyncStatus === null && 'null') ||
-                    (rec.deviceSyncStatus && 'true') ||
-                    'false',
+                deviceSyncStatus: deviceSyncStatus,
                 // store boolean | null
-                deviceIsPrimary:
-                    (rec.deviceIsPrimary === null && 'null') ||
-                    (rec.deviceIsPrimary && 'true') ||
-                    'false',
+                deviceIsPrimary: deviceIsPrimary,
                 deviceChecksum: rec.deviceChecksum
             };
             await this.adaptee.deleteItemFromDb<DBDef.AutoscaleDbItem>(table, item);

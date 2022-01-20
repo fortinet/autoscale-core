@@ -585,6 +585,7 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         this.proxy.logAsInfo('called listAutoscaleVm');
         return vms;
     }
+
     /**
      * Get the Autoscale health check record of a vm with the given vmId
      * @param  {string} vmId the vmId property of the vm.
@@ -811,6 +812,22 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                 return rec.syncState === value;
             })
             .map(([, v]) => v);
+        let deviceSyncStatus: string;
+        if (rec.deviceSyncStatus === null) {
+            deviceSyncStatus = 'null';
+        } else if (rec.deviceSyncStatus) {
+            deviceSyncStatus = 'true';
+        } else {
+            deviceSyncStatus = 'false';
+        }
+        let deviceIsPrimary: string;
+        if (rec.deviceIsPrimary === null) {
+            deviceIsPrimary = 'null';
+        } else if (rec.deviceIsPrimary) {
+            deviceIsPrimary = 'true';
+        } else {
+            deviceIsPrimary = 'false';
+        }
         const item = table.downcast({
             vmId: rec.vmId,
             scalingGroupName: rec.scalingGroupName,
@@ -826,47 +843,53 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             deviceSyncTime: rec.deviceSyncTime,
             deviceSyncFailTime: rec.deviceSyncFailTime,
             // store boolean | null
-            deviceSyncStatus:
-                (rec.deviceSyncStatus === null && 'null') ||
-                (rec.deviceSyncStatus && 'true') ||
-                'false',
+            deviceSyncStatus: deviceSyncStatus,
             // store boolean | null
-            deviceIsPrimary:
-                (rec.deviceIsPrimary === null && 'null') ||
-                (rec.deviceIsPrimary && 'true') ||
-                'false',
+            deviceIsPrimary: deviceIsPrimary,
             deviceChecksum: rec.deviceChecksum
         });
 
         const checker = (
             snapshot: typeof item
         ): Promise<{ result: boolean; errorMessage: string }> => {
-            let errorMessage = this.dataConsistencyCheck(
-                {
-                    vmId: rec.vmId,
-                    scalingGroupName: rec.vmId,
-                    ip: rec.vmId
-                },
-                snapshot
-            );
+            const propToCheck = {
+                vmId: rec.vmId,
+                scalingGroupName: rec.scalingGroupName
+            };
+            const difference = this.dataDiff(propToCheck, snapshot);
             // NOTE: strictly update the record when the sequence to update is equal to or greater
             // than the seq in the db to ensure data not to fall back to old value in race conditions
-            let result: boolean = errorMessage.length === 0;
-            if (rec.seq < snapshot.seq) {
-                result = false;
+            let noError = true;
+            let errorMessage = '';
+            if (Object.keys(difference).length) {
+                noError = false;
+                errorMessage = Object.keys(difference)
+                    .map(k => {
+                        return `key: ${k}, expected: ${propToCheck[k]}, existing: ${difference[k]};`;
+                    })
+                    .join(' ');
+            }
+            // NOTE: allow sequence smaller than the stored one only if the sendTime is older
+            // the reason is if the device is rebooted, the seq value is reset to 0, then the seq
+            // becomes smaller than the stored one. However, the sendTime is still greater
+            // Therefore, do not allow smaller seq while sendTime is also smaller. This is the case
+            // when the request is out-of-date.
+            if (rec.seq < snapshot.seq && rec.sendTime <= snapshot.sendTime) {
+                noError = false;
                 errorMessage =
-                    `A smaller seq is not allowed. seq to save: ${rec.seq}, seq in db: ` +
-                    `${snapshot.seq}. ${errorMessage}`;
+                    `The seq (${rec.seq}) and send time (${rec.sendTime}) indicate that ` +
+                    `this request is out-of-date. values in db (seq: ${snapshot.seq}, ` +
+                    `send time: ${snapshot.sendTime}). ${errorMessage}`;
             }
             return Promise.resolve({
-                result: result,
+                result: noError,
                 errorMessage: errorMessage
             });
         };
         await this.adaptee.saveItemToDb<typeof item>(
             table,
             item,
-            DBDef.SaveCondition.UpdateOnly,
+            DBDef.SaveCondition.Upsert,
             checker
         );
         this.proxy.logAsInfo('called updateHealthCheckRecord');
@@ -879,6 +902,22 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                 return rec.syncState === value;
             })
             .map(([, v]) => v);
+        let deviceSyncStatus: string;
+        if (rec.deviceSyncStatus === null) {
+            deviceSyncStatus = 'null';
+        } else if (rec.deviceSyncStatus) {
+            deviceSyncStatus = 'true';
+        } else {
+            deviceSyncStatus = 'false';
+        }
+        let deviceIsPrimary: string;
+        if (rec.deviceIsPrimary === null) {
+            deviceIsPrimary = 'null';
+        } else if (rec.deviceIsPrimary) {
+            deviceIsPrimary = 'true';
+        } else {
+            deviceIsPrimary = 'false';
+        }
         const item = table.downcast({
             vmId: rec.vmId,
             scalingGroupName: rec.scalingGroupName,
@@ -894,15 +933,9 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             deviceSyncTime: rec.deviceSyncTime,
             deviceSyncFailTime: rec.deviceSyncFailTime,
             // store boolean | null
-            deviceSyncStatus:
-                (rec.deviceSyncStatus === null && 'null') ||
-                (rec.deviceSyncStatus && 'true') ||
-                'false',
+            deviceSyncStatus: deviceSyncStatus,
             // store boolean | null
-            deviceIsPrimary:
-                (rec.deviceIsPrimary === null && 'null') ||
-                (rec.deviceIsPrimary && 'true') ||
-                'false',
+            deviceIsPrimary: deviceIsPrimary,
             deviceChecksum: rec.deviceChecksum
         });
 
@@ -1017,23 +1050,27 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                 }
             ]);
         } catch (error) {
-            this.proxy.logForError(`Primary record (id: ${rec.id}) not found.`, error);
+            this.proxy.logAsInfo(`Primary record (id: ${rec.id}) not found. Will create one.`);
         }
+        // if primary record already exists,
+        // save record only if the keys in rec match the keys in db
         if (existingRec) {
             if (rec.scalingGroupName !== existingRec.scalingGroupName) {
                 throw new Error(
                     'Primary record value not match on attribute: scalingGroupName.' +
                         ` Exptected: ${rec.scalingGroupName}, found: ${existingRec.scalingGroupName}`
                 );
+            } else if (existingRec.id !== existingRec.id) {
+                throw new Error(
+                    'Primary record value not match on attribute: id.' +
+                        ` Exptected: ${rec.id}, found: ${existingRec.id}`
+                );
             } else if (existingRec.voteState !== PrimaryRecordVoteState.Pending) {
                 throw new Error(
                     'Primary record vote state not match.' +
                         ` Expected: ${PrimaryRecordVoteState.Pending}, found: ${existingRec.voteState}`
                 );
-            } else if (
-                existingRec.voteState === PrimaryRecordVoteState.Pending &&
-                existingRec.voteEndTime <= Date.now()
-            ) {
+            } else if (existingRec.voteEndTime <= Date.now()) {
                 throw new Error(
                     `Primary record vote ended (at ${existingRec.voteEndTime}) already.` +
                         ` It's ${Date.now()} now.`
@@ -1044,16 +1081,19 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         const checker = (
             snapshot: typeof item
         ): Promise<{ result: boolean; errorMessage: string }> => {
-            const inconsistentDataDetailString = this.dataConsistencyCheck(
-                {
-                    id: item.id,
-                    scalingGroupName: item.vmId
-                },
-                snapshot
-            );
+            const propToCheck = {
+                id: item.id,
+                scalingGroupName: item.scalingGroupName
+            };
+            const difference = this.dataDiff(propToCheck, snapshot);
             return Promise.resolve({
-                result: inconsistentDataDetailString.length === 0,
-                errorMessage: inconsistentDataDetailString
+                result: Object.keys(difference).length === 0,
+                errorMessage:
+                    Object.keys(difference)
+                        .map(k => {
+                            return `key: ${k}, expected: ${propToCheck[k]}, existing: ${difference[k]};`;
+                        })
+                        .join(' ') || ''
             });
         };
 
@@ -1367,18 +1407,21 @@ export class AzurePlatformAdapter implements PlatformAdapter {
                     const checker = (
                         snapshot: typeof item
                     ): Promise<{ result: boolean; errorMessage: string }> => {
-                        const inconsistentDataDetailString = this.dataConsistencyCheck(
-                            {
-                                vmId: rec.reference.vmId,
-                                scalingGroupName: rec.reference.vmId,
-                                productName: rec.reference.productName,
-                                algorithm: rec.reference.algorithm
-                            },
-                            snapshot
-                        );
+                        const propToCheck = {
+                            vmId: rec.reference.vmId,
+                            scalingGroupName: rec.reference.scalingGroupName,
+                            productName: rec.reference.productName,
+                            algorithm: rec.reference.algorithm
+                        };
+                        const difference = this.dataDiff(propToCheck, snapshot);
                         return Promise.resolve({
-                            result: inconsistentDataDetailString.length === 0,
-                            errorMessage: inconsistentDataDetailString
+                            result: Object.keys(difference).length === 0,
+                            errorMessage:
+                                Object.keys(difference)
+                                    .map(k => {
+                                        return `key: ${k}, expected: ${propToCheck[k]}, existing: ${difference[k]};`;
+                                    })
+                                    .join(' ') || ''
                         });
                     };
                     typeText =
@@ -1673,15 +1716,25 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    dataConsistencyCheck(dataA: { [key: string]: any }, dataB: { [key: string]: any }): string {
-        let inconsistentDataDetailString = '';
+    dataDiff(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        dataToCheck: { [key: string]: any },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        dataAgainst: { [key: string]: any }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ): { [key: string]: any } {
+        if (!dataAgainst) {
+            return dataToCheck;
+        }
 
-        Object.entries(dataA).forEach(([k, v]) => {
-            if (dataB[k] !== v) {
-                inconsistentDataDetailString = `${inconsistentDataDetailString}key: ${k}, expected: ${v}, existing: ${dataB[k]}; `;
-            }
-        });
-        return inconsistentDataDetailString;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const diff: { [key: string]: any } = {};
+
+        Object.keys(dataToCheck)
+            .filter(k => dataToCheck[k] !== dataAgainst[k])
+            .forEach(k => {
+                diff[k] = dataAgainst[k];
+            });
+        return diff;
     }
 }
