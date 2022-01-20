@@ -879,7 +879,7 @@ export abstract class Autoscale implements AutoscaleCore {
             const notificationSubject = 'FortiGate Autoscale license assignment error';
             const notificationMessage =
                 `FortiGate (id: ${this.env.targetVm.id}) cannot be assigned a license` +
-                " because there isn't enough license available." +
+                ' because all available licenses have been allocated.' +
                 ' Please check the Autoscale handler function logs for more details.';
             await this.sendAutoscaleNotifications(
                 this.env.targetVm,
