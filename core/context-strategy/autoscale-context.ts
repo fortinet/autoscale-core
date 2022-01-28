@@ -374,6 +374,8 @@ export class WeightedScorePreferredGroupPrimaryElection extends PreferredGroupPr
         )
             // exclude unhealthy vm from election
             .filter(rec => rec.healthy)
+            // exclude irresponsive vm from election
+            .filter(rec => rec.irresponsivePeriod === 0)
             // exclude those are not in the preferred scaling group for primary election
             .filter(rec => rec.scalingGroupName === settingGroupName);
 
@@ -783,7 +785,9 @@ export class ConstantIntervalHeartbeatSyncStrategy implements HeartbeatSyncStrat
                 deviceSyncFailTime: deviceSyncInfo.syncFailTime,
                 deviceSyncStatus: deviceSyncInfo.syncStatus,
                 deviceIsPrimary: deviceSyncInfo.isPrimary,
-                deviceChecksum: deviceSyncInfo.checksum
+                deviceChecksum: deviceSyncInfo.checksum,
+                irresponsivePeriod: 0,
+                remainingLossAllowed: maxLossCount
             };
             // create health check record
             try {

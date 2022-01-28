@@ -67,7 +67,9 @@ const TEST_HCR_ON_TIME: HealthCheckRecord = {
     deviceSyncFailTime: 'deviceSyncFailTime',
     deviceSyncStatus: true,
     deviceIsPrimary: true,
-    deviceChecksum: 'deviceChecksum'
+    deviceChecksum: 'deviceChecksum',
+    irresponsivePeriod: 0,
+    remainingLossAllowed: 10
 };
 
 const TEST_HCR_LATE: HealthCheckRecord = {
@@ -88,7 +90,9 @@ const TEST_HCR_LATE: HealthCheckRecord = {
     deviceSyncFailTime: null,
     deviceSyncStatus: true,
     deviceIsPrimary: true,
-    deviceChecksum: 'deviceChecksum'
+    deviceChecksum: 'deviceChecksum',
+    irresponsivePeriod: 0,
+    remainingLossAllowed: 10
 };
 
 const TEST_HCR_OUT_OF_SYNC: HealthCheckRecord = {
@@ -109,7 +113,9 @@ const TEST_HCR_OUT_OF_SYNC: HealthCheckRecord = {
     deviceSyncFailTime: null,
     deviceSyncStatus: true,
     deviceIsPrimary: true,
-    deviceChecksum: 'deviceChecksum'
+    deviceChecksum: 'deviceChecksum',
+    irresponsivePeriod: 10,
+    remainingLossAllowed: 0
 };
 
 const TEST_HCR_PRIMARY_ON_TIME: HealthCheckRecord = {
@@ -130,7 +136,9 @@ const TEST_HCR_PRIMARY_ON_TIME: HealthCheckRecord = {
     deviceSyncFailTime: 'deviceSyncFailTime',
     deviceSyncStatus: true,
     deviceIsPrimary: true,
-    deviceChecksum: 'deviceChecksum'
+    deviceChecksum: 'deviceChecksum',
+    irresponsivePeriod: 0,
+    remainingLossAllowed: 10
 };
 
 const TEST_VM: VirtualMachine = {
