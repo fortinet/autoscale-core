@@ -9,12 +9,15 @@ export interface HealthCheckRecord {
     scalingGroupName: string;
     ip: string;
     primaryIp: string;
+    /** time in ms */
     heartbeatInterval: number;
     heartbeatLossCount: number;
+    /** time in ms */
     nextHeartbeatTime: number;
     syncState: HealthCheckSyncState;
     syncRecoveryCount: number;
     seq: number;
+    /** (calculated value) */
     healthy: boolean;
     upToDate: boolean;
     sendTime: string;
@@ -23,6 +26,10 @@ export interface HealthCheckRecord {
     deviceSyncStatus: boolean | null;
     deviceIsPrimary: boolean | null;
     deviceChecksum: string;
+    /** (calculated value) number of current heartbeat interval when record not being updated */
+    irresponsivePeriod: number;
+    /** (calculated value) number of heartbeat loss before reaching the max allowed number */
+    remainingLossAllowed: number;
 }
 
 // the no-shadow rule errored in the next line may be just a false alarm

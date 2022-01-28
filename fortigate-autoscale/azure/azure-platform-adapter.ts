@@ -615,23 +615,24 @@ export class AzurePlatformAdapter implements PlatformAdapter {
         dbItem: DBDef.AutoscaleDbItem,
         settings: Settings
     ): HealthCheckRecord {
-        const heartbeatDelayAllowanceSettingItem = settings.get(
-            AzureFortiGateAutoscaleSetting.HeartbeatDelayAllowance
-        );
         const maxHeartbeatLossCountSettingItem = settings.get(
             AzureFortiGateAutoscaleSetting.HeartbeatLossCount
         );
 
-        const delayAllowance: number =
-            (heartbeatDelayAllowanceSettingItem &&
-                Number(heartbeatDelayAllowanceSettingItem.value)) ||
-            0;
+        const heartbeatDelayAllowanceSettingItem = settings.get(
+            AzureFortiGateAutoscaleSetting.HeartbeatDelayAllowance
+        );
 
         const maxHeartbeatLossCount: number =
             (maxHeartbeatLossCountSettingItem && Number(maxHeartbeatLossCountSettingItem.value)) ||
             0;
+
+        const heartbeatDelayAllowance: number =
+            (heartbeatDelayAllowanceSettingItem &&
+                Number(heartbeatDelayAllowanceSettingItem.value)) * 1000 || 0;
+
         // if heartbeatDelay is <= 0, it means hb arrives early or ontime
-        const heartbeatDelay = this.createTime - dbItem.nextHeartBeatTime - delayAllowance;
+        const heartbeatDelay = this.createTime - dbItem.nextHeartBeatTime - heartbeatDelayAllowance;
 
         const [syncState] = Object.entries(HealthCheckSyncState)
             .filter(([, value]) => {
@@ -641,8 +642,19 @@ export class AzurePlatformAdapter implements PlatformAdapter {
 
         const nextHeartbeatLossCount = dbItem.heartBeatLossCount + ((heartbeatDelay > 0 && 1) || 0);
 
+        const remainingLossAllowed = Math.max(maxHeartbeatLossCount - nextHeartbeatLossCount, 0);
         // healthy reason: next heartbeat loss count is smaller than max allowed value.
-        const isHealthy = nextHeartbeatLossCount < maxHeartbeatLossCount;
+        const isHealthy = remainingLossAllowed > 0;
+
+        // dumb period
+        const irresponsiveTimeFromNextHeartbeat = Math.max(
+            this.createTime - dbItem.nextHeartBeatTime,
+            0
+        );
+        const irresponsivePeriod =
+            dbItem.heartBeatInterval > 0
+                ? Math.floor(irresponsiveTimeFromNextHeartbeat / dbItem.heartBeatInterval)
+                : 0;
 
         return {
             vmId: dbItem.vmId,
@@ -670,7 +682,9 @@ export class AzurePlatformAdapter implements PlatformAdapter {
             deviceIsPrimary: ['true', 'false'].includes(dbItem.deviceIsPrimary)
                 ? dbItem.deviceIsPrimary === 'true'
                 : null,
-            deviceChecksum: dbItem.deviceChecksum === 'null' ? null : dbItem.deviceChecksum
+            deviceChecksum: dbItem.deviceChecksum === 'null' ? null : dbItem.deviceChecksum,
+            irresponsivePeriod: irresponsivePeriod,
+            remainingLossAllowed: remainingLossAllowed
         };
     }
 
