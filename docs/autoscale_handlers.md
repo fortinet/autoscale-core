@@ -10,7 +10,7 @@ Autoscale handler functions use the same URL domain per deployment in the functi
 
 ## Security
 
-The functions must be protected against malicious requests. Technology to increase security varies between cloud platforms. Generally, the protections include limiting access from within a certain virtual private network and IP ranges, request with authentication tokens.
+The functions must be protected against malicious requests. Technology to increase security varies between cloud platforms. Generally, methods to increase security include limiting access from within a certain virtual private network and IP ranges, and requests that include authentication tokens.
 
 ## Functions
 
