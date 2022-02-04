@@ -18,6 +18,13 @@ This project has the following features:
 This project supports auto scaling for the cloud platforms listed below:
 
 * Amazon AWS
+* Microsoft Azure
+
+## Technical documentation
+* [Features and Terminologies](docs/features_and_terms.md)
+* [Autoscale Handler Functions](docs/autoscale_handlers.md)
+* [Autoscale Setting Items](docs/autoscale_setting_items.md)
+
 
 ## Installation
 
@@ -26,8 +33,9 @@ This project can be used as a NodeJS dependency. To install using NPM, run the f
 `npm install https://github.com/fortinet/autoscale-core --save`
 
 ## Diagrams
+![High Level Architecture](/docs/diagrams/Autoscale_3.0_design_High_level_architecture.png)
 
-Technical diagrams are available in the [docs/diagrams](./docs/diagrams) directory.
+More technical diagrams are available in the [docs/diagrams](docs/diagrams) directory.
 
 ## Support
 
