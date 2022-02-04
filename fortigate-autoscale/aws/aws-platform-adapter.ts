@@ -534,15 +534,24 @@ export class AwsPlatformAdapter implements PlatformAdapter {
         dbItem: DBDef.AutoscaleDbItem,
         settings: Settings
     ): HealthCheckRecord {
-        // if heartbeatDelay is <= 0, it means hb arrives early or ontime
-        const heartbeatDelay =
-            this.createTime -
-            dbItem.nextHeartBeatTime -
-            Number(settings.get(AwsFortiGateAutoscaleSetting.HeartbeatDelayAllowance).value);
-
-        const maxHeartbeatLossCount = Number(
-            settings.get(AwsFortiGateAutoscaleSetting.HeartbeatLossCount).value
+        const maxHeartbeatLossCountSettingItem = settings.get(
+            AwsFortiGateAutoscaleSetting.HeartbeatLossCount
         );
+
+        const heartbeatDelayAllowanceSettingItem = settings.get(
+            AwsFortiGateAutoscaleSetting.HeartbeatDelayAllowance
+        );
+
+        const maxHeartbeatLossCount: number = maxHeartbeatLossCountSettingItem
+            ? Number(maxHeartbeatLossCountSettingItem.value)
+            : 0;
+
+        const heartbeatDelayAllowance: number =
+            (heartbeatDelayAllowanceSettingItem &&
+                Number(heartbeatDelayAllowanceSettingItem.value)) * 1000 || 0;
+
+        // if heartbeatDelay is <= 0, it means hb arrives early or ontime
+        const heartbeatDelay = this.createTime - dbItem.nextHeartBeatTime - heartbeatDelayAllowance;
 
         const [syncState] = Object.entries(HealthCheckSyncState)
             .filter(([, value]) => {
@@ -551,9 +560,19 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             .map(([, v]) => v);
 
         const nextHeartbeatLossCount = dbItem.heartBeatLossCount + ((heartbeatDelay > 0 && 1) || 0);
-
+        const remainingLossAllowed = Math.max(maxHeartbeatLossCount - nextHeartbeatLossCount, 0);
         // healthy reason: next heartbeat loss count is smaller than max allowed value.
-        const isHealthy = nextHeartbeatLossCount < maxHeartbeatLossCount;
+        const isHealthy = remainingLossAllowed > 0;
+
+        // irresponsive period
+        const irresponsiveTimeFromNextHeartbeat = Math.max(
+            this.createTime - dbItem.nextHeartBeatTime,
+            0
+        );
+        const irresponsivePeriod =
+            dbItem.heartBeatInterval > 0
+                ? Math.floor(irresponsiveTimeFromNextHeartbeat / dbItem.heartBeatInterval)
+                : 0;
 
         return {
             vmId: dbItem.vmId,
@@ -571,15 +590,19 @@ export class AwsPlatformAdapter implements PlatformAdapter {
             upToDate: true,
             // the following properities are only available in some device versions
             // convert string 'null' to null
-            sendTime: (dbItem.sendTime === 'null' && null) || dbItem.sendTime,
-            deviceSyncTime: (dbItem.deviceSyncTime === 'null' && null) || dbItem.deviceSyncTime,
+            sendTime: dbItem.sendTime === 'null' ? null : dbItem.sendTime,
+            deviceSyncTime: dbItem.deviceSyncTime === 'null' ? null : dbItem.deviceSyncTime,
             deviceSyncFailTime:
-                (dbItem.deviceSyncFailTime === 'null' && null) || dbItem.deviceSyncFailTime,
-            deviceSyncStatus:
-                (dbItem.deviceSyncStatus === 'null' && null) || dbItem.deviceSyncStatus === 'true',
-            deviceIsPrimary:
-                (dbItem.deviceIsPrimary === 'null' && null) || dbItem.deviceIsPrimary === 'true',
-            deviceChecksum: (dbItem.deviceChecksum === 'null' && null) || dbItem.deviceChecksum
+                dbItem.deviceSyncFailTime === 'null' ? null : dbItem.deviceSyncFailTime,
+            deviceSyncStatus: ['true', 'false'].includes(dbItem.deviceSyncStatus)
+                ? dbItem.deviceSyncStatus === 'true'
+                : null,
+            deviceIsPrimary: ['true', 'false'].includes(dbItem.deviceIsPrimary)
+                ? dbItem.deviceIsPrimary === 'true'
+                : null,
+            deviceChecksum: dbItem.deviceChecksum === 'null' ? null : dbItem.deviceChecksum,
+            irresponsivePeriod: irresponsivePeriod,
+            remainingLossAllowed: remainingLossAllowed
         };
     }
 

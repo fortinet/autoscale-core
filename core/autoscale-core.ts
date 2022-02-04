@@ -317,6 +317,16 @@ export abstract class Autoscale implements AutoscaleCore {
         } else {
             this.env.primaryHealthCheckRecord = undefined;
         }
+
+        // is the primary responsive?
+        if (
+            this.env.primaryHealthCheckRecord &&
+            this.env.primaryHealthCheckRecord.irresponsivePeriod > 0
+        ) {
+            this.env.primaryHealthCheckRecord.healthy = false;
+            this.env.primaryHealthCheckRecord.syncState = HealthCheckSyncState.OutOfSync;
+        }
+
         // get primary record
         this.env.primaryRecord = this.env.primaryRecord || (await this.platform.getPrimaryRecord());
 
@@ -340,6 +350,7 @@ export abstract class Autoscale implements AutoscaleCore {
         if (primaryElection.newPrimary) {
             this.env.primaryVm = primaryElection.newPrimary;
             this.env.primaryRecord = primaryElection.newPrimaryRecord;
+            // load the healthcheck record for the primary
             this.env.primaryHealthCheckRecord = await this.platform.getHealthCheckRecord(
                 this.env.primaryVm.id
             );
@@ -350,7 +361,15 @@ export abstract class Autoscale implements AutoscaleCore {
             const oldPrimaryHealthCheck =
                 primaryElection.oldPrimary &&
                 (await this.platform.getHealthCheckRecord(primaryElection.oldPrimary.id));
-            if (oldPrimaryHealthCheck && !oldPrimaryHealthCheck.healthy) {
+            // if the primary vm is gone, no one will update the health check record so the record
+            // will be stale. compare the irresponsivePeriod against the remainingLossAllowed to
+            // see if the vm should be cleanup from the monitor
+            const oldPrimaryIsStale =
+                oldPrimaryHealthCheck &&
+                (!oldPrimaryHealthCheck.healthy ||
+                    oldPrimaryHealthCheck.irresponsivePeriod >=
+                        oldPrimaryHealthCheck.remainingLossAllowed);
+            if (oldPrimaryIsStale) {
                 if (
                     unhealthyVms.filter(vm => {
                         return this.platform.vmEquals(vm, primaryElection.oldPrimary);
@@ -568,6 +587,15 @@ export abstract class Autoscale implements AutoscaleCore {
                     this.env.primaryHealthCheckRecord = await this.platform.getHealthCheckRecord(
                         this.env.primaryVm.id
                     );
+                    // is the primary responsive?
+                    if (
+                        this.env.primaryHealthCheckRecord &&
+                        this.env.primaryHealthCheckRecord.irresponsivePeriod > 0
+                    ) {
+                        this.env.primaryHealthCheckRecord.healthy = false;
+                        this.env.primaryHealthCheckRecord.syncState =
+                            HealthCheckSyncState.OutOfSync;
+                    }
                 }
                 if (
                     this.env.primaryHealthCheckRecord &&
