@@ -2,7 +2,10 @@
 
 [![version on main branch](https://img.shields.io/github/package-json/v/fortinet/autoscale-core?label=version%20on%20main%20branch)](./) [![latest release version](https://img.shields.io/github/v/release/fortinet/autoscale-core?label=latest%20release%20version)](https://github.com/fortinet/autoscale-core/releases/latest) [![platform](https://img.shields.io/badge/platform-AWS%20|%20Azure-green.svg)](./)
 
-Autoscale Core is the core library for the Fortinet Autoscale project.
+Autoscale Core is the core library for the Fortinet Autoscale project. This library is not a complete solution for FortiGate Autoscale. To find complete solutions, please check the following projects:
+
+* [FortiGate Autoscale for AWS](https://github.com/fortinet/fortigate-autoscale-aws)
+* [FortiGate Autoscale for Azure](https://github.com/fortinet/fortigate-autoscale-azure)
 
 The Fortinet Autoscale project provides cloud-based multi-group auto scaling functionality for virtual machines of Fortinet products that have native HA features to form a cluster with failover protection.
 
