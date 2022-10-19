@@ -1,6 +1,6 @@
 {
     "name": "@fortinet/autoscale-core",
-    "version": "3.4.2",
+    "version": "3.5.0",
     "description": "Fortinet Autoscale project(s), core module.",
     "main": "./dist/index.js",
     "exports": {
