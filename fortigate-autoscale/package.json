@@ -28,11 +28,11 @@
         "@azure/ms-rest-js": "^2.2.1",
         "@azure/ms-rest-nodeauth": "^3.0.10",
         "@azure/storage-blob": "^12.4.1",
+        "@fortinet/autoscale-core": "file:../core",
         "axios": "^0.21.2",
         "express": "^4.17.1"
     },
     "devDependencies": {
-        "@fortinet/autoscale-core": "file:../core"
     },
     "bundleDependencies": [
         "@fortinet/autoscale-core"
