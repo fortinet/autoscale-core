@@ -188,7 +188,8 @@ export function jsonParseReviver(
         const val: { type: string; value: unknown[] } = { type: undefined, value: undefined };
         Object.assign(val, v);
         if (val.type === 'Map' && val.value instanceof Array) {
-            return new Map(val.value);
+            // val.value is transformed by jsonStringifyReplacer as [any, any][]
+            return new Map(val.value as [unknown, unknown][]);
         }
     }
     return v;

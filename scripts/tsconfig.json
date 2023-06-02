@@ -4,5 +4,6 @@
         "outDir": "compiled",
         "rootDir": ".",
         "baseUrl": "."
-    }
+    },
+    "exclude": ["compiled"]
 }
