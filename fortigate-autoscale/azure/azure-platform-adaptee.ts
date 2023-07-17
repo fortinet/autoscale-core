@@ -1,7 +1,5 @@
-import { ComputeManagementClient } from '@azure/arm-compute';
-import { VirtualMachineScaleSetVM } from '@azure/arm-compute/esm/models';
-import { NetworkManagementClient } from '@azure/arm-network';
-import { NetworkInterface } from '@azure/arm-network/esm/models';
+import { ComputeManagementClient, VirtualMachineScaleSetVM } from '@azure/arm-compute';
+import { NetworkInterface, NetworkManagementClient } from '@azure/arm-network';
 import {
     CosmosClient,
     CosmosClientOptions,
@@ -13,13 +11,13 @@ import {
 } from '@azure/cosmos';
 import { ClientSecretCredential } from '@azure/identity';
 import { SecretClient } from '@azure/keyvault-secrets';
-import * as msRestNodeAuth from '@azure/ms-rest-nodeauth';
 import { BlobServiceClient, StorageSharedKeyCredential } from '@azure/storage-blob';
 import * as DBDef from '@fortinet/autoscale-core/db-definitions';
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios';
 import fs from 'fs';
 import * as HttpStatusCodes from 'http-status-codes';
 import path from 'path';
+
 import {
     AzureApiRequestCache,
     AzureFortiGateAutoscaleSetting,
@@ -147,17 +145,19 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
      * process.env.TENANT_ID: the tenant containing the App registration (service principal) app.
      * @returns {Promise} void
      */
-    async init(): Promise<void> {
+    init(): Promise<void> {
         const cosmosClientOptions: CosmosClientOptions = {
             endpoint: `https://${process.env.AUTOSCALE_DB_ACCOUNT}.documents.azure.com/`,
             key: process.env.AUTOSCALE_DB_PRIMARY_KEY
         };
         this.azureCosmosDB = new CosmosClient(cosmosClientOptions);
         this.autoscaleDBRef = this.azureCosmosDB.database(process.env.AUTOSCALE_DB_NAME);
-        const creds = await msRestNodeAuth.loginWithServicePrincipalSecret(
+        // NOTE: migrated from @azure/ms-rest-nodeauth
+        // see for example: https://github.com/Azure/ms-rest-nodeauth/blob/master/migrate-to-identity-v2.md#authenticate-with-national-clouds
+        const creds = new ClientSecretCredential(
+            process.env.TENANT_ID,
             process.env.CLIENT_ID,
-            process.env.CLIENT_SECRET,
-            process.env.TENANT_ID
+            process.env.CLIENT_SECRET
         );
         this.azureCompute = new ComputeManagementClient(creds, process.env.SUBSCRIPTION_ID);
         this.azureNetwork = new NetworkManagementClient(creds, process.env.SUBSCRIPTION_ID);
@@ -176,6 +176,7 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                 process.env.CLIENT_SECRET
             )
         );
+        return Promise.resolve();
     }
 
     async reloadSettings(invalidateCache: boolean): Promise<Settings> {
@@ -708,7 +709,22 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                 process.env[RequiredEnvVars.RESOURCE_GROUP],
                 scalingGroupName
             );
-            return (response && response._response.parsedBody) || null;
+            const list: VirtualMachineScaleSetVM[] = [];
+            let result: IteratorResult<VirtualMachineScaleSetVM, VirtualMachineScaleSetVM[]>;
+            if (response) {
+                do {
+                    result = await response.next();
+                    const value = result.value;
+                    if (Array.isArray(value)) {
+                        value.forEach(vm => {
+                            list.push(vm);
+                        });
+                    } else {
+                        list.push(value);
+                    }
+                } while (!result.done);
+            }
+            return list.length > 0 ? list : null;
         };
         return await this.requestWithCaching<VirtualMachineScaleSetVM[]>(
             req,
@@ -804,20 +820,16 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
         ]);
 
         // ASSERT: all related caches are deleted. can delete the vm now
-        const response = await this.azureCompute.virtualMachineScaleSetVMs.deleteMethod(
-            process.env[RequiredEnvVars.RESOURCE_GROUP],
-            scalingGroupName,
-            String(instanceId)
-        );
-        if (
-            response._response.status === HttpStatusCodes.OK ||
-            response._response.status === HttpStatusCodes.ACCEPTED
-        ) {
+        try {
+            const op = await this.azureCompute.virtualMachineScaleSetVMs.beginDelete(
+                process.env[RequiredEnvVars.RESOURCE_GROUP],
+                scalingGroupName,
+                String(instanceId)
+            );
+            await op.pollUntilDone();
             return true;
-        } else if (response._response.status === HttpStatusCodes.NO_CONTENT) {
-            return false;
-        } else {
-            throw new Error(`Unkown response with status code: ${response._response.status}.`);
+        } catch (error) {
+            throw new Error(`Error in deleting a VM from VMSS: ${error}`);
         }
     }
     /**
@@ -846,7 +858,22 @@ export class AzurePlatformAdaptee implements PlatformAdaptee {
                 scalingGroupName,
                 String(id)
             );
-            return (response && response._response.parsedBody) || null;
+            const list: NetworkInterface[] = [];
+            let result: IteratorResult<NetworkInterface, NetworkInterface[]>;
+            if (response) {
+                do {
+                    result = await response.next();
+                    const value = result.value;
+                    if (Array.isArray(value)) {
+                        value.forEach(vm => {
+                            list.push(vm);
+                        });
+                    } else {
+                        list.push(value);
+                    }
+                } while (!result.done);
+            }
+            return list.length > 0 ? list : null;
         };
         return await this.requestWithCaching<NetworkInterface[]>(
             req,
